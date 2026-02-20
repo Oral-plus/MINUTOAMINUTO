@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../providers/app_provider.dart';
 import '../models/registro_llamada.dart';
 import '../utils/constants.dart';
@@ -155,6 +156,44 @@ class MisLlamadasScreen extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
+                      if (provider.usuarioActual != null && (l.rutaGrabacion != null || l.transcripcionTexto != null)) ...[
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 8),
+                        if (l.rutaGrabacion != null && l.rutaGrabacion!.isNotEmpty)
+                          _AudioPlayerWidget(url: l.rutaGrabacion!),
+                        if (l.transcripcionTexto != null && l.transcripcionTexto!.isNotEmpty) ...[
+                          if (l.rutaGrabacion != null && l.rutaGrabacion!.isNotEmpty) const SizedBox(height: 8),
+                          ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            title: Text(
+                              'Transcripción (Gemini)',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppConstants.azulCorporativo,
+                              ),
+                            ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    l.transcripcionTexto!,
+                                    style: const TextStyle(fontSize: 13, height: 1.5),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
@@ -166,7 +205,7 @@ class MisLlamadasScreen extends StatelessWidget {
     );
   }
 
-  Color _colorTipo(dynamic tipo) {
+  static Color _colorTipo(dynamic tipo) {
     switch (tipo.toString()) {
       case 'TipoLlamada.manana':
         return Colors.orange;
@@ -179,5 +218,68 @@ class MisLlamadasScreen extends StatelessWidget {
       default:
         return AppConstants.azulCorporativo;
     }
+  }
+}
+
+class _AudioPlayerWidget extends StatefulWidget {
+  final String url;
+
+  const _AudioPlayerWidget({required this.url});
+
+  @override
+  State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
+}
+
+class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _playing = state == PlayerState.playing);
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    if (_playing) {
+      await _player.pause();
+    } else {
+      final isUrl = widget.url.startsWith('http://') || widget.url.startsWith('https://');
+      if (isUrl) {
+        await _player.play(UrlSource(widget.url));
+      } else {
+        await _player.play(DeviceFileSource(widget.url));
+      }
+    }
+    setState(() => _playing = !_playing);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton.filled(
+          onPressed: _togglePlay,
+          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+          style: IconButton.styleFrom(
+            backgroundColor: AppConstants.azulCorporativo,
+            foregroundColor: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Escuchar grabación',
+          style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+        ),
+      ],
+    );
   }
 }

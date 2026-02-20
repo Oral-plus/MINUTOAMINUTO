@@ -1,10 +1,3 @@
-import '../models/registro_llamada.dart';
-import '../models/vendedor.dart';
-import '../models/supervisor.dart';
-import '../models/ppvc.dart';
-import '../models/rvc.dart';
-import '../models/tipo_llamada.dart';
-import '../models/nivel_cargo.dart';
 import 'constants.dart';
 
 class KpiCalculator {

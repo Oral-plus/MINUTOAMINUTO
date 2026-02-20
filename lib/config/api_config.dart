@@ -11,9 +11,9 @@
 /// La API PHP escribe en [minuto_a_minuto].[dbo].[supervisores] y vendedores.
 class ApiConfig {
   /// URL de la API.
-  /// - localhost:8080 = API Dart (memoria)
-  /// - Cambie a la URL de su servidor PHP para SQL Server, ej:
-  ///   'http://192.168.2.244/api' o 'http://192.168.2.244/minuto_a_minuto/api'
-  static const String baseUrl = 'http://localhost:8080';
+  /// - https://minutoaminuto-1.onrender.com = API Dart desplegada en Render
+  /// - localhost:8080 = API Dart local
+  /// - PHP + SQL Server: 'http://192.168.2.244/api'
+  static const String baseUrl = 'https://minutoaminuto-1.onrender.com';
   static const bool useRemoteApi = true;
 }

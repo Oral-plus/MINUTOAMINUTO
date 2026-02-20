@@ -7,8 +7,6 @@ import '../models/registro_llamada.dart';
 import '../models/ppvc.dart';
 import '../models/rvc.dart';
 import '../models/alerta.dart';
-import '../models/nivel_cargo.dart';
-import '../models/tipo_llamada.dart';
 class DatabaseService {
   static Database? _database;
   static const String _dbName = 'minuto_a_minuto.db';

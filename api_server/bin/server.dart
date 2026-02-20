@@ -235,4 +235,53 @@ class ApiServer {
     res.headers.add('Access-Control-Allow-Headers', 'Content-Type');
     res.headers.add('Content-Type', 'application/json; charset=utf-8');
   }
+
+  Future<String> _transcribeWithGemini(String audioBase64, String mimeType) async {
+    final apiKey = Platform.environment['GEMINI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception('GEMINI_API_KEY no configurada. Define la variable de entorno.');
+    }
+    final url = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey',
+    );
+    final body = {
+      'contents': [
+        {
+          'parts': [
+            {
+              'inline_data': {
+                'mime_type': mimeType,
+                'data': audioBase64,
+              }
+            },
+            {'text': 'Transcribe this audio to text in the same language. Return only the transcribed text.'}
+          ]
+        }
+      ],
+      'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 1024},
+    };
+
+    final client = HttpClient();
+    try {
+      final request = await client.postUrl(url);
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
+      final response = await request.close();
+      final respBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode != 200) {
+        throw Exception('Gemini API error ${response.statusCode}: $respBody');
+      }
+      final decoded = jsonDecode(respBody) as Map<String, dynamic>;
+      final candidates = decoded['candidates'] as List?;
+      if (candidates == null || candidates.isEmpty) {
+        return '';
+      }
+      final parts = (candidates.first as Map)['content']?['parts'] as List?;
+      if (parts == null || parts.isEmpty) return '';
+      final text = (parts.first as Map)['text'] as String?;
+      return text?.trim() ?? '';
+    } finally {
+      client.close();
+    }
+  }
 }

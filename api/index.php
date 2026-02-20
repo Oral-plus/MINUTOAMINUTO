@@ -61,6 +61,10 @@ try {
             require __DIR__ . '/endpoints/ubicaciones.php';
             handleUbicaciones($conn, $method, $id);
             break;
+        case 'audio':
+            require __DIR__ . '/endpoints/audio.php';
+            handleAudio($conn, $method, $id);
+            break;
         default:
             http_response_code(404);
             echo json_encode(['error' => 'Recurso no encontrado']);

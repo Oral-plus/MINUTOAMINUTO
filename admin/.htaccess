@@ -1,0 +1,7 @@
+# Página por defecto
+DirectoryIndex index.php
+
+# Proteger archivos sensibles (Apache 2.4+)
+<Files "config.php">
+    Require all denied
+</Files>

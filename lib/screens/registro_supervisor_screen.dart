@@ -106,7 +106,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DropdownButtonFormField<NivelCargo>(
-                value: _cargo,
+                initialValue: _cargo,
                 decoration: _inputDecoration('Cargo'),
                 items: NivelCargo.values
                     .where((c) => c != NivelCargo.vendedor)
@@ -153,7 +153,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                       );
                     }
                     return DropdownButtonFormField<String>(
-                      value: _superiorId ?? (superiores.isNotEmpty ? superiores.first.id : null),
+                      initialValue: _superiorId ?? (superiores.isNotEmpty ? superiores.first.id : null),
                       decoration: _inputDecoration('Reporta a'),
                       items: superiores
                           .map((s) => DropdownMenuItem(

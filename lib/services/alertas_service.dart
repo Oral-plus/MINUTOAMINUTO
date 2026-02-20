@@ -1,11 +1,6 @@
 import 'package:uuid/uuid.dart';
 import '../models/alerta.dart';
 import '../models/tipo_llamada.dart';
-import '../models/registro_llamada.dart';
-import '../models/vendedor.dart';
-import '../models/supervisor.dart';
-import '../models/rvc.dart';
-import '../models/ppvc.dart';
 import 'data_service.dart';
 import '../utils/constants.dart';
 

@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
@@ -9,9 +10,16 @@ import 'widgets/splash_screen.dart';
 
 // Inicializa SQLite FFI en Windows/Desktop (no en Web)
 import 'utils/init_db_ffi.dart' if (dart.library.html) 'utils/init_db_stub.dart' as db_init;
+import 'services/call_monitor_service.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   db_init.initDatabase();
+  if (Platform.isAndroid) {
+    FlutterForegroundTask.initCommunicationPort();
+    await CallMonitorService.init();
+  }
   runApp(const MinutoAMinutoApp());
 }
 
@@ -20,9 +28,10 @@ class MinutoAMinutoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppProvider()..init(),
-      child: MaterialApp(
+    return WithForegroundTask(
+      child: ChangeNotifierProvider(
+        create: (_) => AppProvider()..init(),
+        child: MaterialApp(
         title: 'Minuto a Minuto',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -110,6 +119,7 @@ class MinutoAMinutoApp extends StatelessWidget {
           },
         ),
       ),
+    ),
     );
   }
 }

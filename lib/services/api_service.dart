@@ -7,8 +7,6 @@ import '../models/registro_llamada.dart';
 import '../models/ppvc.dart';
 import '../models/rvc.dart';
 import '../models/alerta.dart';
-import '../models/nivel_cargo.dart';
-import '../models/tipo_llamada.dart';
 
 class ApiService {
   static String get _base => ApiConfig.baseUrl;
@@ -110,6 +108,8 @@ class ApiService {
       'recuperacionPerdidos': r.recuperacionPerdidos,
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
+      'rutaGrabacion': r.rutaGrabacion,
+      'transcripcionTexto': r.transcripcionTexto,
     };
     final res = await http.post(Uri.parse('$_base/llamadas'), body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
     if (res.statusCode != 200) throw Exception(res.body);

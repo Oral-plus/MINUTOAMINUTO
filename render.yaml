@@ -1,0 +1,11 @@
+# Render Blueprint - Despliegue API Minuto a Minuto
+# Conecte este repo en render.com y se creará el servicio automáticamente
+services:
+  - type: web
+    name: api-minuto-a-minuto
+    runtime: docker
+    rootDir: api_server
+    # Render asigna PORT automáticamente; la API lo usa
+    healthCheckPath: /test
+    # Plan gratuito: el servicio duerme tras inactividad
+    # Plan de pago: siempre activo

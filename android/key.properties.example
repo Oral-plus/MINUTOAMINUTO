@@ -1,0 +1,7 @@
+# Copiar este archivo a key.properties y completar los valores.
+# key.properties NO debe subirse a git (está en .gitignore).
+
+storePassword=TU_PASSWORD_KEYSTORE
+keyPassword=TU_PASSWORD_KEY
+keyAlias=upload
+storeFile=upload-keystore.jks

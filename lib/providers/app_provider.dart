@@ -3,17 +3,13 @@ import 'package:flutter/foundation.dart';
 import '../models/vendedor.dart';
 import '../models/supervisor.dart';
 import '../models/registro_llamada.dart';
-import '../models/ppvc.dart';
-import '../models/rvc.dart';
 import '../models/alerta.dart';
-import '../models/nivel_cargo.dart';
-import '../models/tipo_llamada.dart';
 import '../config/api_config.dart';
 import '../services/data_service.dart';
-import '../services/database_service.dart';
 import '../services/location_service.dart';
 import '../services/api_service.dart';
 import '../services/alertas_service.dart';
+import '../services/call_monitor_service.dart';
 import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,6 +22,7 @@ class AppProvider with ChangeNotifier {
   Supervisor? _usuarioActual;
   Vendedor? _vendedorActual;
   bool _geolocalizacionActiva = false;
+  bool _monitorLlamadasActivo = false;
   StreamSubscription? _locationSub;
   bool _isInitialized = false;
   String? _initError;
@@ -39,6 +36,7 @@ class AppProvider with ChangeNotifier {
   Supervisor? get usuarioActual => _usuarioActual;
   Vendedor? get vendedorActual => _vendedorActual;
   bool get geolocalizacionActiva => _geolocalizacionActiva;
+  bool get monitorLlamadasActivo => _monitorLlamadasActivo;
 
   bool get esCoach => _usuarioActual?.esCoach ?? false;
   bool get esKam => _usuarioActual?.esKam ?? false;
@@ -57,6 +55,8 @@ class AppProvider with ChangeNotifier {
       await cargarDatosHoy();
       _alertas = await DataService.getAlertasPendientes();
       await _cargarUsuarioGuardado();
+      _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+      await CallMonitorService.init();
       await AlertasService.verificarAlertasDiarias();
       _alertas = await DataService.getAlertasPendientes();
     } catch (e, st) {
@@ -166,6 +166,18 @@ class AppProvider with ChangeNotifier {
   Future<void> detenerGeolocalizacion() async {
     _locationSub?.cancel();
     _geolocalizacionActiva = false;
+    notifyListeners();
+  }
+
+  Future<void> iniciarMonitorLlamadas() async {
+    await CallMonitorService.start();
+    _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+    notifyListeners();
+  }
+
+  Future<void> detenerMonitorLlamadas() async {
+    await CallMonitorService.stop();
+    _monitorLlamadasActivo = false;
     notifyListeners();
   }
 

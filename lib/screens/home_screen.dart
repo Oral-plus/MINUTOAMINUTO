@@ -145,6 +145,48 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (provider.usuarioActual != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                provider.monitorLlamadasActivo
+                                    ? Icons.phone_in_talk
+                                    : Icons.phone_disabled,
+                                color: provider.monitorLlamadasActivo
+                                    ? Colors.white
+                                    : Colors.white70,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  provider.monitorLlamadasActivo
+                                      ? 'Monitor de llamadas activo - Usa el marcador del teléfono'
+                                      : 'Registra llamadas automáticamente al usar el marcador',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: provider.monitorLlamadasActivo
+                                    ? provider.detenerMonitorLlamadas
+                                    : provider.iniciarMonitorLlamadas,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                child: Text(provider.monitorLlamadasActivo ? 'Desactivar' : 'Activar'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       if (provider.vendedorActual != null) ...[
                         const SizedBox(height: 16),
                         Container(

@@ -1,7 +1,3 @@
-import '../models/vendedor.dart';
-import '../models/supervisor.dart';
-import '../models/ppvc.dart';
-import '../models/rvc.dart';
 import '../models/nivel_cargo.dart';
 import 'package:sqflite/sqflite.dart';
 

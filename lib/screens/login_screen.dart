@@ -202,7 +202,7 @@ class _SelectorSupervisor extends StatelessWidget {
           );
         }
         return DropdownButtonFormField<String>(
-          value: selectedId,
+          initialValue: selectedId,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Seleccione supervisor',
@@ -249,7 +249,7 @@ class _SelectorVendedor extends StatelessWidget {
           );
         }
         return DropdownButtonFormField<String>(
-          value: selectedId,
+          initialValue: selectedId,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Seleccione vendedor',

@@ -134,7 +134,7 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                     );
                   }
                   return DropdownButtonFormField<String>(
-                    value: _coachId ?? (coaches.isNotEmpty ? coaches.first.id : null),
+                    initialValue: _coachId ?? (coaches.isNotEmpty ? coaches.first.id : null),
                     decoration: _inputDecoration('Coach asignado'),
                     items: coaches
                         .map((c) => DropdownMenuItem(

@@ -1,11 +1,12 @@
 <?php
 // config/database.php - Conexión SQL Server para Minuto a Minuto
+// En producción: usar DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT como variables de entorno
 
-define('DB_HOST', '192.168.2.244');
-define('DB_NAME', 'minuto_a_minuto');
-define('DB_USER', 'sa');
-define('DB_PASS', 'Sky2022*!');
-define('DB_PORT', 1433);
+define('DB_HOST', getenv('DB_HOST') ?: '192.168.2.244');
+define('DB_NAME', getenv('DB_NAME') ?: 'minuto_a_minuto');
+define('DB_USER', getenv('DB_USER') ?: 'sa');
+define('DB_PASS', getenv('DB_PASS') ?: 'Sky2022*!');
+define('DB_PORT', (int)(getenv('DB_PORT') ?: '1433'));
 define('DB_CHARSET', 'UTF-8');
 
 function getDbConnection() {

@@ -22,6 +22,8 @@ class RegistroLlamada {
   final int recuperacionPerdidos;
   final String observaciones;
   final bool confirmacionVeracidad;
+  final String? rutaGrabacion;
+  final String? transcripcionTexto;
 
   RegistroLlamada({
     required this.id,
@@ -44,6 +46,8 @@ class RegistroLlamada {
     this.recuperacionPerdidos = 0,
     this.observaciones = '',
     required this.confirmacionVeracidad,
+    this.rutaGrabacion,
+    this.transcripcionTexto,
   });
 
   Map<String, dynamic> toMap() => {
@@ -67,6 +71,8 @@ class RegistroLlamada {
         'recuperacionPerdidos': recuperacionPerdidos,
         'observaciones': observaciones,
         'confirmacionVeracidad': confirmacionVeracidad ? 1 : 0,
+        'rutaGrabacion': rutaGrabacion,
+        'transcripcionTexto': transcripcionTexto,
       };
 
   factory RegistroLlamada.fromMap(Map<String, dynamic> map) => RegistroLlamada(
@@ -96,5 +102,7 @@ class RegistroLlamada {
         recuperacionPerdidos: map['recuperacionPerdidos'] as int? ?? 0,
         observaciones: map['observaciones'] as String? ?? '',
         confirmacionVeracidad: (map['confirmacionVeracidad'] ?? 0) == 1,
+        rutaGrabacion: map['rutaGrabacion'] as String?,
+        transcripcionTexto: map['transcripcionTexto'] as String?,
       );
 }
