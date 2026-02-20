@@ -1,0 +1,4 @@
+name: api_server
+description: API local para Minuto a Minuto
+environment:
+  sdk: ^3.0.0

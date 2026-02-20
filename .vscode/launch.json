@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Minuto a Minuto (Web)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["-d", "chrome"],
+      "preLaunchTask": "Iniciar API local"
+    },
+    {
+      "name": "Minuto a Minuto (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["-d", "chrome"]
+    },
+    {
+      "name": "Minuto a Minuto (Android)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["-d", "android"]
+    },
+    {
+      "name": "Minuto a Minuto (Windows)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["-d", "windows"]
+    }
+  ]
+}

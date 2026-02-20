@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Iniciar API local",
+      "type": "shell",
+      "command": "dart run bin/server.dart",
+      "options": {
+        "cwd": "${workspaceFolder}/api_server",
+        "env": {},
+        "isBackground": true
+      },
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "API Minuto a Minuto",
+          "endsPattern": "."
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Esperar API",
+      "type": "shell",
+      "command": "timeout /t 3 /nobreak >nul 2>&1 || ping -n 4 127.0.0.1 >nul 2>&1",
+      "dependsOn": "Iniciar API local"
+    }
+  ]
+}
