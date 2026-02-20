@@ -11,5 +11,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=build /app/bin/server ./
 EXPOSE 8080
-ENV PORT=8080
+# Render inyecta PORT dinámicamente; sin eso usa 8080
 CMD ["./server"]

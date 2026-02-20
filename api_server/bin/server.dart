@@ -142,6 +142,23 @@ class ApiServer {
             body['id'] ??= 'll_${DateTime.now().millisecondsSinceEpoch}';
             _llamadas.add(body);
             req.response.write(jsonEncode({'success': true, 'id': body['id']}));
+          } else if (req.method == 'PATCH' && id != null) {
+            try {
+              final decoded = await json.fuse(utf8).decoder.bind(req).single;
+              final body = Map<String, dynamic>.from(decoded as Map);
+              final idx = _llamadas.indexWhere((x) => x['id'] == id);
+              if (idx >= 0) {
+                if (body['transcripcionTexto'] != null) _llamadas[idx]['transcripcionTexto'] = body['transcripcionTexto'];
+                if (body['rutaGrabacion'] != null) _llamadas[idx]['rutaGrabacion'] = body['rutaGrabacion'];
+                req.response.write(jsonEncode({'success': true}));
+              } else {
+                req.response.statusCode = 404;
+                req.response.write(jsonEncode({'error': 'Llamada no encontrada'}));
+              }
+            } catch (e) {
+              req.response.statusCode = 500;
+              req.response.write(jsonEncode({'error': e.toString()}));
+            }
           }
           break;
         case 'ppvc':
@@ -181,6 +198,26 @@ class ApiServer {
             req.response.write(jsonEncode({'success': true}));
           }
           break;
+        case 'transcribe':
+          if (req.method == 'POST') {
+            try {
+              final decoded = await json.fuse(utf8).decoder.bind(req).single;
+              final body = Map<String, dynamic>.from(decoded as Map);
+              final audioB64 = body['audioBase64'] as String?;
+              final mime = body['mimeType'] as String? ?? 'audio/mpeg';
+              if (audioB64 == null || audioB64.isEmpty) {
+                req.response.statusCode = 400;
+                req.response.write(jsonEncode({'error': 'audioBase64 requerido'}));
+              } else {
+                final text = await _transcribeWithGemini(audioB64, mime);
+                req.response.write(jsonEncode({'text': text}));
+              }
+            } catch (e) {
+              req.response.statusCode = 500;
+              req.response.write(jsonEncode({'error': e.toString()}));
+            }
+          }
+          break;
         default:
           req.response.statusCode = 404;
           req.response.write(jsonEncode({'error': 'No encontrado'}));
@@ -194,7 +231,7 @@ class ApiServer {
 
   void _addCors(HttpResponse res) {
     res.headers.add('Access-Control-Allow-Origin', '*');
-    res.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.headers.add('Access-Control-Allow-Headers', 'Content-Type');
     res.headers.add('Content-Type', 'application/json; charset=utf-8');
   }
