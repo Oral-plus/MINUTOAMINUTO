@@ -3,7 +3,6 @@ require_once 'config.php';
 requireLogin();
 $pageTitle = 'Dashboard';
 $currentPage = 'dashboard';
-$conn = getDbConnection();
 
 $stats = [
     'supervisores' => 0,
@@ -11,11 +10,14 @@ $stats = [
     'llamadas' => 0,
     'llamadas_hoy' => 0,
 ];
+$dbError = null;
 try {
-    $stats['supervisores'] = count(dbQuery($conn, "SELECT id FROM supervisores"));
-    $stats['vendedores'] = count(dbQuery($conn, "SELECT id FROM vendedores"));
-    $stats['llamadas'] = count(dbQuery($conn, "SELECT id FROM registro_llamadas"));
-    $stats['llamadas_hoy'] = count(dbQuery($conn, "SELECT id FROM registro_llamadas WHERE fecha = ?", [date('Y-m-d')]));
+    $stats['supervisores'] = count(apiGetSupervisores());
+    $stats['vendedores'] = count(apiGetVendedores());
+    $hoy = date('Y-m-d');
+    $todas = apiGetLlamadas($hoy, $hoy);
+    $stats['llamadas_hoy'] = count($todas);
+    $stats['llamadas'] = count(apiGetLlamadas('2020-01-01', date('Y-m-d')));
 } catch (Exception $e) {
     $dbError = $e->getMessage();
 }
@@ -24,7 +26,7 @@ include 'includes/header.php';
 <div class="card">
     <h2>Panel de control</h2>
     <?php if (!empty($dbError)): ?>
-        <p class="alert alert-error">Error de conexión: <?= htmlspecialchars($dbError) ?></p>
+        <p class="alert alert-error">Error al conectar con la API: <?= htmlspecialchars($dbError) ?></p>
     <?php else: ?>
     <div class="stats">
         <div class="stat"><span><?= $stats['supervisores'] ?></span><small>Supervisores</small></div>

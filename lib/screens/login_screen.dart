@@ -32,18 +32,15 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      height: 90,
-                      width: 180,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.schedule,
-                        size: 80,
-                        color: AppConstants.azulCorporativo,
-                      ),
+                  Image.asset(
+                    'assets/images/logo.png',
+                    height: 140,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.schedule,
+                      size: 64,
+                      color: AppConstants.azulCorporativo,
                     ),
                   ),
                   const SizedBox(height: 16),

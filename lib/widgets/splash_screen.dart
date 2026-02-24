@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../utils/constants.dart';
 
-/// Pantalla de carga con logo, círculos animados, texto "Minuto a Minuto" y efecto de cargando.
+/// Pantalla de carga: diseño elegante, profesional y serio. Logo sin marco.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -8,147 +9,123 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
-  late AnimationController _circleController;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _circleController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+    _controller = AnimationController(
       vsync: this,
-    )..repeat();
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _controller.forward();
   }
 
   @override
   void dispose() {
-    _circleController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: Colors.white,
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
-              // Círculos animados de carga detrás del logo
-              Stack(
-                alignment: Alignment.center,
+      backgroundColor: const Color(0xFFFAFBFC),
+      body: SafeArea(
+        child: Center(
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) => Opacity(
+              opacity: _fadeAnimation.value,
+              child: child,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedBuilder(
-                    animation: _circleController,
-                    builder: (context, child) {
-                      return CustomPaint(
-                        size: const Size(180, 180),
-                        painter: _PulsingCirclesPainter(
-                          progress: _circleController.value,
-                        ),
-                      );
-                    },
-                  ),
-                  // Logo principal
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      height: 90,
-                      width: 180,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.image,
-                        size: 70,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
+                  _buildLogo(),
+                  const SizedBox(height: 32),
+                  _buildTitle(),
+                  const SizedBox(height: 6),
+                  _buildSubtitle(),
+                  const SizedBox(height: 48),
+                  _buildLoader(),
+                  const SizedBox(height: 14),
+                  _buildLoadingLabel(),
                 ],
               ),
-              const SizedBox(height: 28),
-              // Texto "Minuto a Minuto"
-              Text(
-                'MINUTO A MINUTO',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Seguimiento PPVC y RVC',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const Spacer(),
-              // Círculo de carga + texto Cargando
-              Column(
-                children: [
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(
-                      color: Colors.blue.shade700,
-                      strokeWidth: 3,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Cargando...',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(flex: 2),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _PulsingCirclesPainter extends CustomPainter {
-  final double progress;
-
-  _PulsingCirclesPainter({required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final colors = [
-      Colors.blue.shade100.withValues(alpha: 0.5),
-      Colors.blue.shade200.withValues(alpha: 0.4),
-      Colors.blue.shade300.withValues(alpha: 0.3),
-    ];
-    for (var i = 0; i < 3; i++) {
-      final t = (progress + i * 0.33) % 1.0;
-      final scale = 0.5 + (t * 0.8);
-      final radius = 40.0 + (scale * 35);
-      final alpha = (1 - t) * 0.4;
-      final paint = Paint()
-        ..color = colors[i].withValues(alpha: alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawCircle(center, radius, paint);
-    }
+  Widget _buildLogo() {
+    return Image.asset(
+      'assets/images/logo.png',
+      height: 180,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, __, ___) => Icon(
+        Icons.schedule_rounded,
+        size: 72,
+        color: AppConstants.azulCorporativo.withOpacity(0.7),
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant _PulsingCirclesPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+  Widget _buildTitle() {
+    return Text(
+      'Minuto a Minuto',
+      style: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF0F172A),
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _buildSubtitle() {
+    return Text(
+      'Seguimiento PPVC y RVC',
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        color: const Color(0xFF64748B),
+      ),
+    );
+  }
+
+  Widget _buildLoader() {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: CircularProgressIndicator(
+        strokeWidth: 2.5,
+        valueColor: AlwaysStoppedAnimation<Color>(AppConstants.azulCorporativo),
+        backgroundColor: const Color(0xFFE2E8F0),
+      ),
+    );
+  }
+
+  Widget _buildLoadingLabel() {
+    return Text(
+      'Cargando…',
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w400,
+        color: const Color(0xFF94A3B8),
+      ),
+    );
+  }
 }

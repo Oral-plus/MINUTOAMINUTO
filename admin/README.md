@@ -24,8 +24,15 @@ Variables de entorno:
 
 ## Requisitos
 
-- PHP con extensión `sqlsrv` o `pdo_sqlsrv` (SQL Server)
-- Misma base de datos que la API (`api/config/database.php`)
+- PHP 7.4+ con `curl` o `allow_url_fopen` habilitado
+- El admin se conecta a la misma API que la app Flutter
+
+## Configuración de la API
+
+Por defecto usa: `https://minutoaminuto-1.onrender.com` (igual que la app).
+
+Para cambiar la URL, defina la variable de entorno:
+- `API_BASE_URL`: URL base de la API (ej: `https://minutoaminuto-1.onrender.com`)
 
 ## Despliegue
 

@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="login-page">
     <div class="login-box">
         <div class="logo">
-            <img src="../assets/logo_oral_plus.png" alt="Oral-Plus" onerror="this.remove()">
+            <img src="../assets/images/logo.png" alt="Oral-Plus - Minuto a Minuto" onerror="this.style.display='none'">
             <span class="logo-text">MINUTO A MINUTO</span>
         </div>
         <h1>Portal Administrador</h1>

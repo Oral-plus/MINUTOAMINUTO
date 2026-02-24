@@ -7,9 +7,8 @@ import '../models/alerta.dart';
 import '../config/api_config.dart';
 import '../services/data_service.dart';
 import '../services/location_service.dart';
-import '../services/api_service.dart';
-import '../services/alertas_service.dart';
 import '../services/call_monitor_service.dart';
+import '../services/debug_alert_service.dart';
 import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,6 +25,7 @@ class AppProvider with ChangeNotifier {
   StreamSubscription? _locationSub;
   bool _isInitialized = false;
   String? _initError;
+  static const Duration _initTimeout = Duration(seconds: 12);
 
   List<Vendedor> get vendedores => _vendedores;
   List<Supervisor> get supervisores => _supervisores;
@@ -44,29 +44,50 @@ class AppProvider with ChangeNotifier {
   bool get esVendedor => _vendedorActual != null;
 
   Future<void> init() async {
-    try {
-      await DataService.init();
-      if (ApiConfig.useRemoteApi) {
-        final ok = await ApiService.testConnection();
-        if (!ok) throw Exception('No se pudo conectar con el servidor. Verifique la URL en api_config.dart');
+    await runZonedGuarded(() async {
+      try {
+        DebugAlertService.info('Inicializando app...');
+        await DataService.init();
+        final results = await Future.wait([
+          _withTimeout(DataService.getVendedores(), 'vendedores'),
+          _withTimeout(DataService.getSupervisores(), 'supervisores'),
+          _withTimeout(_cargarUsuarioGuardado(), 'usuario guardado'),
+        ]);
+        _vendedores = results[0] as List<Vendedor>;
+        _supervisores = results[1] as List<Supervisor>;
+        await _withTimeout(recargarDashboard(), 'dashboard');
+        try {
+          _monitorLlamadasActivo = await _withTimeout(
+            CallMonitorService.isEnabled(),
+            'estado del monitor',
+          );
+        } catch (e) {
+          debugPrint('CallMonitor isEnabled: $e');
+          _monitorLlamadasActivo = false;
+        }
+        DebugAlertService.success('Inicio completado');
+      } catch (e, st) {
+        debugPrint('Error init Minuto a Minuto: $e\n$st');
+        DebugAlertService.error('Error al iniciar: $e');
+        _initError = 'Error al cargar: $e';
+        if (!ApiConfig.useRemoteApi) _initError = '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
+      } finally {
+        _isInitialized = true;
+        notifyListeners();
       }
-      _vendedores = await DataService.getVendedores();
-      _supervisores = await DataService.getSupervisores();
-      await cargarDatosHoy();
-      _alertas = await DataService.getAlertasPendientes();
-      await _cargarUsuarioGuardado();
-      _monitorLlamadasActivo = await CallMonitorService.isEnabled();
-      await CallMonitorService.init();
-      await AlertasService.verificarAlertasDiarias();
-      _alertas = await DataService.getAlertasPendientes();
-    } catch (e, st) {
-      debugPrint('Error init Minuto a Minuto: $e');
-      debugPrint('Stack: $st');
-      _initError = 'Error al cargar: $e';
-      if (!ApiConfig.useRemoteApi) _initError = '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
-    } finally {
+    }, (error, stack) {
+      debugPrint('AppProvider zone: $error\n$stack');
+      _initError = 'Error inesperado: $error';
       _isInitialized = true;
       notifyListeners();
+    });
+  }
+
+  Future<T> _withTimeout<T>(Future<T> future, String label) async {
+    try {
+      return await future.timeout(_initTimeout);
+    } on TimeoutException {
+      throw Exception('Tiempo de espera agotado en: $label');
     }
   }
 
@@ -74,12 +95,12 @@ class AppProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final supervisorId = prefs.getString('supervisor_id');
     final vendedorId = prefs.getString('vendedor_id');
-    if (supervisorId != null) {
-      _usuarioActual = await DataService.getSupervisor(supervisorId);
-    }
-    if (vendedorId != null) {
-      _vendedorActual = await DataService.getVendedor(vendedorId);
-    }
+    Supervisor? s;
+    Vendedor? v;
+    if (supervisorId != null) s = await DataService.getSupervisor(supervisorId);
+    if (vendedorId != null) v = await DataService.getVendedor(vendedorId);
+    _usuarioActual = s;
+    _vendedorActual = v;
   }
 
   Future<void> loginSupervisor(String id) async {
@@ -130,6 +151,16 @@ class AppProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> recargarDashboard() async {
+    final hoy = DateTime.now();
+    _llamadas = await DataService.getRegistroLlamadas(
+      desde: hoy,
+      hasta: hoy,
+    );
+    _alertas = await DataService.getAlertasPendientes();
+    notifyListeners();
+  }
+
   List<Vendedor> vendedoresPorCoach(String coachId) {
     return _vendedores.where((v) => v.coachId == coachId).toList();
   }
@@ -170,13 +201,25 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<void> iniciarMonitorLlamadas() async {
-    await CallMonitorService.start();
-    _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+    _monitorLlamadasActivo = false;
+    notifyListeners();
+    await Future.delayed(const Duration(milliseconds: 200));
+    try {
+      await CallMonitorService.start();
+      _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+    } catch (e, st) {
+      debugPrint('iniciarMonitorLlamadas: $e\n$st');
+      _monitorLlamadasActivo = false;
+    }
     notifyListeners();
   }
 
   Future<void> detenerMonitorLlamadas() async {
-    await CallMonitorService.stop();
+    try {
+      await CallMonitorService.stop();
+    } catch (e) {
+      debugPrint('detenerMonitorLlamadas: $e');
+    }
     _monitorLlamadasActivo = false;
     notifyListeners();
   }

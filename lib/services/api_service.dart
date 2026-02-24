@@ -7,6 +7,7 @@ import '../models/registro_llamada.dart';
 import '../models/ppvc.dart';
 import '../models/rvc.dart';
 import '../models/alerta.dart';
+import 'debug_alert_service.dart';
 
 class ApiService {
   static String get _base => ApiConfig.baseUrl;
@@ -63,6 +64,43 @@ class ApiService {
     if (r.statusCode != 200 && r.statusCode != 204) throw Exception('Error ${r.statusCode}: ${r.body}');
   }
 
+  static Future<RegistroLlamada?> getRegistroLlamada(String id) async {
+    final hoy = DateTime.now();
+    final list = await getRegistroLlamadas(desde: hoy, hasta: hoy);
+    try {
+      return list.firstWhere((r) => r.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> updateRegistroLlamadaObservaciones(String id, String observaciones) async {
+    final r = await http.patch(
+      Uri.parse('$_base/llamadas/$id'),
+      body: jsonEncode({'observaciones': observaciones}),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (r.statusCode != 200) throw Exception(r.body);
+  }
+
+  static Future<void> updateRegistroLlamadaTranscripcion(String id, String transcripcionTexto) async {
+    final r = await http.patch(
+      Uri.parse('$_base/llamadas/$id'),
+      body: jsonEncode({'transcripcionTexto': transcripcionTexto}),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (r.statusCode != 200) throw Exception(r.body);
+  }
+
+  static Future<void> updateRegistroLlamadaRutaGrabacion(String id, String rutaGrabacion) async {
+    final r = await http.patch(
+      Uri.parse('$_base/llamadas/$id'),
+      body: jsonEncode({'rutaGrabacion': rutaGrabacion}),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (r.statusCode != 200) throw Exception(r.body);
+  }
+
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
     DateTime? desde,
     DateTime? hasta,
@@ -74,9 +112,11 @@ class ApiService {
     if (hasta != null) url += 'hasta=${hasta.toIso8601String().split('T')[0]}&';
     if (zona != null) url += 'zona=$zona&';
     if (nombreContactado != null) url += 'nombreContactado=$nombreContactado&';
+    DebugAlertService.info('API GET: $url');
     final r = await http.get(Uri.parse(url));
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
+    DebugAlertService.success('API OK /llamadas (${list.length} registros)');
     return list.map((m) => _registroFromJson(m as Map)).toList();
   }
 
@@ -111,8 +151,11 @@ class ApiService {
       'rutaGrabacion': r.rutaGrabacion,
       'transcripcionTexto': r.transcripcionTexto,
     };
-    final res = await http.post(Uri.parse('$_base/llamadas'), body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
+    DebugAlertService.info('API POST: $_base/llamadas');
+    final res = await http.post(Uri.parse('$_base/llamadas'),
+        body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
     if (res.statusCode != 200) throw Exception(res.body);
+    DebugAlertService.success('API OK: llamada guardada');
   }
 
   static Future<List<RegistroLlamada>> getLlamadasHoy(String? contactadoId) async {
@@ -201,13 +244,22 @@ class ApiService {
 
   static Future<bool> testConnection() async {
     try {
+      DebugAlertService.info('Probando conexión API: $_base/test');
       final r = await http.get(Uri.parse('$_base/test')).timeout(const Duration(seconds: 5));
       if (r.statusCode == 200) {
         final data = jsonDecode(r.body) as Map;
-        return data['success'] == true;
+        final ok = data['success'] == true;
+        if (ok) {
+          DebugAlertService.success('Conexión API exitosa');
+        } else {
+          DebugAlertService.error('API respondió sin éxito');
+        }
+        return ok;
       }
+      DebugAlertService.error('API error HTTP ${r.statusCode}');
       return false;
-    } catch (_) {
+    } catch (e) {
+      DebugAlertService.error('Error conexión API: $e');
       return false;
     }
   }

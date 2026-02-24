@@ -3,27 +3,27 @@ require_once 'config.php';
 requireLogin();
 $pageTitle = 'Vendedores';
 $currentPage = 'vendedores';
-$conn = getDbConnection();
 
 $msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['_action'] ?? 'create';
     try {
         if ($action === 'create') {
-            $id = !empty($_POST['id']) ? $_POST['id'] : ('v_' . uniqid());
-            if ($conn instanceof PDO) {
-                $stmt = $conn->prepare("INSERT INTO vendedores (id,nombre,codigo,zona,coachId,geolocalizacionActiva,horaInicioJornada,presupuestoMensual,presupuestoDiario) VALUES (?,?,?,?,?,?,?,?,?)");
-                $stmt->execute([$id, $_POST['nombre'], $_POST['codigo'], $_POST['zona'], $_POST['coachId'], (int)($_POST['geolocalizacionActiva'] ?? 0), !empty($_POST['horaInicioJornada']) ? $_POST['horaInicioJornada'] : null, (float)($_POST['presupuestoMensual'] ?? 0), (float)($_POST['presupuestoDiario'] ?? 0)]);
-            } else {
-                sqlsrv_query($conn, "INSERT INTO vendedores (id,nombre,codigo,zona,coachId,geolocalizacionActiva,horaInicioJornada,presupuestoMensual,presupuestoDiario) VALUES (?,?,?,?,?,?,?,?,?)", [$id, $_POST['nombre'], $_POST['codigo'], $_POST['zona'], $_POST['coachId'], (int)($_POST['geolocalizacionActiva'] ?? 0), !empty($_POST['horaInicioJornada']) ? $_POST['horaInicioJornada'] : null, (float)($_POST['presupuestoMensual'] ?? 0), (float)($_POST['presupuestoDiario'] ?? 0)]);
-            }
+            $body = [
+                'id' => !empty($_POST['id']) ? $_POST['id'] : ('v_' . uniqid()),
+                'nombre' => $_POST['nombre'],
+                'codigo' => $_POST['codigo'],
+                'zona' => $_POST['zona'],
+                'coachId' => $_POST['coachId'],
+                'geolocalizacionActiva' => (int)($_POST['geolocalizacionActiva'] ?? 0),
+                'horaInicioJornada' => !empty($_POST['horaInicioJornada']) ? $_POST['horaInicioJornada'] : null,
+                'presupuestoMensual' => (float)($_POST['presupuestoMensual'] ?? 0),
+                'presupuestoDiario' => (float)($_POST['presupuestoDiario'] ?? 0),
+            ];
+            apiPostVendedor($body);
             $msg = 'Vendedor creado correctamente.';
         } elseif ($action === 'delete' && !empty($_POST['id'])) {
-            if ($conn instanceof PDO) {
-                $conn->prepare("DELETE FROM vendedores WHERE id = ?")->execute([$_POST['id']]);
-            } else {
-                sqlsrv_query($conn, "DELETE FROM vendedores WHERE id = ?", [$_POST['id']]);
-            }
+            apiDeleteVendedor($_POST['id']);
             $msg = 'Vendedor eliminado.';
         }
     } catch (Exception $e) {
@@ -31,8 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$vendedores = dbQuery($conn, "SELECT v.*, s.nombre as coachNombre FROM vendedores v LEFT JOIN supervisores s ON v.coachId = s.id ORDER BY v.nombre");
-$coaches = dbQuery($conn, "SELECT id, nombre FROM supervisores WHERE cargo = 'coach' ORDER BY nombre");
+$vendedoresRaw = apiGetVendedores();
+$supervisoresMap = [];
+foreach (apiGetSupervisores() as $s) {
+    $supervisoresMap[$s['id'] ?? ''] = $s['nombre'] ?? '';
+}
+foreach ($vendedoresRaw as &$v) {
+    $v['coachNombre'] = $supervisoresMap[$v['coachId'] ?? ''] ?? $v['coachId'] ?? '-';
+}
+usort($vendedoresRaw, fn($a, $b) => strcmp($a['nombre'] ?? '', $b['nombre'] ?? ''));
+$coaches = array_filter(apiGetSupervisores(), fn($s) => ($s['cargo'] ?? '') === 'coach');
+usort($coaches, fn($a, $b) => strcmp($a['nombre'] ?? '', $b['nombre'] ?? ''));
 include 'includes/header.php';
 ?>
 <div class="card">
@@ -61,7 +70,7 @@ include 'includes/header.php';
         <table>
             <thead><tr><th>ID</th><th>Nombre</th><th>Codigo</th><th>Zona</th><th>Coach</th><th>Geo</th><th>Acciones</th></tr></thead>
             <tbody>
-            <?php foreach ($vendedores as $v): ?>
+            <?php foreach ($vendedoresRaw as $v): ?>
                 <tr>
                     <td><?= htmlspecialchars($v['id'] ?? '') ?></td>
                     <td><?= htmlspecialchars($v['nombre'] ?? '') ?></td>

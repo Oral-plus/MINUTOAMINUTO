@@ -12,13 +12,17 @@
 <body>
 <div class="layout">
 <aside class="sidebar">
-    <h2>Minuto a Minuto</h2>
+    <div class="sidebar-logo">
+        <img src="../assets/images/logo.png" alt="Logo" onerror="this.style.display='none'">
+        <h2>Minuto a Minuto</h2>
+    </div>
     <nav class="sidebar-nav">
         <a href="dashboard.php" class="<?= ($currentPage ?? '') === 'dashboard' ? 'active' : '' ?>"><span class="nav-icon">📊</span> Dashboard</a>
         <a href="supervisores.php" class="<?= ($currentPage ?? '') === 'supervisores' ? 'active' : '' ?>"><span class="nav-icon">👥</span> Supervisores</a>
         <a href="vendedores.php" class="<?= ($currentPage ?? '') === 'vendedores' ? 'active' : '' ?>"><span class="nav-icon">🏪</span> Vendedores</a>
         <a href="llamadas.php" class="<?= ($currentPage ?? '') === 'llamadas' ? 'active' : '' ?>"><span class="nav-icon">📞</span> Llamadas</a>
     </nav>
+    <div class="sidebar-api-badge" title="Datos extraídos desde la API remota">API activa</div>
     <a href="logout.php" class="logout"><span class="nav-icon">🚪</span> Cerrar sesión</a>
 </aside>
 <main class="main">

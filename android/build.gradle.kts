@@ -19,6 +19,23 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+gradle.projectsEvaluated {
+    allprojects {
+        tasks.withType<JavaCompile>().configureEach {
+            options.isWarnings = false
+            options.compilerArgs.removeAll { it.startsWith("-Xlint") || it == "-nowarn" }
+            options.compilerArgs.addAll(
+                listOf(
+                    "-nowarn",
+                    "-Xlint:-deprecation",
+                    "-Xlint:-unchecked",
+                    "-Xlint:-options",
+                ),
+            )
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

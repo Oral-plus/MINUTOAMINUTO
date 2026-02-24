@@ -18,6 +18,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -47,6 +48,8 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = false
+            isShrinkResources = false
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
@@ -56,6 +59,18 @@ android {
     }
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf(
+        "-Xlint:-deprecation",
+        "-Xlint:-unchecked",
+        "-Xlint:-options"
+    ))
+}
+
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

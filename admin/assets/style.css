@@ -131,6 +131,22 @@ a:hover { color: var(--primary-hover); }
   flex-direction: column;
 }
 .sidebar-nav { flex: 1; }
+.sidebar-logo {
+  padding: 0 1.25rem 1rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.sidebar-logo img {
+  display: block;
+  max-height: 48px;
+  max-width: 100%;
+  margin-bottom: 0.5rem;
+  object-fit: contain;
+}
+.sidebar-logo h2 {
+  padding: 0;
+  margin: 0;
+}
 .sidebar h2 {
   font-size: 0.75rem;
   font-weight: 600;
@@ -156,6 +172,15 @@ a:hover { color: var(--primary-hover); }
   color: #fff;
 }
 .sidebar .nav-icon { font-size: 1.1rem; opacity: .9; }
+.sidebar-api-badge {
+  font-size: 0.65rem;
+  color: #64748b;
+  padding: 0.35rem 0.75rem;
+  margin: 0 1rem 0.5rem;
+  background: rgba(255,255,255,.06);
+  border-radius: 6px;
+  text-align: center;
+}
 .sidebar .logout { margin-top: auto; padding-top: 1rem; color: #f87171; }
 .sidebar .logout:hover { color: #fca5a5; background: rgba(248,113,113,.1); }
 

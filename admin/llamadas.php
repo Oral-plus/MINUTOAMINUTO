@@ -3,20 +3,20 @@ require_once 'config.php';
 requireLogin();
 $pageTitle = 'Llamadas';
 $currentPage = 'llamadas';
-$conn = getDbConnection();
 
 $desde = $_GET['desde'] ?? date('Y-m-d');
 $hasta = $_GET['hasta'] ?? date('Y-m-d');
 $zona = $_GET['zona'] ?? '';
 
-$sql = "SELECT * FROM registro_llamadas WHERE fecha >= ? AND fecha <= ?";
-$params = [$desde, $hasta];
-if ($zona) { $sql .= " AND zona = ?"; $params[] = $zona; }
-$sql .= " ORDER BY horaInicio DESC";
-
-$llamadas = dbQuery($conn, $sql, $params);
-$zonasRaw = dbQuery($conn, "SELECT DISTINCT zona FROM registro_llamadas WHERE zona IS NOT NULL AND zona != ''");
-$zonas = array_values(array_unique(array_filter(array_column($zonasRaw, 'zona'))));
+$llamadas = apiGetLlamadas($desde, $hasta, $zona ?: null);
+if ($zona) {
+    $llamadas = array_values(array_filter($llamadas, fn($l) => ($l['zona'] ?? '') === $zona));
+}
+$zonas = [];
+foreach ($llamadas as $l) {
+    $z = trim($l['zona'] ?? '');
+    if ($z !== '' && !in_array($z, $zonas)) $zonas[] = $z;
+}
 sort($zonas);
 include 'includes/header.php';
 ?>

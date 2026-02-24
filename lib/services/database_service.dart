@@ -206,6 +206,42 @@ class DatabaseService {
     await db.insert('registro_llamadas', r.toMap());
   }
 
+  static Future<RegistroLlamada?> getRegistroLlamada(String id) async {
+    final db = await database;
+    final maps = await db.query('registro_llamadas', where: 'id = ?', whereArgs: [id]);
+    return maps.isEmpty ? null : RegistroLlamada.fromMap(maps.first);
+  }
+
+  static Future<void> updateRegistroLlamadaObservaciones(String id, String observaciones) async {
+    final db = await database;
+    await db.update(
+      'registro_llamadas',
+      {'observaciones': observaciones},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  static Future<void> updateRegistroLlamadaTranscripcion(String id, String transcripcionTexto) async {
+    final db = await database;
+    await db.update(
+      'registro_llamadas',
+      {'transcripcionTexto': transcripcionTexto},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  static Future<void> updateRegistroLlamadaRutaGrabacion(String id, String rutaGrabacion) async {
+    final db = await database;
+    await db.update(
+      'registro_llamadas',
+      {'rutaGrabacion': rutaGrabacion},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
     DateTime? desde,
     DateTime? hasta,

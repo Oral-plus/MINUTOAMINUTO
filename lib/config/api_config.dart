@@ -15,5 +15,6 @@ class ApiConfig {
   /// - localhost:8080 = API Dart local
   /// - PHP + SQL Server: 'http://192.168.2.244/api'
   static const String baseUrl = 'https://minutoaminuto-1.onrender.com';
+  /// false = SQLite local. true = API remota (inserta en servidor).
   static const bool useRemoteApi = true;
 }

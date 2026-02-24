@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+class AppKeys {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+}
+
 class AppConstants {
   // Colores corporativos
   static const Color azulCorporativo = Color(0xFF1565C0);

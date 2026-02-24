@@ -64,7 +64,9 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_cargo.displayName} registrado correctamente'),
+            content: Text(
+              '${_cargo.displayName} registrado en ${DataService.userRegistrationDestination}',
+            ),
             backgroundColor: AppConstants.verdeMeta,
           ),
         );
@@ -166,6 +168,27 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                   },
                 ),
               ],
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.storage_rounded, size: 18, color: AppConstants.azulCorporativo),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Destino de registro: ${DataService.userRegistrationDestination}',
+                        style: TextStyle(color: Colors.grey[700], fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 32),
               FilledButton(
                 onPressed: _guardando ? null : _guardar,

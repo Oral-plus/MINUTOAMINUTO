@@ -130,9 +130,16 @@ class ApiServer {
           if (req.method == 'GET') {
             final desde = req.uri.queryParameters['desde'] ?? DateTime.now().toIso8601String().split('T')[0];
             final hasta = req.uri.queryParameters['hasta'] ?? DateTime.now().toIso8601String().split('T')[0];
+            final zona = req.uri.queryParameters['zona'];
+            final nombreContactado = req.uri.queryParameters['nombreContactado'];
             var list = _llamadas.where((l) {
               final f = (l['fecha'] ?? '').toString().split('T')[0].split(' ')[0];
-              return f.compareTo(desde) >= 0 && f.compareTo(hasta) <= 0;
+              final okFecha = f.compareTo(desde) >= 0 && f.compareTo(hasta) <= 0;
+              final okZona = zona == null || zona.isEmpty || (l['zona'] ?? '').toString() == zona;
+              final okContactado = nombreContactado == null ||
+                  nombreContactado.isEmpty ||
+                  (l['nombreContactado'] ?? '').toString() == nombreContactado;
+              return okFecha && okZona && okContactado;
             }).toList();
             list.sort((a, b) => (b['horaInicio'] ?? '').toString().compareTo((a['horaInicio'] ?? '').toString()));
             req.response.write(jsonEncode(list));
@@ -148,6 +155,7 @@ class ApiServer {
               final body = Map<String, dynamic>.from(decoded as Map);
               final idx = _llamadas.indexWhere((x) => x['id'] == id);
               if (idx >= 0) {
+                if (body['observaciones'] != null) _llamadas[idx]['observaciones'] = body['observaciones'];
                 if (body['transcripcionTexto'] != null) _llamadas[idx]['transcripcionTexto'] = body['transcripcionTexto'];
                 if (body['rutaGrabacion'] != null) _llamadas[idx]['rutaGrabacion'] = body['rutaGrabacion'];
                 req.response.write(jsonEncode({'success': true}));

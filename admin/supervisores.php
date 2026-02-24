@@ -3,28 +3,25 @@ require_once 'config.php';
 requireLogin();
 $pageTitle = 'Supervisores';
 $currentPage = 'supervisores';
-$conn = getDbConnection();
 
 $msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['_action'] ?? 'create';
     try {
         if ($action === 'create') {
-            $id = !empty($_POST['id']) ? $_POST['id'] : ('s_' . uniqid());
-            $sub = isset($_POST['subordinadosIds']) ? (is_array($_POST['subordinadosIds']) ? implode(',', $_POST['subordinadosIds']) : $_POST['subordinadosIds']) : '';
-            if ($conn instanceof PDO) {
-                $stmt = $conn->prepare("INSERT INTO supervisores (id,nombre,codigo,zona,cargo,superiorId,subordinadosIds) VALUES (?,?,?,?,?,?,?)");
-                $stmt->execute([$id, $_POST['nombre'], $_POST['codigo'], $_POST['zona'], $_POST['cargo'] ?? 'coach', !empty($_POST['superiorId']) ? $_POST['superiorId'] : null, $sub]);
-            } else {
-                sqlsrv_query($conn, "INSERT INTO supervisores (id,nombre,codigo,zona,cargo,superiorId,subordinadosIds) VALUES (?,?,?,?,?,?,?)", [$id, $_POST['nombre'], $_POST['codigo'], $_POST['zona'], $_POST['cargo'] ?? 'coach', !empty($_POST['superiorId']) ? $_POST['superiorId'] : null, $sub]);
-            }
+            $body = [
+                'id' => !empty($_POST['id']) ? $_POST['id'] : ('s_' . uniqid()),
+                'nombre' => $_POST['nombre'],
+                'codigo' => $_POST['codigo'],
+                'zona' => $_POST['zona'],
+                'cargo' => $_POST['cargo'] ?? 'coach',
+                'superiorId' => !empty($_POST['superiorId']) ? $_POST['superiorId'] : null,
+                'subordinadosIds' => isset($_POST['subordinadosIds']) ? (is_array($_POST['subordinadosIds']) ? implode(',', $_POST['subordinadosIds']) : $_POST['subordinadosIds']) : '',
+            ];
+            apiPostSupervisor($body);
             $msg = 'Supervisor creado correctamente.';
         } elseif ($action === 'delete' && !empty($_POST['id'])) {
-            if ($conn instanceof PDO) {
-                $conn->prepare("DELETE FROM supervisores WHERE id = ?")->execute([$_POST['id']]);
-            } else {
-                sqlsrv_query($conn, "DELETE FROM supervisores WHERE id = ?", [$_POST['id']]);
-            }
+            apiDeleteSupervisor($_POST['id']);
             $msg = 'Supervisor eliminado.';
         }
     } catch (Exception $e) {
@@ -32,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$supervisores = dbQuery($conn, "SELECT * FROM supervisores ORDER BY nombre");
+$supervisoresRaw = apiGetSupervisores();
+usort($supervisoresRaw, fn($a, $b) => strcmp($a['nombre'] ?? '', $b['nombre'] ?? ''));
 include 'includes/header.php';
 ?>
 <div class="card">
@@ -56,7 +54,7 @@ include 'includes/header.php';
         <table>
             <thead><tr><th>ID</th><th>Nombre</th><th>Codigo</th><th>Zona</th><th>Cargo</th><th>Superior</th><th>Acciones</th></tr></thead>
             <tbody>
-            <?php foreach ($supervisores as $s): ?>
+            <?php foreach ($supervisoresRaw as $s): ?>
                 <tr>
                     <td><?= htmlspecialchars($s['id'] ?? '') ?></td>
                     <td><?= htmlspecialchars($s['nombre'] ?? '') ?></td>

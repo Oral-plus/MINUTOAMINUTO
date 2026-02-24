@@ -48,5 +48,36 @@ function handleLlamadas($conn, $method, $id) {
             sqlsrv_query($conn, $sql, $params);
         }
         echo json_encode(['success' => true, 'id' => $rid]);
+    } elseif ($method === 'PATCH' && $id) {
+        $d = getJsonInput();
+        $allowed = ['observaciones', 'rutaGrabacion', 'transcripcionTexto'];
+        $sets = [];
+        $params = [];
+        foreach ($allowed as $f) {
+            if (array_key_exists($f, $d)) {
+                $sets[] = "$f = ?";
+                $params[] = $d[$f];
+            }
+        }
+        if (empty($sets)) {
+            echo json_encode(['success' => false, 'message' => 'Sin campos para actualizar']);
+            return;
+        }
+        $params[] = $id;
+        $sql = "UPDATE registro_llamadas SET " . implode(', ', $sets) . " WHERE id = ?";
+        if ($conn instanceof PDO) {
+            $stmt = $conn->prepare($sql);
+            $stmt->execute($params);
+            echo json_encode(['success' => true, 'rows' => $stmt->rowCount()]);
+        } else {
+            $stmt = sqlsrv_query($conn, $sql, $params);
+            if ($stmt === false) {
+                http_response_code(500);
+                echo json_encode(['error' => print_r(sqlsrv_errors(), true)]);
+                exit;
+            }
+            sqlsrv_free_stmt($stmt);
+            echo json_encode(['success' => true]);
+        }
     }
 }
