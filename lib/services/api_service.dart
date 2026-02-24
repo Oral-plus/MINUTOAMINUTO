@@ -306,19 +306,39 @@ class ApiService {
   static Future<bool> testConnection() async {
     try {
       DebugAlertService.info('Probando conexión API: $_base/health/db');
-      final r = await _get('/health/db');
-      if (r.statusCode == 200) {
-        final data = jsonDecode(r.body) as Map;
-        final ok = data['success'] == true;
-        if (ok) {
-          DebugAlertService.success('Conexión API exitosa');
-        } else {
-          DebugAlertService.error('API respondió sin éxito');
-        }
-        return ok;
+      var r = await _get('/health/db');
+      if (r.statusCode != 200) {
+        DebugAlertService.warning(
+          'health/db no disponible (${r.statusCode}), probando /test',
+        );
+        r = await _get('/test');
       }
-      DebugAlertService.error('API error HTTP ${r.statusCode}');
-      return false;
+      if (r.statusCode != 200) {
+        DebugAlertService.error('API error HTTP ${r.statusCode}');
+        return false;
+      }
+
+      final data = jsonDecode(r.body);
+      if (data is! Map) {
+        DebugAlertService.error('Respuesta inválida de API');
+        return false;
+      }
+      final ok = data['success'] == true;
+      if (!ok) {
+        DebugAlertService.error('API respondió sin éxito');
+        return false;
+      }
+      // Si responde metadata de DB, confirmamos puente real.
+      final hasDbFingerprint =
+          data.containsKey('database') || data.containsKey('driver');
+      if (!hasDbFingerprint) {
+        DebugAlertService.warning(
+          'Conectada API sin verificación de DB (falta health/db).',
+        );
+      } else {
+        DebugAlertService.success('Conexión API + DB exitosa');
+      }
+      return true;
     } catch (e) {
       DebugAlertService.error('Error conexión API: $e');
       return false;

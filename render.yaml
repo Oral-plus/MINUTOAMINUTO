@@ -4,8 +4,18 @@ services:
   - type: web
     name: api-minuto-a-minuto
     runtime: docker
-    rootDir: api_server
-    # Render asigna PORT automáticamente; la API lo usa
+    rootDir: api
     healthCheckPath: /test
-    # Plan gratuito: el servicio duerme tras inactividad
-    # Plan de pago: siempre activo
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false
+      - key: DB_PORT
+        value: "1433"
+      - key: APP_DEBUG
+        value: "1"

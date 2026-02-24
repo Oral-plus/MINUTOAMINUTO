@@ -57,3 +57,20 @@ En `lib/config/api_config.dart`:
 - `baseUrl` (principal)
 - `fallbackBaseUrl` (respaldo)
 - `useRemoteApi = true`
+
+## Despliegue en Render (Docker)
+
+Este repositorio ya incluye `render.yaml` apuntando a `rootDir: api`.
+
+1. En Render, abra su servicio y ejecute **Manual Deploy** del último commit.
+2. Configure variables:
+   - `DB_HOST`
+   - `DB_NAME`
+   - `DB_USER`
+   - `DB_PASS`
+   - `DB_PORT=1433`
+   - `APP_DEBUG=1` (temporal para diagnóstico)
+3. Verifique en navegador:
+   - `GET /test`
+   - `GET /health/db`
+4. Cuando ya esté estable, cambie `APP_DEBUG=0`.
