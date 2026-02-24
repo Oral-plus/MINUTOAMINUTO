@@ -1,30 +1,67 @@
 <?php
-function handleAlertas($conn, $method, $id) {
+declare(strict_types=1);
+
+function handleAlertas($conn, string $method, ?string $id): void
+{
     if ($method === 'GET') {
         $resueltas = isset($_GET['resuelta']) ? (int)$_GET['resuelta'] : 0;
-        $sql = "SELECT * FROM alertas WHERE resuelta = ? ORDER BY fecha DESC";
-        
-        if ($conn instanceof PDO) {
-            $stmt = $conn->prepare($sql);
-            $stmt->execute([$resueltas]);
-            echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
-        } else {
-            $stmt = sqlsrv_query($conn, $sql, [$resueltas]);
-            $rows = [];
-            while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-                if (isset($r['fecha']) && $r['fecha'] instanceof DateTime) $r['fecha'] = $r['fecha']->format('Y-m-d\TH:i:s');
-                $rows[] = $r;
+        $rows = dbQueryAll(
+            $conn,
+            'SELECT * FROM alertas WHERE resuelta = ? ORDER BY fecha DESC',
+            [$resueltas]
+        );
+        foreach ($rows as &$row) {
+            if (isset($row['fecha'])) {
+                $row['fecha'] = str_replace(' ', 'T', (string)$row['fecha']);
             }
-            sqlsrv_free_stmt($stmt);
-            echo json_encode($rows);
         }
-    } elseif ($method === 'POST') {
-        $d = getJsonInput();
-        $aid = $d['id'] ?? uniqid('alerta_');
-        $sql = "INSERT INTO alertas (id,tipo,fecha,mensaje,vendedorId,supervisorId,zona,resuelta) VALUES (?,?,?,?,?,?,?,?)";
-        $params = [$aid, $d['tipo'], $d['fecha'], $d['mensaje'], $d['vendedorId'] ?? null, $d['supervisorId'] ?? null, $d['zona'] ?? '', (int)($d['resuelta'] ?? 0)];
-        if ($conn instanceof PDO) $conn->prepare($sql)->execute($params);
-        else sqlsrv_query($conn, $sql, $params);
-        echo json_encode(['success' => true]);
+        jsonResponse($rows);
+        return;
     }
+
+    if ($method === 'POST') {
+        $d = getJsonInput();
+        $aid = optionalString($d, 'id', '');
+        if ($aid === '') {
+            $aid = uniqid('alerta_', false);
+        }
+        $payload = [
+            requiredString($d, 'tipo'),
+            requiredString($d, 'fecha'),
+            requiredString($d, 'mensaje'),
+            ($d['vendedorId'] ?? null),
+            ($d['supervisorId'] ?? null),
+            optionalString($d, 'zona', ''),
+            (int)($d['resuelta'] ?? 0),
+        ];
+
+        dbBegin($conn);
+        try {
+            $exists = dbQueryOne($conn, 'SELECT COUNT(1) AS total FROM alertas WHERE id = ?', [$aid]);
+            if (((int)($exists['total'] ?? 0)) > 0) {
+                dbExecute(
+                    $conn,
+                    'UPDATE alertas SET tipo=?,fecha=?,mensaje=?,vendedorId=?,supervisorId=?,zona=?,resuelta=? WHERE id=?',
+                    array_merge($payload, [$aid])
+                );
+                dbCommit($conn);
+                jsonResponse(['success' => true, 'id' => $aid, 'mode' => 'updated']);
+                return;
+            }
+
+            dbExecute(
+                $conn,
+                'INSERT INTO alertas (id,tipo,fecha,mensaje,vendedorId,supervisorId,zona,resuelta) VALUES (?,?,?,?,?,?,?,?)',
+                array_merge([$aid], $payload)
+            );
+            dbCommit($conn);
+            jsonResponse(['success' => true, 'id' => $aid, 'mode' => 'inserted']);
+            return;
+        } catch (Throwable $e) {
+            dbRollback($conn);
+            throw $e;
+        }
+    }
+
+    jsonResponse(['success' => false, 'error' => 'Método no permitido'], 405);
 }

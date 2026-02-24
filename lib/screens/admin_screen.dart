@@ -50,7 +50,7 @@ class _AdminScreenState extends State<AdminScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar supervisor'),
-        content: Text('¿Eliminar a ${s.nombre} (${s.cargo.displayName})?'),
+        content: Text('Eliminar a ${s.nombre} (${s.cargo.displayName})?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -94,7 +94,7 @@ class _AdminScreenState extends State<AdminScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar vendedor'),
-        content: Text('¿Eliminar a ${v.nombre}?'),
+        content: Text('Eliminar a ${v.nombre}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -138,7 +138,7 @@ class _AdminScreenState extends State<AdminScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
       appBar: AppBar(
-        title: const Text('Administración de Equipo'),
+        title: const Text('Administracion de Equipo'),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF111827),
         actions: [
@@ -256,7 +256,7 @@ class _ResumenAdmin extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '$totalSupervisores supervisores · $totalVendedores vendedores',
+              '$totalSupervisores supervisores - $totalVendedores vendedores',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,

@@ -1,42 +1,73 @@
 <?php
-function handlePpvc($conn, $method, $id) {
+declare(strict_types=1);
+
+function handlePpvc($conn, string $method, ?string $id): void
+{
     if ($method === 'GET') {
         $fecha = $_GET['fecha'] ?? date('Y-m-d');
-        $vendedorId = $_GET['vendedorId'] ?? null;
-        
-        if ($vendedorId) {
-            $sql = "SELECT * FROM ppvc WHERE vendedorId = ? AND fecha = ?";
-            $params = [$vendedorId, $fecha];
-        } else {
-            $sql = "SELECT * FROM ppvc WHERE fecha = ?";
-            $params = [$fecha];
+        $vendedorId = isset($_GET['vendedorId']) ? trim((string)$_GET['vendedorId']) : '';
+
+        if ($vendedorId !== '') {
+            $row = dbQueryOne(
+                $conn,
+                'SELECT * FROM ppvc WHERE vendedorId = ? AND fecha = ?',
+                [$vendedorId, $fecha]
+            );
+            jsonResponse($row ?: null);
+            return;
         }
-        
-        if ($conn instanceof PDO) {
-            $stmt = $conn->prepare($sql);
-            $stmt->execute($params);
-            $row = $vendedorId ? $stmt->fetch(PDO::FETCH_ASSOC) : $stmt->fetchAll(PDO::FETCH_ASSOC);
-            echo json_encode($row ?: ($vendedorId ? null : []));
-        } else {
-            $stmt = sqlsrv_query($conn, $sql, $params);
-            $rows = [];
-            while ($r = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-                if (isset($r['fecha']) && $r['fecha'] instanceof DateTime) $r['fecha'] = $r['fecha']->format('Y-m-d');
-                $rows[] = $r;
-            }
-            sqlsrv_free_stmt($stmt);
-            echo json_encode($vendedorId ? ($rows[0] ?? null) : $rows);
-        }
-    } elseif ($method === 'POST') {
-        $d = getJsonInput();
-        $pid = $d['id'] ?? uniqid('ppvc_');
-        $sql = "INSERT INTO ppvc (id,vendedorId,fecha,zona,clientesProgramados,clientes60Ids,clientesPerdidosIds,metaVenta,metaRecaudo,programado2DiasAntes) VALUES (?,?,?,?,?,?,?,?,?,?)";
-        $params = [$pid, $d['vendedorId'], $d['fecha'], $d['zona'] ?? '', (int)($d['clientesProgramados'] ?? 0), $d['clientes60Ids'] ?? '', $d['clientesPerdidosIds'] ?? '', (float)($d['metaVenta'] ?? 0), (float)($d['metaRecaudo'] ?? 0), (int)($d['programado2DiasAntes'] ?? 0)];
-        if ($conn instanceof PDO) {
-            $conn->prepare($sql)->execute($params);
-        } else {
-            sqlsrv_query($conn, $sql, $params);
-        }
-        echo json_encode(['success' => true, 'id' => $pid]);
+
+        $rows = dbQueryAll($conn, 'SELECT * FROM ppvc WHERE fecha = ?', [$fecha]);
+        jsonResponse($rows);
+        return;
     }
+
+    if ($method === 'POST') {
+        $d = getJsonInput();
+        $pid = optionalString($d, 'id', '');
+        if ($pid === '') {
+            $pid = uniqid('ppvc_', false);
+        }
+
+        $payload = [
+            requiredString($d, 'vendedorId'),
+            requiredString($d, 'fecha'),
+            optionalString($d, 'zona', ''),
+            (int)($d['clientesProgramados'] ?? 0),
+            optionalString($d, 'clientes60Ids', ''),
+            optionalString($d, 'clientesPerdidosIds', ''),
+            (float)($d['metaVenta'] ?? 0),
+            (float)($d['metaRecaudo'] ?? 0),
+            (int)($d['programado2DiasAntes'] ?? 0),
+        ];
+
+        dbBegin($conn);
+        try {
+            $exists = dbQueryOne($conn, 'SELECT COUNT(1) AS total FROM ppvc WHERE id = ?', [$pid]);
+            if (((int)($exists['total'] ?? 0)) > 0) {
+                dbExecute(
+                    $conn,
+                    'UPDATE ppvc SET vendedorId=?,fecha=?,zona=?,clientesProgramados=?,clientes60Ids=?,clientesPerdidosIds=?,metaVenta=?,metaRecaudo=?,programado2DiasAntes=? WHERE id=?',
+                    array_merge($payload, [$pid])
+                );
+                dbCommit($conn);
+                jsonResponse(['success' => true, 'id' => $pid, 'mode' => 'updated']);
+                return;
+            }
+
+            dbExecute(
+                $conn,
+                'INSERT INTO ppvc (id,vendedorId,fecha,zona,clientesProgramados,clientes60Ids,clientesPerdidosIds,metaVenta,metaRecaudo,programado2DiasAntes) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                array_merge([$pid], $payload)
+            );
+            dbCommit($conn);
+            jsonResponse(['success' => true, 'id' => $pid, 'mode' => 'inserted']);
+            return;
+        } catch (Throwable $e) {
+            dbRollback($conn);
+            throw $e;
+        }
+    }
+
+    jsonResponse(['success' => false, 'error' => 'Método no permitido'], 405);
 }

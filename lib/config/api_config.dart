@@ -11,10 +11,19 @@
 /// La API PHP escribe en [minuto_a_minuto].[dbo].[supervisores] y vendedores.
 class ApiConfig {
   /// URL de la API.
-  /// - https://minutoaminuto-1.onrender.com = API Dart desplegada en Render
-  /// - localhost:8080 = API Dart local
-  /// - PHP + SQL Server: 'http://192.168.2.244/api'
-  static const String baseUrl = 'https://minutoaminuto-1.onrender.com';
+  /// - PHP + SQL Server (LAN): 'http://192.168.2.244/api'
+  /// - Se puede sobreescribir con --dart-define=API_BASE_URL=...
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.2.244/api',
+  );
+
+  /// URL alternativa cuando el servidor publica la API sin el prefijo /api.
+  /// Se puede sobreescribir con --dart-define=API_FALLBACK_BASE_URL=...
+  static const String fallbackBaseUrl = String.fromEnvironment(
+    'API_FALLBACK_BASE_URL',
+    defaultValue: 'http://192.168.2.244',
+  );
   /// false = SQLite local. true = API remota (inserta en servidor).
   static const bool useRemoteApi = true;
 }

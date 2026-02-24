@@ -10,31 +10,91 @@ import '../models/alerta.dart';
 import 'debug_alert_service.dart';
 
 class ApiService {
-  static String get _base => ApiConfig.baseUrl;
+  static String _activeBase = ApiConfig.baseUrl;
+  static bool _fallbackTried = false;
+  static String get _base => _activeBase;
+
+  static Future<http.Response> _get(String path) async {
+    return _requestWithFallback(() => http.get(Uri.parse('$_base$path')));
+  }
+
+  static Future<http.Response> _delete(String path) async {
+    return _requestWithFallback(() => http.delete(Uri.parse('$_base$path')));
+  }
+
+  static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
+    return _requestWithFallback(
+      () => http.post(
+        Uri.parse('$_base$path'),
+        body: jsonEncode(body),
+        headers: {'Content-Type': 'application/json'},
+      ),
+    );
+  }
+
+  static Future<http.Response> _patch(String path, Map<String, dynamic> body) async {
+    return _requestWithFallback(
+      () => http.patch(
+        Uri.parse('$_base$path'),
+        body: jsonEncode(body),
+        headers: {'Content-Type': 'application/json'},
+      ),
+    );
+  }
+
+  static Future<http.Response> _requestWithFallback(
+    Future<http.Response> Function() request,
+  ) async {
+    try {
+      final r = await request().timeout(const Duration(seconds: 8));
+      if (_shouldSwitchToFallback(r.statusCode)) {
+        await _switchToFallbackBase();
+        return request().timeout(const Duration(seconds: 8));
+      }
+      return r;
+    } catch (e) {
+      if (!_fallbackTried) {
+        await _switchToFallbackBase();
+        return request().timeout(const Duration(seconds: 8));
+      }
+      rethrow;
+    }
+  }
+
+  static bool _shouldSwitchToFallback(int statusCode) {
+    return !_fallbackTried && (statusCode == 404 || statusCode == 502 || statusCode == 503);
+  }
+
+  static Future<void> _switchToFallbackBase() async {
+    if (_fallbackTried) return;
+    _fallbackTried = true;
+    _activeBase = ApiConfig.fallbackBaseUrl;
+    DebugAlertService.warning('API fallback activado: $_activeBase');
+  }
 
   static Future<List<Vendedor>> getVendedores() async {
-    final r = await http.get(Uri.parse('$_base/vendedores'));
+    final r = await _get('/vendedores');
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     return list.map((m) => Vendedor.fromMap(Map<String, dynamic>.from(m as Map))).toList();
   }
 
   static Future<Vendedor?> getVendedor(String id) async {
-    final r = await http.get(Uri.parse('$_base/vendedores/$id'));
+    final r = await _get('/vendedores/$id');
     if (r.statusCode != 200) throw Exception(r.body);
     final data = jsonDecode(r.body);
     return data == null ? null : Vendedor.fromMap(Map<String, dynamic>.from(data as Map));
   }
 
   static Future<List<Supervisor>> getSupervisores() async {
-    final r = await http.get(Uri.parse('$_base/supervisores'));
+    final r = await _get('/supervisores');
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     return list.map((m) => Supervisor.fromMap(Map<String, dynamic>.from(m as Map))).toList();
   }
 
   static Future<Supervisor?> getSupervisor(String id) async {
-    final r = await http.get(Uri.parse('$_base/supervisores/$id'));
+    final r = await _get('/supervisores/$id');
     if (r.statusCode != 200) throw Exception(r.body);
     final data = jsonDecode(r.body);
     return data == null ? null : Supervisor.fromMap(Map<String, dynamic>.from(data as Map));
@@ -42,25 +102,23 @@ class ApiService {
 
   static Future<void> insertSupervisor(Supervisor s) async {
     final body = s.toMap();
-    final r = await http.post(Uri.parse('$_base/supervisores'),
-        body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
+    final r = await _post('/supervisores', body);
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
   static Future<void> insertVendedor(Vendedor v) async {
     final body = v.toMap();
-    final r = await http.post(Uri.parse('$_base/vendedores'),
-        body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
+    final r = await _post('/vendedores', body);
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
   static Future<void> deleteSupervisor(String id) async {
-    final r = await http.delete(Uri.parse('$_base/supervisores/$id'));
+    final r = await _delete('/supervisores/$id');
     if (r.statusCode != 200 && r.statusCode != 204) throw Exception('Error ${r.statusCode}: ${r.body}');
   }
 
   static Future<void> deleteVendedor(String id) async {
-    final r = await http.delete(Uri.parse('$_base/vendedores/$id'));
+    final r = await _delete('/vendedores/$id');
     if (r.statusCode != 200 && r.statusCode != 204) throw Exception('Error ${r.statusCode}: ${r.body}');
   }
 
@@ -75,29 +133,17 @@ class ApiService {
   }
 
   static Future<void> updateRegistroLlamadaObservaciones(String id, String observaciones) async {
-    final r = await http.patch(
-      Uri.parse('$_base/llamadas/$id'),
-      body: jsonEncode({'observaciones': observaciones}),
-      headers: {'Content-Type': 'application/json'},
-    );
+    final r = await _patch('/llamadas/$id', {'observaciones': observaciones});
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
   static Future<void> updateRegistroLlamadaTranscripcion(String id, String transcripcionTexto) async {
-    final r = await http.patch(
-      Uri.parse('$_base/llamadas/$id'),
-      body: jsonEncode({'transcripcionTexto': transcripcionTexto}),
-      headers: {'Content-Type': 'application/json'},
-    );
+    final r = await _patch('/llamadas/$id', {'transcripcionTexto': transcripcionTexto});
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
   static Future<void> updateRegistroLlamadaRutaGrabacion(String id, String rutaGrabacion) async {
-    final r = await http.patch(
-      Uri.parse('$_base/llamadas/$id'),
-      body: jsonEncode({'rutaGrabacion': rutaGrabacion}),
-      headers: {'Content-Type': 'application/json'},
-    );
+    final r = await _patch('/llamadas/$id', {'rutaGrabacion': rutaGrabacion});
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
@@ -107,13 +153,18 @@ class ApiService {
     String? zona,
     String? nombreContactado,
   }) async {
-    var url = '$_base/llamadas?';
-    if (desde != null) url += 'desde=${desde.toIso8601String().split('T')[0]}&';
-    if (hasta != null) url += 'hasta=${hasta.toIso8601String().split('T')[0]}&';
-    if (zona != null) url += 'zona=$zona&';
-    if (nombreContactado != null) url += 'nombreContactado=$nombreContactado&';
-    DebugAlertService.info('API GET: $url');
-    final r = await http.get(Uri.parse(url));
+    final qp = <String, String>{};
+    if (desde != null) qp['desde'] = desde.toIso8601String().split('T')[0];
+    if (hasta != null) qp['hasta'] = hasta.toIso8601String().split('T')[0];
+    if (zona != null && zona.isNotEmpty) qp['zona'] = zona;
+    if (nombreContactado != null && nombreContactado.isNotEmpty) {
+      qp['nombreContactado'] = nombreContactado;
+    }
+    final uri = Uri.parse('$_base/llamadas').replace(
+      queryParameters: qp.isEmpty ? null : qp,
+    );
+    DebugAlertService.info('API GET: $uri');
+    final r = await _requestWithFallback(() => http.get(uri));
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     DebugAlertService.success('API OK /llamadas (${list.length} registros)');
@@ -151,10 +202,20 @@ class ApiService {
       'rutaGrabacion': r.rutaGrabacion,
       'transcripcionTexto': r.transcripcionTexto,
     };
-    DebugAlertService.info('API POST: $_base/llamadas');
-    final res = await http.post(Uri.parse('$_base/llamadas'),
-        body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
+    final uri = Uri.parse('$_base/llamadas');
+    DebugAlertService.info('API POST: $uri');
+    final res = await _requestWithFallback(
+      () => http.post(
+        uri,
+        body: jsonEncode(body),
+        headers: {'Content-Type': 'application/json'},
+      ),
+    );
     if (res.statusCode != 200) throw Exception(res.body);
+    final parsed = jsonDecode(res.body);
+    if (parsed is! Map || parsed['success'] != true) {
+      throw Exception('Respuesta invalida al guardar llamada: ${res.body}');
+    }
     DebugAlertService.success('API OK: llamada guardada');
   }
 
@@ -166,7 +227,7 @@ class ApiService {
 
   static Future<Ppvc?> getPpvcHoy(String vendedorId) async {
     final hoy = DateTime.now().toIso8601String().split('T')[0];
-    final r = await http.get(Uri.parse('$_base/ppvc?vendedorId=$vendedorId&fecha=$hoy'));
+    final r = await _get('/ppvc?vendedorId=$vendedorId&fecha=$hoy');
     if (r.statusCode != 200) throw Exception(r.body);
     final data = jsonDecode(r.body);
     return data == null ? null : Ppvc.fromMap(Map<String, dynamic>.from(data as Map));
@@ -174,7 +235,7 @@ class ApiService {
 
   static Future<List<Ppvc>> getPpvcByFecha(DateTime fecha) async {
     final f = fecha.toIso8601String().split('T')[0];
-    final r = await http.get(Uri.parse('$_base/ppvc?fecha=$f'));
+    final r = await _get('/ppvc?fecha=$f');
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     return list.map((m) => Ppvc.fromMap(Map<String, dynamic>.from(m as Map))).toList();
@@ -182,7 +243,7 @@ class ApiService {
 
   static Future<Rvc?> getRvcHoy(String vendedorId) async {
     final hoy = DateTime.now().toIso8601String().split('T')[0];
-    final r = await http.get(Uri.parse('$_base/rvc?vendedorId=$vendedorId&fecha=$hoy'));
+    final r = await _get('/rvc?vendedorId=$vendedorId&fecha=$hoy');
     if (r.statusCode != 200) throw Exception(r.body);
     final data = jsonDecode(r.body);
     return data == null ? null : Rvc.fromMap(Map<String, dynamic>.from(data as Map));
@@ -190,7 +251,7 @@ class ApiService {
 
   static Future<List<Rvc>> getRvcByFecha(DateTime fecha) async {
     final f = fecha.toIso8601String().split('T')[0];
-    final r = await http.get(Uri.parse('$_base/rvc?fecha=$f'));
+    final r = await _get('/rvc?fecha=$f');
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     return list.map((m) => Rvc.fromMap(Map<String, dynamic>.from(m as Map))).toList();
@@ -207,12 +268,12 @@ class ApiService {
       'zona': a.zona,
       'resuelta': a.resuelta ? 1 : 0,
     };
-    final r = await http.post(Uri.parse('$_base/alertas'), body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
+    final r = await _post('/alertas', body);
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
   static Future<List<Alerta>> getAlertasPendientes() async {
-    final r = await http.get(Uri.parse('$_base/alertas?resuelta=0'));
+    final r = await _get('/alertas?resuelta=0');
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     return list.map((m) {
@@ -238,14 +299,14 @@ class ApiService {
       'longitud': lng,
       'timestamp': DateTime.now().toIso8601String(),
     };
-    final r = await http.post(Uri.parse('$_base/ubicaciones'), body: jsonEncode(body), headers: {'Content-Type': 'application/json'});
+    final r = await _post('/ubicaciones', body);
     if (r.statusCode != 200) throw Exception(r.body);
   }
 
   static Future<bool> testConnection() async {
     try {
-      DebugAlertService.info('Probando conexión API: $_base/test');
-      final r = await http.get(Uri.parse('$_base/test')).timeout(const Duration(seconds: 5));
+      DebugAlertService.info('Probando conexión API: $_base/health/db');
+      final r = await _get('/health/db');
       if (r.statusCode == 200) {
         final data = jsonDecode(r.body) as Map;
         final ok = data['success'] == true;

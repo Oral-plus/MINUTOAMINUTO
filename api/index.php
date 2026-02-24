@@ -1,37 +1,44 @@
 <?php
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+declare(strict_types=1);
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+require_once __DIR__ . '/core/http.php';
+require_once __DIR__ . '/config/database.php';
+
+sendApiHeaders();
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
+    jsonResponse(['success' => true], 200);
     exit;
 }
 
-require_once __DIR__ . '/config/database.php';
-
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$path = preg_replace('#^.*/(api/|api\.php/?)#', '', $requestUri);
-$path = str_replace('index.php/', '', $path);
-$path = trim($path, '/');
-$segments = $path ? explode('/', $path) : [];
-$method = $_SERVER['REQUEST_METHOD'];
+$segments = resolveRouteSegments();
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 try {
     $conn = getDbConnection();
-    
-    if (empty($segments[0])) {
-        echo json_encode(['status' => 'ok', 'api' => 'Minuto a Minuto', 'version' => '1.0']);
+
+    if (empty($segments)) {
+        jsonResponse([
+            'success' => true,
+            'api' => 'Minuto a Minuto',
+            'version' => '2.0',
+            'time' => date('c'),
+        ]);
         exit;
     }
-    
+
     $resource = $segments[0];
     $id = $segments[1] ?? null;
-    
+
     switch ($resource) {
         case 'test':
-            echo json_encode(testDatabaseConnection());
+        case 'health':
+            if (($segments[1] ?? 'db') !== 'db' && $resource === 'health') {
+                jsonResponse(['success' => true, 'resource' => 'health']);
+            } else {
+                $db = testDatabaseConnection();
+                jsonResponse($db, $db['success'] ? 200 : 500);
+            }
             break;
         case 'vendedores':
             require __DIR__ . '/endpoints/vendedores.php';
@@ -66,15 +73,13 @@ try {
             handleAudio($conn, $method, $id);
             break;
         default:
-            http_response_code(404);
-            echo json_encode(['error' => 'Recurso no encontrado']);
+            jsonResponse(['success' => false, 'error' => 'Recurso no encontrado'], 404);
     }
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
-}
-
-function getJsonInput() {
-    $input = file_get_contents('php://input');
-    return $input ? json_decode($input, true) : [];
+} catch (InvalidArgumentException $e) {
+    jsonResponse(['success' => false, 'error' => $e->getMessage()], 400);
+} catch (Throwable $e) {
+    jsonResponse([
+        'success' => false,
+        'error' => APP_DEBUG ? $e->getMessage() : 'Error interno del servidor.',
+    ], 500);
 }

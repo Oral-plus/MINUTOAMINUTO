@@ -11,6 +11,66 @@ class CallAudioRecordingService {
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   static AudioRecorder get _instance => _recorder ??= AudioRecorder();
+  static const List<_PerfilGrabacion> _perfiles = [
+    // Perfil prioritario para intentar capturar canal de llamada completo en equipos compatibles.
+    _PerfilGrabacion(
+      'voice_call_legacy',
+      RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+        numChannels: 1,
+        autoGain: false,
+        echoCancel: false,
+        noiseSuppress: false,
+        androidConfig: AndroidRecordConfig(
+          useLegacy: true,
+          audioSource: AndroidAudioSource.voiceCall,
+          audioManagerMode: AudioManagerMode.modeInCommunication,
+          speakerphone: false,
+          manageBluetooth: false,
+        ),
+      ),
+    ),
+    // Alternativa moderna en modo comunicación.
+    _PerfilGrabacion(
+      'voice_communication',
+      RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+        numChannels: 1,
+        autoGain: false,
+        echoCancel: false,
+        noiseSuppress: false,
+        androidConfig: AndroidRecordConfig(
+          audioSource: AndroidAudioSource.voiceCommunication,
+          audioManagerMode: AudioManagerMode.modeInCommunication,
+          speakerphone: false,
+          manageBluetooth: true,
+        ),
+      ),
+    ),
+    // Último fallback acústico para equipos donde Android bloquea canal remoto.
+    _PerfilGrabacion(
+      'mic_speakerphone',
+      RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+        numChannels: 1,
+        autoGain: false,
+        echoCancel: false,
+        noiseSuppress: false,
+        androidConfig: AndroidRecordConfig(
+          audioSource: AndroidAudioSource.mic,
+          audioManagerMode: AudioManagerMode.modeInCommunication,
+          speakerphone: true,
+          manageBluetooth: false,
+        ),
+      ),
+    ),
+  ];
 
   /// Inicia la grabación. Pequeña pausa si hace falta permiso.
   static Future<String?> start() async {
@@ -36,19 +96,31 @@ class CallAudioRecordingService {
 
       final filePath =
           '${recDir.path}/call_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _instance.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 64000,
-          sampleRate: 16000,
-          numChannels: 1,
-          noiseSuppress: true,
-          echoCancel: true,
-        ),
-        path: filePath,
-      );
-      _currentPath = filePath;
-      return _currentPath;
+
+      for (final perfil in _perfiles) {
+        try {
+          await _instance.start(perfil.config, path: filePath);
+          await Future.delayed(const Duration(milliseconds: 220));
+          if (await _instance.isRecording()) {
+            _currentPath = filePath;
+            debugPrint('CallAudioRecordingService: perfil activo ${perfil.nombre}');
+            return _currentPath;
+          }
+        } catch (e) {
+          debugPrint(
+            'CallAudioRecordingService start perfil ${perfil.nombre} error: $e',
+          );
+        } finally {
+          if (!await _instance.isRecording()) {
+            try {
+              await _instance.stop();
+            } catch (_) {}
+          }
+        }
+      }
+
+      debugPrint('CallAudioRecordingService: no se pudo iniciar ningún perfil');
+      return null;
     } catch (e) {
       debugPrint('CallAudioRecordingService start error: $e');
       return null;
@@ -74,4 +146,11 @@ class CallAudioRecordingService {
       _currentPath = null;
     }
   }
+}
+
+class _PerfilGrabacion {
+  final String nombre;
+  final RecordConfig config;
+
+  const _PerfilGrabacion(this.nombre, this.config);
 }
