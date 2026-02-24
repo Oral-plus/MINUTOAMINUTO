@@ -1,22 +1,4 @@
 {
-  "name": "minutoaminuto-api-node",
-  "version": "1.0.0",
-  "private": true,
-  "description": "API Node.js para consulta de cartera en SQL Server",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "mssql": "^11.0.1"
-  }
-}
-{
   "name": "minuto-a-minuto-api-node",
   "version": "1.0.0",
   "private": true,
@@ -33,6 +15,6 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "mssql": "^10.0.2"
+    "mssql": "^11.0.1"
   }
 }
