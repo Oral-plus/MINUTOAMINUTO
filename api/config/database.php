@@ -121,6 +121,14 @@ function sqlsrvErrorMessage(): string
     return implode(' | ', array_filter($parts));
 }
 
+function sqlsrvQueryOptions(): array
+{
+    if (DB_QUERY_TIMEOUT <= 0) {
+        return [];
+    }
+    return ['QueryTimeout' => DB_QUERY_TIMEOUT];
+}
+
 function getDbConnection()
 {
     static $cached = null;
@@ -137,7 +145,6 @@ function getDbConnection()
         'TrustServerCertificate' => DB_TRUST_SERVER_CERT,
         'Encrypt' => DB_ENCRYPT,
         'LoginTimeout' => DB_LOGIN_TIMEOUT,
-        'QueryTimeout' => DB_QUERY_TIMEOUT,
     ];
 
     if (function_exists('sqlsrv_connect')) {
@@ -266,7 +273,7 @@ function dbExecute($conn, string $sql, array $params = []): int
         $stmt->execute($params);
         return $stmt->rowCount();
     }
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $stmt = sqlsrv_query($conn, $sql, $params, sqlsrvQueryOptions());
     if ($stmt === false) {
         throwSqlsrv('Error al ejecutar sentencia SQL.');
     }
@@ -282,7 +289,7 @@ function dbQueryAll($conn, string $sql, array $params = []): array
         $stmt->execute($params);
         return normalizeRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $stmt = sqlsrv_query($conn, $sql, $params, sqlsrvQueryOptions());
     if ($stmt === false) {
         throwSqlsrv('Error al consultar datos.');
     }
