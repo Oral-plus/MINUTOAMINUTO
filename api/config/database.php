@@ -6,8 +6,120 @@ define('DB_NAME', getenv('DB_NAME') ?: 'minuto_a_minuto');
 define('DB_USER', getenv('DB_USER') ?: 'sa');
 define('DB_PASS', getenv('DB_PASS') ?: 'Sky2022*!');
 define('DB_PORT', (int)(getenv('DB_PORT') ?: '1433'));
+define('DB_SERVER', getenv('DB_SERVER') ?: '');
+define('DB_LOGIN_TIMEOUT', (int)(getenv('DB_LOGIN_TIMEOUT') ?: '8'));
+define('DB_QUERY_TIMEOUT', (int)(getenv('DB_QUERY_TIMEOUT') ?: '20'));
+define('DB_ENCRYPT', envBool('DB_ENCRYPT', false));
+define('DB_TRUST_SERVER_CERT', envBool('DB_TRUST_SERVER_CERT', true));
 define('DB_CHARSET', 'UTF-8');
 define('APP_DEBUG', (getenv('APP_DEBUG') ?: '0') === '1');
+
+function envBool(string $name, bool $default): bool
+{
+    $raw = getenv($name);
+    if ($raw === false || trim((string)$raw) === '') {
+        return $default;
+    }
+    $value = strtolower(trim((string)$raw));
+    if (in_array($value, ['1', 'true', 'yes', 'y', 'on'], true)) {
+        return true;
+    }
+    if (in_array($value, ['0', 'false', 'no', 'n', 'off'], true)) {
+        return false;
+    }
+    return $default;
+}
+
+function buildServerName(): string
+{
+    if (DB_SERVER !== '') {
+        return DB_SERVER;
+    }
+
+    // Si el host ya trae instancia o puerto explícito, no forzar formato.
+    if (strpos(DB_HOST, '\\') !== false || strpos(DB_HOST, ',') !== false) {
+        return DB_HOST;
+    }
+
+    return DB_HOST . ',' . DB_PORT;
+}
+
+function isPrivateHost(string $host): bool
+{
+    $h = trim($host);
+    if ($h === '' || $h === 'localhost') {
+        return true;
+    }
+    if (strpos($h, '\\') !== false) {
+        $h = explode('\\', $h, 2)[0];
+    }
+    if (strpos($h, ',') !== false) {
+        $h = explode(',', $h, 2)[0];
+    }
+    if (filter_var($h, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+        return false;
+    }
+    $long = ip2long($h);
+    if ($long === false) {
+        return false;
+    }
+    $privateRanges = [
+        ['10.0.0.0', '10.255.255.255'],
+        ['172.16.0.0', '172.31.255.255'],
+        ['192.168.0.0', '192.168.255.255'],
+        ['127.0.0.0', '127.255.255.255'],
+    ];
+    foreach ($privateRanges as [$start, $end]) {
+        if ($long >= ip2long($start) && $long <= ip2long($end)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function tcpProbe(string $host, int $port, float $timeout = 4.0): array
+{
+    $target = $host;
+    if (strpos($target, '\\') !== false) {
+        $target = explode('\\', $target, 2)[0];
+    }
+    if (strpos($target, ',') !== false) {
+        $target = explode(',', $target, 2)[0];
+    }
+    $target = trim($target);
+    if ($target === '') {
+        return ['ok' => false, 'message' => 'Host vacío'];
+    }
+
+    $errno = 0;
+    $errstr = '';
+    $socket = @fsockopen($target, $port, $errno, $errstr, $timeout);
+    if ($socket === false) {
+        return [
+            'ok' => false,
+            'message' => trim($errstr) !== '' ? $errstr : 'No se pudo abrir socket TCP',
+            'errno' => $errno,
+        ];
+    }
+    fclose($socket);
+    return ['ok' => true];
+}
+
+function sqlsrvErrorMessage(): string
+{
+    if (!function_exists('sqlsrv_errors')) {
+        return '';
+    }
+    $errors = sqlsrv_errors(SQLSRV_ERR_ERRORS);
+    if (!is_array($errors) || empty($errors)) {
+        return '';
+    }
+    $parts = [];
+    foreach ($errors as $err) {
+        $parts[] = trim((string)($err['message'] ?? ''));
+    }
+    return implode(' | ', array_filter($parts));
+}
 
 function getDbConnection()
 {
@@ -16,18 +128,25 @@ function getDbConnection()
         return $cached;
     }
 
+    $serverName = buildServerName();
     $connectionInfo = [
         'Database' => DB_NAME,
         'UID' => DB_USER,
         'PWD' => DB_PASS,
         'CharacterSet' => DB_CHARSET,
-        'TrustServerCertificate' => true,
-        'Encrypt' => false,
+        'TrustServerCertificate' => DB_TRUST_SERVER_CERT,
+        'Encrypt' => DB_ENCRYPT,
+        'LoginTimeout' => DB_LOGIN_TIMEOUT,
+        'QueryTimeout' => DB_QUERY_TIMEOUT,
     ];
 
     if (function_exists('sqlsrv_connect')) {
-        $conn = sqlsrv_connect(DB_HOST . ',' . DB_PORT, $connectionInfo);
+        $conn = sqlsrv_connect($serverName, $connectionInfo);
         if ($conn === false) {
+            $details = sqlsrvErrorMessage();
+            if (APP_DEBUG && $details !== '') {
+                throw new RuntimeException('No fue posible conectar con SQL Server (sqlsrv). ' . $details);
+            }
             throw new RuntimeException('No fue posible conectar con SQL Server (sqlsrv).');
         }
         $cached = $conn;
@@ -36,7 +155,10 @@ function getDbConnection()
 
     if (class_exists('PDO')) {
         try {
-            $dsn = 'sqlsrv:Server=' . DB_HOST . ',' . DB_PORT . ';Database=' . DB_NAME;
+            $dsn = 'sqlsrv:Server=' . $serverName . ';Database=' . DB_NAME;
+            $dsn .= ';Encrypt=' . (DB_ENCRYPT ? 'yes' : 'no');
+            $dsn .= ';TrustServerCertificate=' . (DB_TRUST_SERVER_CERT ? 'yes' : 'no');
+            $dsn .= ';LoginTimeout=' . DB_LOGIN_TIMEOUT;
             $options = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             ];
@@ -47,6 +169,9 @@ function getDbConnection()
             $cached = $conn;
             return $cached;
         } catch (Throwable $e) {
+            if (APP_DEBUG) {
+                throw new RuntimeException('No fue posible conectar con SQL Server (PDO). ' . $e->getMessage());
+            }
             throw new RuntimeException('No fue posible conectar con SQL Server (PDO).');
         }
     }
@@ -56,21 +181,44 @@ function getDbConnection()
 
 function testDatabaseConnection(): array
 {
+    $serverName = buildServerName();
+    $probe = tcpProbe($serverName, DB_PORT);
+
     try {
         $conn = getDbConnection();
         $rows = dbQueryAll($conn, 'SELECT @@VERSION AS version');
-        return [
+        $response = [
             'success' => true,
             'driver' => $conn instanceof PDO ? 'pdo_sqlsrv' : 'sqlsrv',
-            'server' => DB_HOST . ':' . DB_PORT,
+            'server' => $serverName,
+            'host' => DB_HOST,
+            'port' => DB_PORT,
             'database' => DB_NAME,
+            'encrypt' => DB_ENCRYPT,
+            'trustServerCertificate' => DB_TRUST_SERVER_CERT,
+            'tcpProbe' => $probe,
             'version' => $rows[0]['version'] ?? 'unknown',
         ];
+        if (isPrivateHost(DB_HOST)) {
+            $response['networkHint'] = 'DB_HOST es privado/local; desde Render solo funcionará si la red expone ese SQL Server públicamente (NAT/VPN/túnel).';
+        }
+        return $response;
     } catch (Throwable $e) {
-        return [
+        $response = [
             'success' => false,
             'message' => APP_DEBUG ? $e->getMessage() : 'Error de conexión a base de datos.',
+            'server' => $serverName,
+            'host' => DB_HOST,
+            'port' => DB_PORT,
+            'database' => DB_NAME,
+            'encrypt' => DB_ENCRYPT,
+            'trustServerCertificate' => DB_TRUST_SERVER_CERT,
+            'tcpProbe' => $probe,
         ];
+        if (isPrivateHost(DB_HOST)) {
+            $response['networkHint'] = 'DB_HOST es privado/local; Render (nube) no accede a 192.168.x.x salvo túnel o IP pública con puerto abierto.';
+        }
+        return $response;
     }
 }
 

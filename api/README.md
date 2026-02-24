@@ -11,10 +11,15 @@ API REST conectada directamente a SQL Server.
 ## Variables de entorno recomendadas
 
 - `DB_HOST` (ej: `192.168.2.244`)
+- `DB_SERVER` (opcional; prioridad sobre DB_HOST, ej `host,1433` o `host\SQLEXPRESS`)
 - `DB_PORT` (por defecto `1433`)
 - `DB_NAME` (ej: `minuto_a_minuto`)
 - `DB_USER`
 - `DB_PASS`
+- `DB_ENCRYPT` (`true/false`, por defecto `false`)
+- `DB_TRUST_SERVER_CERT` (`true/false`, por defecto `true`)
+- `DB_LOGIN_TIMEOUT` (segundos, por defecto `8`)
+- `DB_QUERY_TIMEOUT` (segundos, por defecto `20`)
 - `APP_DEBUG` (`1` para ver mensajes detallados)
 
 ## Publicación IIS (recomendado)
@@ -74,3 +79,7 @@ Este repositorio ya incluye `render.yaml` apuntando a `rootDir: api`.
    - `GET /test`
    - `GET /health/db`
 4. Cuando ya esté estable, cambie `APP_DEBUG=0`.
+
+Notas:
+- `/test` valida solo que la API esté arriba (útil para health check de Render).
+- `/health/db` valida conectividad real con SQL Server y devuelve diagnóstico de red.

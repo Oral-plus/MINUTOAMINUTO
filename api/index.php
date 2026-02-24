@@ -15,8 +15,6 @@ $segments = resolveRouteSegments();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 try {
-    $conn = getDbConnection();
-
     if (empty($segments)) {
         jsonResponse([
             'success' => true,
@@ -32,6 +30,13 @@ try {
 
     switch ($resource) {
         case 'test':
+            // Health ligero para Render: no depende de SQL Server.
+            jsonResponse([
+                'success' => true,
+                'message' => 'API activa',
+                'time' => date('c'),
+            ]);
+            break;
         case 'health':
             if (($segments[1] ?? 'db') !== 'db' && $resource === 'health') {
                 jsonResponse(['success' => true, 'resource' => 'health']);
@@ -41,34 +46,42 @@ try {
             }
             break;
         case 'vendedores':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/vendedores.php';
             handleVendedores($conn, $method, $id);
             break;
         case 'supervisores':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/supervisores.php';
             handleSupervisores($conn, $method, $id);
             break;
         case 'llamadas':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/llamadas.php';
             handleLlamadas($conn, $method, $id);
             break;
         case 'ppvc':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/ppvc.php';
             handlePpvc($conn, $method, $id);
             break;
         case 'rvc':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/rvc.php';
             handleRvc($conn, $method, $id);
             break;
         case 'alertas':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/alertas.php';
             handleAlertas($conn, $method, $id);
             break;
         case 'ubicaciones':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/ubicaciones.php';
             handleUbicaciones($conn, $method, $id);
             break;
         case 'audio':
+            $conn = getDbConnection();
             require __DIR__ . '/endpoints/audio.php';
             handleAudio($conn, $method, $id);
             break;
