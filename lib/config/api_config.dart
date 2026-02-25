@@ -5,25 +5,24 @@
 ///
 /// Opciones de baseUrl:
 /// - API Dart local (memoria): 'http://localhost:8080'
-/// - API PHP + SQL Server:    'http://192.168.2.244/api' (o la URL donde esté PHP)
+/// - API Node Render:         'https://minutoaminuto-2.onrender.com'
 ///
-/// Para SQL Server: usar la API PHP y apuntar baseUrl al servidor.
-/// La API PHP escribe en [minuto_a_minuto].[dbo].[supervisores] y vendedores.
+/// Para SQL Server: usar API remota con endpoints compatibles.
 class ApiConfig {
   /// URL de la API.
-  /// - Render desplegado: 'https://minutoaminuto-1.onrender.com'
-  /// - PHP + SQL Server (LAN): 'http://192.168.2.244/api'
+  /// - Render desplegado: 'https://minutoaminuto-2.onrender.com'
+  /// - Respaldo: 'https://minutoaminuto-2.onrender.com'
   /// - Se puede sobreescribir con --dart-define=API_BASE_URL=...
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://minutoaminuto-1.onrender.com',
+    defaultValue: 'https://minutoaminuto-2.onrender.com',
   );
 
   /// URL alternativa cuando el servidor publica la API sin el prefijo /api.
   /// Se puede sobreescribir con --dart-define=API_FALLBACK_BASE_URL=...
   static const String fallbackBaseUrl = String.fromEnvironment(
     'API_FALLBACK_BASE_URL',
-    defaultValue: 'https://minutoaminuto-1.onrender.com/api',
+    defaultValue: 'https://minutoaminuto-2.onrender.com',
   );
   /// false = SQLite local. true = API remota (inserta en servidor).
   static const bool useRemoteApi = true;

@@ -48,6 +48,152 @@ const dbConfig = {
 
 let poolPromise = null;
 
+const TABLES = Object.freeze({
+  cartera: "[CONSULTA_CARTERA]",
+  vendedores: "[vendedores]",
+  supervisores: "[supervisores]",
+  llamadas: "[registro_llamadas]",
+  ppvc: "[ppvc]",
+  rvc: "[rvc]",
+  alertas: "[alertas]",
+  ubicaciones: "[ubicaciones]",
+});
+
+const SAFE_COLUMN_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function makeId(prefix) {
+  return `${prefix}_${Date.now()}`;
+}
+
+function asString(value, fallback = "") {
+  if (value === undefined || value === null) return fallback;
+  return String(value).trim();
+}
+
+function asNullableString(value) {
+  const normalized = asString(value, "");
+  return normalized === "" ? null : normalized;
+}
+
+function asInt(value, fallback = 0) {
+  const num = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function asDouble(value, fallback = 0) {
+  const num = Number(value ?? fallback);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function asCsv(value) {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter((v) => v.length > 0).join(",");
+  }
+  return asString(value, "");
+}
+
+function requireStringField(body, field) {
+  const value = asString(body[field], "");
+  if (!value) {
+    throw new Error(`Campo requerido: ${field}`);
+  }
+  return value;
+}
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeRowForJson(row) {
+  const out = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value instanceof Date) {
+      out[key] = key === "fecha" ? value.toISOString().slice(0, 10) : value.toISOString();
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function normalizeRowsForJson(rows) {
+  return rows.map(normalizeRowForJson);
+}
+
+function rowsAffectedCount(result) {
+  if (!result || !Array.isArray(result.rowsAffected)) return 0;
+  return result.rowsAffected.reduce((acc, n) => acc + Number(n || 0), 0);
+}
+
+async function runQuery(sqlText, bindInputs) {
+  const pool = await getPool();
+  const request = pool.request();
+  if (typeof bindInputs === "function") {
+    bindInputs(request);
+  }
+  return request.query(sqlText);
+}
+
+async function runQueryOne(sqlText, bindInputs) {
+  const result = await runQuery(sqlText, bindInputs);
+  return result.recordset[0] || null;
+}
+
+async function runExecute(sqlText, bindInputs) {
+  const result = await runQuery(sqlText, bindInputs);
+  return rowsAffectedCount(result);
+}
+
+async function upsertById(tableRef, id, payload) {
+  const columns = Object.keys(payload);
+  if (columns.length === 0) {
+    throw new Error("No hay campos para guardar.");
+  }
+
+  for (const col of columns) {
+    if (!SAFE_COLUMN_NAME.test(col)) {
+      throw new Error(`Nombre de columna no permitido: ${col}`);
+    }
+  }
+
+  const exists = await runQueryOne(
+    `SELECT COUNT(1) AS total FROM ${tableRef} WHERE id = @id`,
+    (request) => {
+      request.input("id", asString(id));
+    },
+  );
+  const alreadyExists = Number(exists?.total || 0) > 0;
+
+  if (alreadyExists) {
+    const setClause = columns.map((col) => `[${col}] = @${col}`).join(", ");
+    await runExecute(
+      `UPDATE ${tableRef} SET ${setClause} WHERE id = @id`,
+      (request) => {
+        request.input("id", asString(id));
+        for (const col of columns) {
+          request.input(col, payload[col] ?? null);
+        }
+      },
+    );
+    return "updated";
+  }
+
+  const insertColumns = ["id", ...columns];
+  const insertColumnSql = insertColumns.map((col) => `[${col}]`).join(", ");
+  const insertValueSql = insertColumns.map((col) => `@${col}`).join(", ");
+
+  await runExecute(
+    `INSERT INTO ${tableRef} (${insertColumnSql}) VALUES (${insertValueSql})`,
+    (request) => {
+      request.input("id", asString(id));
+      for (const col of columns) {
+        request.input(col, payload[col] ?? null);
+      }
+    },
+  );
+  return "inserted";
+}
+
 function missingDbConfig() {
   const required = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASS"];
   return required.filter((key) => !process.env[key]);
@@ -257,68 +403,401 @@ app.get("/api/test", async (_req, res) => {
   }
 });
 
-app.get("/api/invoices/by-cardcode/:cardcode", async (req, res) => {
+// Compatibilidad con la app Flutter existente
+app.get("/test", async (_req, res) => {
   const startedAt = Date.now();
   try {
-    const cardCode = String(req.params.cardcode || "").trim();
-    if (!cardCode) {
-      return res.status(400).json({
-        success: false,
-        error: "CardCode es requerido",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const pool = await getPool();
-    const result = await pool
-      .request()
-      .input("cardCode", sql.VarChar(80), cardCode)
-      .query("SELECT * FROM CONSULTA_CARTERA WHERE CardCode = @cardCode");
-
-    if (result.recordset.length === 0) {
-      return res.json({
-        success: true,
-        message: "Te encuentras a paz y salvo",
-        cardCode,
-        count: 0,
-        invoices: [],
-        queryTimeMs: Date.now() - startedAt,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const invoices = result.recordset.map(mapInvoice).sort((a, b) => a.priority - b.priority);
-    const totalAmount = invoices.reduce((sum, item) => sum + item.amount, 0);
-    const overdue = invoices.filter((i) => i.isOverdue).length;
-    const urgent = invoices.filter((i) => i.isUrgent && !i.isOverdue).length;
-    const upcoming = invoices.filter((i) => i.isUpcoming).length;
-    const normal = invoices.length - overdue - urgent - upcoming;
-
-    return res.json({
+    const health = await runDbHealth();
+    res.json({
       success: true,
-      message: `${invoices.length} facturas encontradas`,
-      cardCode,
-      count: invoices.length,
-      invoices,
-      statistics: {
-        total: invoices.length,
-        overdue,
-        urgent,
-        upcoming,
-        normal,
-        totalAmount,
-      },
+      message: "Conexion exitosa",
+      checks: health,
       queryTimeMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: "Error interno del servidor",
       message: error.message,
       queryTimeMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     });
+  }
+});
+
+app.get("/vendedores", async (req, res) => {
+  try {
+    const id = asString(req.query.id, "");
+    if (id) {
+      const row = await runQueryOne(
+        `SELECT * FROM ${TABLES.vendedores} WHERE id = @id`,
+        (request) => request.input("id", id),
+      );
+      return res.json(row ? normalizeRowForJson(row) : null);
+    }
+    const result = await runQuery(`SELECT * FROM ${TABLES.vendedores} ORDER BY nombre`);
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/vendedores/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    const row = await runQueryOne(
+      `SELECT * FROM ${TABLES.vendedores} WHERE id = @id`,
+      (request) => request.input("id", id),
+    );
+    return res.json(row ? normalizeRowForJson(row) : null);
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/vendedores", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("v");
+    const payload = {
+      nombre: requireStringField(body, "nombre"),
+      codigo: requireStringField(body, "codigo"),
+      zona: requireStringField(body, "zona"),
+      coachId: requireStringField(body, "coachId"),
+      geolocalizacionActiva: asInt(body.geolocalizacionActiva, 0),
+      horaInicioJornada: asNullableString(body.horaInicioJornada),
+      presupuestoMensual: asDouble(body.presupuestoMensual, 0),
+      presupuestoDiario: asDouble(body.presupuestoDiario, 0),
+    };
+    const mode = await upsertById(TABLES.vendedores, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.delete("/vendedores/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id) {
+      return res.status(400).json({ success: false, error: "id requerido" });
+    }
+    const rows = await runExecute(
+      `DELETE FROM ${TABLES.vendedores} WHERE id = @id`,
+      (request) => request.input("id", id),
+    );
+    return res.json({ success: true, id, rows });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/supervisores", async (_req, res) => {
+  try {
+    const result = await runQuery(`SELECT * FROM ${TABLES.supervisores} ORDER BY nombre`);
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/supervisores/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    const row = await runQueryOne(
+      `SELECT * FROM ${TABLES.supervisores} WHERE id = @id`,
+      (request) => request.input("id", id),
+    );
+    return res.json(row ? normalizeRowForJson(row) : null);
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/supervisores", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("s");
+    const payload = {
+      nombre: requireStringField(body, "nombre"),
+      codigo: requireStringField(body, "codigo"),
+      zona: requireStringField(body, "zona"),
+      cargo: asString(body.cargo, "coach"),
+      superiorId: asNullableString(body.superiorId),
+      subordinadosIds: asCsv(body.subordinadosIds),
+    };
+    const mode = await upsertById(TABLES.supervisores, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.delete("/supervisores/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id) {
+      return res.status(400).json({ success: false, error: "id requerido" });
+    }
+    const rows = await runExecute(
+      `DELETE FROM ${TABLES.supervisores} WHERE id = @id`,
+      (request) => request.input("id", id),
+    );
+    return res.json({ success: true, id, rows });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/llamadas", async (req, res) => {
+  try {
+    const desde = asString(req.query.desde, todayIsoDate());
+    const hasta = asString(req.query.hasta, todayIsoDate());
+    const zona = asString(req.query.zona, "");
+    const nombreContactado = asString(req.query.nombreContactado, "");
+
+    const whereParts = ["fecha >= @desde", "fecha <= @hasta"];
+    if (zona) whereParts.push("zona = @zona");
+    if (nombreContactado) whereParts.push("nombreContactado = @nombreContactado");
+
+    const sqlText = `
+      SELECT *
+      FROM ${TABLES.llamadas}
+      WHERE ${whereParts.join(" AND ")}
+      ORDER BY horaInicio DESC
+    `;
+
+    const result = await runQuery(sqlText, (request) => {
+      request.input("desde", desde);
+      request.input("hasta", hasta);
+      if (zona) request.input("zona", zona);
+      if (nombreContactado) request.input("nombreContactado", nombreContactado);
+    });
+
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/llamadas", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("llamada");
+    const payload = {
+      fecha: requireStringField(body, "fecha"),
+      horaInicio: requireStringField(body, "horaInicio"),
+      horaFin: requireStringField(body, "horaFin"),
+      duracionMinutos: asInt(body.duracionMinutos, 0),
+      tipoLlamada: requireStringField(body, "tipoLlamada"),
+      cargoLider: requireStringField(body, "cargoLider"),
+      zona: requireStringField(body, "zona"),
+      nombreLider: requireStringField(body, "nombreLider"),
+      nombreContactado: requireStringField(body, "nombreContactado"),
+      clientesProgramados: asInt(body.clientesProgramados, 0),
+      clientesVisitados: asInt(body.clientesVisitados, 0),
+      ventaDia: asDouble(body.ventaDia, 0),
+      recaudoDia: asDouble(body.recaudoDia, 0),
+      cumplioMeta: asInt(body.cumplioMeta, 0),
+      coincidenciaPpvcRvc: asInt(body.coincidenciaPpvcRvc, 0),
+      conversion60: asInt(body.conversion60, 0),
+      recuperacionPerdidos: asInt(body.recuperacionPerdidos, 0),
+      observaciones: asString(body.observaciones, ""),
+      confirmacionVeracidad: asInt(body.confirmacionVeracidad, 0),
+      rutaGrabacion: asNullableString(body.rutaGrabacion),
+      transcripcionTexto: asNullableString(body.transcripcionTexto),
+    };
+    const mode = await upsertById(TABLES.llamadas, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.patch("/llamadas/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id) {
+      return res.status(400).json({ success: false, error: "id requerido" });
+    }
+
+    const body = req.body || {};
+    const updates = {};
+    if (Object.prototype.hasOwnProperty.call(body, "observaciones")) {
+      updates.observaciones = asString(body.observaciones, "");
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "rutaGrabacion")) {
+      updates.rutaGrabacion = asNullableString(body.rutaGrabacion);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "transcripcionTexto")) {
+      updates.transcripcionTexto = asNullableString(body.transcripcionTexto);
+    }
+
+    const columns = Object.keys(updates);
+    if (columns.length === 0) {
+      return res.status(400).json({ success: false, message: "Sin campos para actualizar" });
+    }
+
+    const setClause = columns.map((c) => `[${c}] = @${c}`).join(", ");
+    const rows = await runExecute(
+      `UPDATE ${TABLES.llamadas} SET ${setClause} WHERE id = @id`,
+      (request) => {
+        request.input("id", id);
+        for (const col of columns) {
+          request.input(col, updates[col] ?? null);
+        }
+      },
+    );
+
+    return res.json({ success: true, id, rows });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/ppvc", async (req, res) => {
+  try {
+    const fecha = asString(req.query.fecha, todayIsoDate());
+    const vendedorId = asString(req.query.vendedorId, "");
+    if (vendedorId) {
+      const row = await runQueryOne(
+        `SELECT * FROM ${TABLES.ppvc} WHERE vendedorId = @vendedorId AND fecha = @fecha`,
+        (request) => {
+          request.input("vendedorId", vendedorId);
+          request.input("fecha", fecha);
+        },
+      );
+      return res.json(row ? normalizeRowForJson(row) : null);
+    }
+
+    const result = await runQuery(
+      `SELECT * FROM ${TABLES.ppvc} WHERE fecha = @fecha`,
+      (request) => request.input("fecha", fecha),
+    );
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/ppvc", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("ppvc");
+    const payload = {
+      vendedorId: requireStringField(body, "vendedorId"),
+      fecha: requireStringField(body, "fecha"),
+      zona: asString(body.zona, ""),
+      clientesProgramados: asInt(body.clientesProgramados, 0),
+      clientes60Ids: asCsv(body.clientes60Ids),
+      clientesPerdidosIds: asCsv(body.clientesPerdidosIds),
+      metaVenta: asDouble(body.metaVenta, 0),
+      metaRecaudo: asDouble(body.metaRecaudo, 0),
+      programado2DiasAntes: asInt(body.programado2DiasAntes, 0),
+    };
+    const mode = await upsertById(TABLES.ppvc, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/rvc", async (req, res) => {
+  try {
+    const fecha = asString(req.query.fecha, todayIsoDate());
+    const vendedorId = asString(req.query.vendedorId, "");
+    if (vendedorId) {
+      const row = await runQueryOne(
+        `SELECT * FROM ${TABLES.rvc} WHERE vendedorId = @vendedorId AND fecha = @fecha`,
+        (request) => {
+          request.input("vendedorId", vendedorId);
+          request.input("fecha", fecha);
+        },
+      );
+      return res.json(row ? normalizeRowForJson(row) : null);
+    }
+
+    const result = await runQuery(
+      `SELECT * FROM ${TABLES.rvc} WHERE fecha = @fecha`,
+      (request) => request.input("fecha", fecha),
+    );
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/rvc", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("rvc");
+    const payload = {
+      vendedorId: requireStringField(body, "vendedorId"),
+      fecha: requireStringField(body, "fecha"),
+      zona: asString(body.zona, ""),
+      clientesVisitados: asInt(body.clientesVisitados, 0),
+      clientes60Visitados: asInt(body.clientes60Visitados, 0),
+      clientesPerdidosVisitados: asInt(body.clientesPerdidosVisitados, 0),
+      ventaTotal: asDouble(body.ventaTotal, 0),
+      recaudoTotal: asDouble(body.recaudoTotal, 0),
+      clientesNoVisitados: asCsv(body.clientesNoVisitados),
+      descuentosAplicados: asInt(body.descuentosAplicados, 0),
+    };
+    const mode = await upsertById(TABLES.rvc, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/alertas", async (req, res) => {
+  try {
+    const resuelta = asInt(req.query.resuelta, 0);
+    const result = await runQuery(
+      `SELECT * FROM ${TABLES.alertas} WHERE resuelta = @resuelta ORDER BY fecha DESC`,
+      (request) => request.input("resuelta", resuelta),
+    );
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/alertas", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("alerta");
+    const payload = {
+      tipo: requireStringField(body, "tipo"),
+      fecha: requireStringField(body, "fecha"),
+      mensaje: requireStringField(body, "mensaje"),
+      vendedorId: asNullableString(body.vendedorId),
+      supervisorId: asNullableString(body.supervisorId),
+      zona: asString(body.zona, ""),
+      resuelta: asInt(body.resuelta, 0),
+    };
+    const mode = await upsertById(TABLES.alertas, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/ubicaciones", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "") || makeId("ub");
+    const payload = {
+      vendedorId: requireStringField(body, "vendedorId"),
+      fecha: asString(body.fecha, todayIsoDate()),
+      latitud: asDouble(body.latitud, 0),
+      longitud: asDouble(body.longitud, 0),
+      timestamp: asString(body.timestamp, new Date().toISOString()),
+    };
+    const mode = await upsertById(TABLES.ubicaciones, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
   }
 });
 
@@ -329,8 +808,13 @@ app.use((_req, res) => {
     availableEndpoints: [
       "GET /health",
       "GET /health/db",
-      "GET /api/test",
-      "GET /api/invoices/by-cardcode/:cardcode",
+      "GET /test",
+      "GET /vendedores",
+      "GET /supervisores",
+      "GET /llamadas",
+      "GET /ppvc",
+      "GET /rvc",
+      "GET /alertas",
     ],
     timestamp: new Date().toISOString(),
   });
