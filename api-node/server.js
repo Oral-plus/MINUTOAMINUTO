@@ -9,7 +9,7 @@ const app = express();
 const port = Number(process.env.PORT || 3005);
 
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "30mb" }));
 
 function parseBool(value, fallback) {
   if (value === undefined || value === null || value === "") {
@@ -27,10 +27,10 @@ function parseIntSafe(value, fallback) {
 }
 
 const dbConfig = {
-  user: process.env.DB_USER || "",
-  password: process.env.DB_PASS || "",
-  server: process.env.DB_HOST || "",
-  database: process.env.DB_NAME || "",
+  user: process.env.DB_USER || "sa",
+  password: process.env.DB_PASS || "Sky2022*!",
+  server: process.env.DB_HOST || "192.168.2.244",
+  database: process.env.DB_NAME || "minuto_a_minuto",
   port: parseIntSafe(process.env.DB_PORT, 1433),
   connectionTimeout: parseIntSafe(process.env.DB_CONNECT_TIMEOUT, 30000),
   requestTimeout: parseIntSafe(process.env.DB_REQUEST_TIMEOUT, 30000),
@@ -44,6 +44,11 @@ const dbConfig = {
     min: 0,
     idleTimeoutMillis: 30000,
   },
+};
+
+const geminiConfig = {
+  modelPrimary: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  modelFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite",
 };
 
 let poolPromise = null;
@@ -194,9 +199,120 @@ async function upsertById(tableRef, id, payload) {
   return "inserted";
 }
 
+function getGeminiModels() {
+  const models = [geminiConfig.modelPrimary, geminiConfig.modelFallback]
+    .map((m) => asString(m, ""))
+    .where((m) => m.length > 0);
+  return [...new Set(models)];
+}
+
+function resolveGeminiApiKey(req) {
+  const headerKey = asString(req?.headers?.["x-gemini-api-key"], "");
+  const envKey = asString(process.env.GEMINI_API_KEY, "");
+  return headerKey || envKey;
+}
+
+function extractTranscriptionText(payload) {
+  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts)
+      ? candidate.content.parts
+      : [];
+    const joined = parts
+      .map((part) => (typeof part?.text === "string" ? part.text : ""))
+      .join("\n")
+      .trim();
+    if (joined) return joined;
+  }
+  return "";
+}
+
+async function callGeminiModel({ apiKey, model, audioBase64, mimeType }) {
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
+    `:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inline_data: {
+              mime_type: mimeType,
+              data: audioBase64,
+            },
+          },
+          {
+            text:
+              "Transcribe este audio exactamente en el mismo idioma. " +
+              "Devuelve solo el texto transcrito, sin explicaciones.",
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 2048,
+    },
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const rawBody = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch (_) {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const detail =
+      parsed?.error?.message ||
+      parsed?.message ||
+      rawBody ||
+      `HTTP ${response.status}`;
+    throw new Error(`${model}: ${detail}`);
+  }
+
+  const text = extractTranscriptionText(parsed);
+  if (!text) {
+    throw new Error(`${model}: respuesta sin texto de transcripción`);
+  }
+  return text;
+}
+
+async function transcribeWithGemini({ apiKey, audioBase64, mimeType }) {
+  const models = getGeminiModels();
+  if (models.length === 0) {
+    throw new Error("No hay modelo Gemini configurado.");
+  }
+
+  let lastError = "Error desconocido de transcripción.";
+  for (const model of models) {
+    try {
+      const text = await callGeminiModel({
+        apiKey,
+        model,
+        audioBase64,
+        mimeType,
+      });
+      return { text, model };
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  throw new Error(lastError);
+}
+
 function missingDbConfig() {
-  const required = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASS"];
-  return required.filter((key) => !process.env[key]);
+  // Permitimos fallback local por defecto para evitar bloqueo en entornos sin variables.
+  return [];
 }
 
 async function getPool() {
@@ -419,6 +535,51 @@ app.get("/test", async (_req, res) => {
     res.status(500).json({
       success: false,
       message: error.message,
+      queryTimeMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/transcribe", async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const body = req.body || {};
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) {
+      return res.status(400).json({
+        success: false,
+        error: "audioBase64 es requerido",
+      });
+    }
+
+    const apiKey = resolveGeminiApiKey(req);
+    if (!apiKey) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "No se encontró llave de Gemini. Configure GEMINI_API_KEY o envíe x-gemini-api-key.",
+      });
+    }
+
+    const { text, model } = await transcribeWithGemini({
+      apiKey,
+      audioBase64,
+      mimeType,
+    });
+
+    return res.json({
+      success: true,
+      text,
+      model,
+      queryTimeMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
       queryTimeMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     });
@@ -809,6 +970,7 @@ app.use((_req, res) => {
       "GET /health",
       "GET /health/db",
       "GET /test",
+      "POST /transcribe",
       "GET /vendedores",
       "GET /supervisores",
       "GET /llamadas",

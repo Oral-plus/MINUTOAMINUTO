@@ -3,6 +3,8 @@ import '../models/supervisor.dart';
 import '../models/vendedor.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
+import '../widgets/app_feedback.dart';
+import '../widgets/app_loading_screen.dart';
 import 'registro_supervisor_screen.dart';
 import 'registro_vendedor_screen.dart';
 
@@ -35,106 +37,77 @@ class _AdminScreenState extends State<AdminScreen>
 
   Future<void> _cargar() async {
     if (mounted) setState(() => _cargando = true);
-    final sp = await DataService.getSupervisores();
-    final vd = await DataService.getVendedores();
-    if (!mounted) return;
-    setState(() {
-      _supervisores = sp;
-      _vendedores = vd;
-      _cargando = false;
-    });
+    try {
+      final sp = await DataService.getSupervisores().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => <Supervisor>[],
+      );
+      final vd = await DataService.getVendedores().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => <Vendedor>[],
+      );
+      if (!mounted) return;
+      setState(() {
+        _supervisores = sp;
+        _vendedores = vd;
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+    }
   }
 
   Future<void> _eliminarSupervisor(Supervisor s) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar supervisor'),
-        content: Text('Eliminar a ${s.nombre} (${s.cargo.displayName})?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppConstants.rojoCritico,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+    final ok = await AppFeedback.confirmDialog(
+      context,
+      title: 'Eliminar supervisor',
+      message: 'Se eliminará a ${s.nombre} (${s.cargo.displayName}). Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      confirmColor: AppConstants.rojoCritico,
+      icon: Icons.delete_outline_rounded,
     );
 
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await DataService.deleteSupervisor(s.id);
       await _cargar();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Supervisor eliminado'),
-          backgroundColor: AppConstants.verdeMeta,
-        ),
-      );
+      AppFeedback.success(context, 'Supervisor eliminado');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al eliminar: $e'),
-          backgroundColor: AppConstants.rojoCritico,
-        ),
-      );
+      AppFeedback.error(context, 'Error al eliminar: $e');
     }
   }
 
   Future<void> _eliminarVendedor(Vendedor v) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar vendedor'),
-        content: Text('Eliminar a ${v.nombre}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppConstants.rojoCritico,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+    final ok = await AppFeedback.confirmDialog(
+      context,
+      title: 'Eliminar vendedor',
+      message: 'Se eliminará a ${v.nombre}. Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      confirmColor: AppConstants.rojoCritico,
+      icon: Icons.delete_outline_rounded,
     );
 
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await DataService.deleteVendedor(v.id);
       await _cargar();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vendedor eliminado'),
-          backgroundColor: AppConstants.verdeMeta,
-        ),
-      );
+      AppFeedback.success(context, 'Vendedor eliminado');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al eliminar: $e'),
-          backgroundColor: AppConstants.rojoCritico,
-        ),
-      );
+      AppFeedback.error(context, 'Error al eliminar: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_cargando) {
+      return const AppLoadingScreen();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
       appBar: AppBar(
@@ -149,9 +122,7 @@ class _AdminScreenState extends State<AdminScreen>
           ),
         ],
       ),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+      body: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
@@ -304,9 +275,9 @@ class _ListaSupervisores extends StatelessWidget {
         ),
         Expanded(
           child: lista.isEmpty
-              ? const _EmptyState(
-                  icono: Icons.supervisor_account_outlined,
-                  mensaje: 'No hay supervisores registrados',
+              ? const AppEmptyState(
+                  icon: Icons.supervisor_account_outlined,
+                  title: 'No hay supervisores registrados',
                 )
               : RefreshIndicator(
                   onRefresh: onRefrescar,
@@ -370,9 +341,9 @@ class _ListaVendedores extends StatelessWidget {
           ),
         Expanded(
           child: lista.isEmpty
-              ? const _EmptyState(
-                  icono: Icons.storefront_outlined,
-                  mensaje: 'No hay vendedores registrados',
+              ? const AppEmptyState(
+                  icon: Icons.storefront_outlined,
+                  title: 'No hay vendedores registrados',
                 )
               : RefreshIndicator(
                   onRefresh: onRefrescar,
@@ -502,29 +473,3 @@ class _VendedorTile extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final IconData icono;
-  final String mensaje;
-
-  const _EmptyState({required this.icono, required this.mensaje});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icono, size: 58, color: const Color(0xFF9CA3AF)),
-            const SizedBox(height: 10),
-            Text(
-              mensaje,
-              style: const TextStyle(color: Color(0xFF6B7280)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

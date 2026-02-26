@@ -151,7 +151,11 @@ class DatabaseService {
   // Vendedores
   static Future<void> insertVendedor(Vendedor v) async {
     final db = await database;
-    await db.insert('vendedores', v.toMap());
+    await db.insert(
+      'vendedores',
+      v.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   static Future<List<Vendedor>> getVendedores() async {
@@ -174,7 +178,11 @@ class DatabaseService {
   // Supervisores
   static Future<void> insertSupervisor(Supervisor s) async {
     final db = await database;
-    await db.insert('supervisores', s.toMap());
+    await db.insert(
+      'supervisores',
+      s.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   static Future<List<Supervisor>> getSupervisores() async {

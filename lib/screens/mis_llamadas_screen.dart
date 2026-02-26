@@ -8,6 +8,7 @@ import '../services/data_service.dart';
 import '../services/post_call_notification_service.dart';
 import '../services/transcription_service.dart';
 import '../utils/constants.dart';
+import '../widgets/app_feedback.dart';
 
 class MisLlamadasScreen extends StatefulWidget {
   const MisLlamadasScreen({super.key});
@@ -75,9 +76,7 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
       );
       if (context.mounted) {
         provider.cargarDatosHoy();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Observaciones actualizadas')),
-        );
+        AppFeedback.success(context, 'Observaciones actualizadas');
       }
     }
   }
@@ -698,12 +697,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo reproducir el audio'),
-            backgroundColor: AppConstants.rojoCritico,
-          ),
-        );
+        AppFeedback.error(context, 'No se pudo reproducir el audio');
       }
     } finally {
       if (mounted) setState(() => _cargandoAudio = false);
@@ -739,32 +733,15 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
         });
         widget.onTranscripcionGuardada?.call();
         if (text != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Transcripción guardada'),
-              backgroundColor: AppConstants.verdeMeta,
-            ),
-          );
+          AppFeedback.success(context, 'Transcripción guardada');
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'No se pudo transcribir. Verifique que la API tenga el endpoint /transcribe.',
-              ),
-              backgroundColor: AppConstants.rojoCritico,
-            ),
-          );
+          AppFeedback.warning(context, 'No se pudo transcribir. Verifique la conexión con la API.');
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _transcribiendo = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppConstants.rojoCritico,
-          ),
-        );
+        AppFeedback.error(context, 'Error en transcripción: $e');
       }
     }
   }

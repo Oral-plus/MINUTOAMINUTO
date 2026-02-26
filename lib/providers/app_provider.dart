@@ -20,12 +20,14 @@ class AppProvider with ChangeNotifier {
   List<Alerta> _alertas = [];
   Supervisor? _usuarioActual;
   Vendedor? _vendedorActual;
+  String? _storedSupervisorId;
+  String? _storedVendedorId;
   bool _geolocalizacionActiva = false;
   bool _monitorLlamadasActivo = false;
   StreamSubscription? _locationSub;
   bool _isInitialized = false;
   String? _initError;
-  static const Duration _initTimeout = Duration(seconds: 12);
+  static const Duration _initTimeout = Duration(seconds: 8);
 
   List<Vendedor> get vendedores => _vendedores;
   List<Supervisor> get supervisores => _supervisores;
@@ -35,6 +37,8 @@ class AppProvider with ChangeNotifier {
   String? get initError => _initError;
   Supervisor? get usuarioActual => _usuarioActual;
   Vendedor? get vendedorActual => _vendedorActual;
+  bool get hasStoredSession =>
+      _storedSupervisorId != null || _storedVendedorId != null;
   bool get geolocalizacionActiva => _geolocalizacionActiva;
   bool get monitorLlamadasActivo => _monitorLlamadasActivo;
 
@@ -48,24 +52,12 @@ class AppProvider with ChangeNotifier {
       try {
         DebugAlertService.info('Inicializando app...');
         await DataService.init();
-        final results = await Future.wait([
-          _withTimeout(DataService.getVendedores(), 'vendedores'),
-          _withTimeout(DataService.getSupervisores(), 'supervisores'),
-          _withTimeout(_cargarUsuarioGuardado(), 'usuario guardado'),
-        ]);
-        _vendedores = results[0] as List<Vendedor>;
-        _supervisores = results[1] as List<Supervisor>;
-        await _withTimeout(recargarDashboard(), 'dashboard');
-        try {
-          _monitorLlamadasActivo = await _withTimeout(
-            CallMonitorService.isEnabled(),
-            'estado del monitor',
-          );
-        } catch (e) {
-          debugPrint('CallMonitor isEnabled: $e');
-          _monitorLlamadasActivo = false;
-        }
-        DebugAlertService.success('Inicio completado');
+        await _withTimeout(
+          _readStoredSessionIds(),
+          'lectura de sesión local',
+          timeout: const Duration(seconds: 2),
+        );
+        DebugAlertService.success('Inicio instantáneo completado');
       } catch (e, st) {
         debugPrint('Error init Minuto a Minuto: $e\n$st');
         DebugAlertService.error('Error al iniciar: $e');
@@ -75,6 +67,7 @@ class AppProvider with ChangeNotifier {
         _isInitialized = true;
         notifyListeners();
       }
+      unawaited(_warmUpPostInit());
     }, (error, stack) {
       debugPrint('AppProvider zone: $error\n$stack');
       _initError = 'Error inesperado: $error';
@@ -83,24 +76,102 @@ class AppProvider with ChangeNotifier {
     });
   }
 
-  Future<T> _withTimeout<T>(Future<T> future, String label) async {
+  Future<void> _warmUpPostInit() async {
+    await _runInitStep(
+      'resolver sesión guardada',
+      _resolverUsuarioGuardado,
+      timeout: _initTimeout,
+    );
+    _vendedores = await _loadListOrEmpty<Vendedor>(
+      DataService.getVendedores,
+      'vendedores (background)',
+      timeout: _initTimeout,
+    );
+    _supervisores = await _loadListOrEmpty<Supervisor>(
+      DataService.getSupervisores,
+      'supervisores (background)',
+      timeout: _initTimeout,
+    );
+    notifyListeners();
+  }
+
+  Future<List<T>> _loadListOrEmpty<T>(
+    Future<List<T>> Function() loader,
+    String label,
+    {Duration? timeout}
+  ) async {
     try {
-      return await future.timeout(_initTimeout);
+      return await _withTimeout(loader(), label, timeout: timeout);
+    } catch (e) {
+      DebugAlertService.warning('Init parcial: no se cargó $label ($e)');
+      return <T>[];
+    }
+  }
+
+  Future<void> _runInitStep(
+    String label,
+    Future<void> Function() action,
+    {Duration? timeout}
+  ) async {
+    try {
+      await _withTimeout(action(), label, timeout: timeout);
+    } catch (e) {
+      DebugAlertService.warning('Init parcial: fallo en $label ($e)');
+    }
+  }
+
+  Future<T> _withTimeout<T>(
+    Future<T> future,
+    String label, {
+    Duration? timeout,
+  }) async {
+    final limit = timeout ?? _initTimeout;
+    try {
+      return await future.timeout(limit);
     } on TimeoutException {
       throw Exception('Tiempo de espera agotado en: $label');
     }
   }
 
-  Future<void> _cargarUsuarioGuardado() async {
+  Future<void> _readStoredSessionIds() async {
     final prefs = await SharedPreferences.getInstance();
-    final supervisorId = prefs.getString('supervisor_id');
-    final vendedorId = prefs.getString('vendedor_id');
+    _storedSupervisorId = prefs.getString('supervisor_id');
+    _storedVendedorId = prefs.getString('vendedor_id');
+  }
+
+  Future<void> _resolverUsuarioGuardado() async {
+    await _readStoredSessionIds();
+    final supervisorId = _storedSupervisorId;
+    final vendedorId = _storedVendedorId;
+
     Supervisor? s;
     Vendedor? v;
-    if (supervisorId != null) s = await DataService.getSupervisor(supervisorId);
-    if (vendedorId != null) v = await DataService.getVendedor(vendedorId);
+    if (supervisorId != null) {
+      try {
+        s = await DataService.getSupervisor(supervisorId);
+      } catch (_) {}
+    }
+    if (vendedorId != null) {
+      try {
+        v = await DataService.getVendedor(vendedorId);
+      } catch (_) {}
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (supervisorId != null && s == null) {
+      await prefs.remove('supervisor_id');
+      _storedSupervisorId = null;
+    }
+    if (vendedorId != null && v == null) {
+      await prefs.remove('vendedor_id');
+      _storedVendedorId = null;
+    }
     _usuarioActual = s;
     _vendedorActual = v;
+    notifyListeners();
+    if (s != null || v != null) {
+      unawaited(_asegurarMonitorActivo());
+    }
   }
 
   Future<void> loginSupervisor(String id) async {
@@ -110,8 +181,11 @@ class AppProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('supervisor_id', id);
       await prefs.remove('vendedor_id');
+      _storedSupervisorId = id;
+      _storedVendedorId = null;
     }
     notifyListeners();
+    unawaited(_asegurarMonitorActivo());
   }
 
   Future<void> loginVendedor(String id) async {
@@ -121,13 +195,31 @@ class AppProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('vendedor_id', id);
       await prefs.remove('supervisor_id');
+      _storedVendedorId = id;
+      _storedSupervisorId = null;
     }
     notifyListeners();
+    unawaited(_asegurarMonitorActivo());
+  }
+
+  Future<void> _asegurarMonitorActivo() async {
+    try {
+      final activo = await CallMonitorService.isEnabled();
+      if (!activo) {
+        await CallMonitorService.start();
+      }
+      _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('_asegurarMonitorActivo: $e');
+    }
   }
 
   Future<void> logout() async {
     _usuarioActual = null;
     _vendedorActual = null;
+    _storedSupervisorId = null;
+    _storedVendedorId = null;
     _geolocalizacionActiva = false;
     _locationSub?.cancel();
     final prefs = await SharedPreferences.getInstance();

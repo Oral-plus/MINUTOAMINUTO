@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../models/vendedor.dart';
 import '../utils/constants.dart';
+import 'app_loading_screen.dart';
 
 class BloqueRanking extends StatelessWidget {
   const BloqueRanking({super.key});
@@ -39,10 +40,12 @@ class BloqueRanking extends StatelessWidget {
               future: context.read<AppProvider>().obtenerRankingVendedores(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: AppLoadingIndicator(
+                      logoHeight: 84,
+                      dotSize: 8,
+                      showMessage: false,
                     ),
                   );
                 }

@@ -1,0 +1,163 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../utils/constants.dart';
+
+/// Loader corporativo reutilizable: fondo blanco, logo y 3 bolitas animadas.
+class AppLoadingScreen extends StatelessWidget {
+  final bool showMessage;
+  final String message;
+
+  const AppLoadingScreen({
+    super.key,
+    this.showMessage = false,
+    this.message = 'Cargando...',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: AppLoadingIndicator(
+            showMessage: showMessage,
+            message: message,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppLoadingIndicator extends StatelessWidget {
+  final double logoHeight;
+  final double dotSize;
+  final double dotSpacing;
+  final bool showMessage;
+  final String message;
+
+  const AppLoadingIndicator({
+    super.key,
+    this.logoHeight = 138,
+    this.dotSize = 10,
+    this.dotSpacing = 8,
+    this.showMessage = false,
+    this.message = 'Cargando...',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(
+          'assets/images/logo.png',
+          height: logoHeight,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.schedule_rounded,
+            size: logoHeight * 0.45,
+            color: AppConstants.azulCorporativo,
+          ),
+        ),
+        const SizedBox(height: 20),
+        _AnimatedLoadingDots(
+          dotSize: dotSize,
+          spacing: dotSpacing,
+          color: AppConstants.azulCorporativo,
+        ),
+        if (showMessage) ...[
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AnimatedLoadingDots extends StatefulWidget {
+  final double dotSize;
+  final double spacing;
+  final Color color;
+
+  const _AnimatedLoadingDots({
+    required this.dotSize,
+    required this.spacing,
+    required this.color,
+  });
+
+  @override
+  State<_AnimatedLoadingDots> createState() => _AnimatedLoadingDotsState();
+}
+
+class _AnimatedLoadingDotsState extends State<_AnimatedLoadingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1050),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double _factorFor(int index, double t) {
+    final shifted = (t + 1 - (index * 0.16)) % 1;
+    final wave = (math.sin(shifted * math.pi * 2) + 1) / 2;
+    return Curves.easeInOut.transform(wave);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            final factor = _factorFor(index, t);
+            final opacity = 0.35 + (0.65 * factor);
+            final offsetY = -3.5 * factor;
+
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: widget.spacing / 2),
+              child: Opacity(
+                opacity: opacity,
+                child: Transform.translate(
+                  offset: Offset(0, offsetY),
+                  child: Container(
+                    width: widget.dotSize,
+                    height: widget.dotSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: widget.color,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}

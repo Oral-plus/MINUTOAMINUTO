@@ -100,10 +100,16 @@ class CallAudioRecordingService {
       for (final perfil in _perfiles) {
         try {
           await _instance.start(perfil.config, path: filePath);
-          await Future.delayed(const Duration(milliseconds: 220));
+          await Future.delayed(const Duration(milliseconds: 400));
           if (await _instance.isRecording()) {
             _currentPath = filePath;
             debugPrint('CallAudioRecordingService: perfil activo ${perfil.nombre}');
+            return _currentPath;
+          }
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (await _instance.isRecording()) {
+            _currentPath = filePath;
+            debugPrint('CallAudioRecordingService: perfil activo (retry) ${perfil.nombre}');
             return _currentPath;
           }
         } catch (e) {
@@ -132,18 +138,65 @@ class CallAudioRecordingService {
     if (!_isAndroid) return null;
     final pathToReturn = _currentPath;
     try {
-      if (!await _instance.isRecording()) return pathToReturn;
-      final path = await _instance.stop();
-      if (path != null && path.isNotEmpty) {
-        _currentPath = path;
+      String? candidatePath = pathToReturn;
+      if (await _instance.isRecording()) {
+        final path = await _instance.stop();
+        if (path != null && path.isNotEmpty) {
+          candidatePath = path;
+        }
+      }
+      final stabilizedPath = await _stabilizeRecordingPath(candidatePath);
+      if (stabilizedPath != null) {
+        _currentPath = stabilizedPath;
         return _currentPath;
       }
-      return pathToReturn;
+      return candidatePath;
     } catch (e) {
       debugPrint('CallAudioRecordingService stop error: $e');
       return pathToReturn;
     } finally {
       _currentPath = null;
+    }
+  }
+
+  /// Asegura que el audio quede en almacenamiento persistente de la app.
+  static Future<String?> _stabilizeRecordingPath(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    try {
+      final source = File(path);
+      if (!await source.exists()) return null;
+
+      // Algunos dispositivos tardan milisegundos en cerrar y volcar el archivo.
+      var size = await source.length();
+      if (size <= 0) {
+        for (var wait = 0; wait < 4 && size <= 0; wait++) {
+          await Future.delayed(Duration(milliseconds: 300 * (wait + 1)));
+          if (!await source.exists()) return null;
+          size = await source.length();
+        }
+      }
+      if (size <= 0) return null;
+
+      final dir = await getApplicationDocumentsDirectory();
+      final recDir = Directory('${dir.path}/call_recordings');
+      if (!await recDir.exists()) {
+        await recDir.create(recursive: true);
+      }
+
+      final normalizedSourceDir = source.parent.path.replaceAll('\\', '/');
+      final normalizedTargetDir = recDir.path.replaceAll('\\', '/');
+      if (normalizedSourceDir == normalizedTargetDir) {
+        return source.path;
+      }
+
+      final ext = source.path.toLowerCase().endsWith('.m4a') ? '.m4a' : '.aac';
+      final targetPath =
+          '${recDir.path}/call_${DateTime.now().millisecondsSinceEpoch}$ext';
+      final copied = await source.copy(targetPath);
+      return copied.path;
+    } catch (e) {
+      debugPrint('CallAudioRecordingService stabilize path error: $e');
+      return path;
     }
   }
 }

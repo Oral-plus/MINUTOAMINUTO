@@ -43,9 +43,18 @@ class DataService {
         ? 'API ${ApiConfig.baseUrl}/supervisores'
         : 'SQLite local (tabla supervisores)';
     DebugAlertService.info('Registrando ${s.cargo.displayName} en: $destino');
-    await (_useApi
-        ? ApiService.insertSupervisor(s)
-        : DatabaseService.insertSupervisor(s));
+    if (_useApi) {
+      try {
+        await ApiService.insertSupervisor(s);
+        await DatabaseService.insertSupervisor(s);
+      } catch (_) {
+        // Cache local para no perder el alta aunque la API tarde/falle.
+        await DatabaseService.insertSupervisor(s);
+        rethrow;
+      }
+    } else {
+      await DatabaseService.insertSupervisor(s);
+    }
     DebugAlertService.success('${s.cargo.displayName} guardado en: $destino');
   }
 
@@ -54,9 +63,18 @@ class DataService {
         ? 'API ${ApiConfig.baseUrl}/vendedores'
         : 'SQLite local (tabla vendedores)';
     DebugAlertService.info('Registrando vendedor en: $destino');
-    await (_useApi
-        ? ApiService.insertVendedor(v)
-        : DatabaseService.insertVendedor(v));
+    if (_useApi) {
+      try {
+        await ApiService.insertVendedor(v);
+        await DatabaseService.insertVendedor(v);
+      } catch (_) {
+        // Cache local para no perder el alta aunque la API tarde/falle.
+        await DatabaseService.insertVendedor(v);
+        rethrow;
+      }
+    } else {
+      await DatabaseService.insertVendedor(v);
+    }
     DebugAlertService.success('Vendedor guardado en: $destino');
   }
 

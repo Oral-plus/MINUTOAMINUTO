@@ -7,6 +7,7 @@ import '../services/data_service.dart';
 import '../utils/constants.dart';
 import 'home_screen.dart';
 import 'setup_screen.dart';
+import '../widgets/app_loading_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,6 +19,19 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _esSupervisor = true;
   String? _selectedId;
+  late final Future<List<Supervisor>> _supervisoresFuture;
+  late final Future<List<Vendedor>> _vendedoresFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _supervisoresFuture = DataService.getSupervisores()
+        .timeout(const Duration(seconds: 20), onTimeout: () => <Supervisor>[])
+        .catchError((_) => <Supervisor>[]);
+    _vendedoresFuture = DataService.getVendedores()
+        .timeout(const Duration(seconds: 20), onTimeout: () => <Vendedor>[])
+        .catchError((_) => <Vendedor>[]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 140,
                     fit: BoxFit.contain,
                     filterQuality: FilterQuality.high,
-                    errorBuilder: (_, __, ___) => Icon(
+                    errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.schedule,
                       size: 64,
                       color: AppConstants.azulCorporativo,
@@ -75,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: Border.all(color: Colors.grey.shade200),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
+                          color: Colors.black.withValues(alpha: 0.08),
                           blurRadius: 20,
                           offset: const Offset(0, 4),
                         ),
@@ -108,11 +122,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 24),
                         _esSupervisor
                             ? _SelectorSupervisor(
+                                future: _supervisoresFuture,
                                 onSelected: (id) =>
                                     setState(() => _selectedId = id),
                                 selectedId: _selectedId,
                               )
                             : _SelectorVendedor(
+                                future: _vendedoresFuture,
                                 onSelected: (id) =>
                                     setState(() => _selectedId = id),
                                 selectedId: _selectedId,
@@ -171,10 +187,12 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _SelectorSupervisor extends StatelessWidget {
+  final Future<List<Supervisor>> future;
   final void Function(String) onSelected;
   final String? selectedId;
 
   const _SelectorSupervisor({
+    required this.future,
     required this.onSelected,
     this.selectedId,
   });
@@ -182,10 +200,17 @@ class _SelectorSupervisor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Supervisor>>(
-      future: DataService.getSupervisores(),
+      future: future,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: AppLoadingIndicator(
+              logoHeight: 88,
+              dotSize: 8,
+              showMessage: false,
+            ),
+          );
         }
         final list = snapshot.data!;
         if (list.isEmpty) {
@@ -218,10 +243,12 @@ class _SelectorSupervisor extends StatelessWidget {
 }
 
 class _SelectorVendedor extends StatelessWidget {
+  final Future<List<Vendedor>> future;
   final void Function(String) onSelected;
   final String? selectedId;
 
   const _SelectorVendedor({
+    required this.future,
     required this.onSelected,
     this.selectedId,
   });
@@ -229,10 +256,17 @@ class _SelectorVendedor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Vendedor>>(
-      future: DataService.getVendedores(),
+      future: future,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: AppLoadingIndicator(
+              logoHeight: 88,
+              dotSize: 8,
+              showMessage: false,
+            ),
+          );
         }
         final list = snapshot.data!;
         if (list.isEmpty) {

@@ -5,8 +5,9 @@ import '../providers/app_provider.dart';
 import '../models/registro_llamada.dart';
 import '../models/tipo_llamada.dart';
 import '../utils/constants.dart';
-import 'speech_llamada_screen.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/recording_overlay.dart';
+import 'speech_llamada_screen.dart';
 
 class NuevaLlamadaScreen extends StatefulWidget {
   const NuevaLlamadaScreen({super.key});
@@ -321,14 +322,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
     final usuario = context.read<AppProvider>().usuarioActual;
     if (usuario == null) return;
     if (!_confirmacionVeracidad) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Debe confirmar la veracidad del registro para continuar.',
-          ),
-          backgroundColor: AppConstants.rojoCritico,
-        ),
-      );
+      AppFeedback.warning(context, 'Debe confirmar la veracidad del registro para continuar.');
       return;
     }
 
@@ -339,13 +333,9 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
     final duracion = fin.difference(inicio).inMinutes;
 
     if (duracion < AppConstants.duracionMinimaLlamada) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'La duración debe ser al menos ${AppConstants.duracionMinimaLlamada} minutos. Actual: $duracion min.',
-          ),
-          backgroundColor: AppConstants.rojoCritico,
-        ),
+      AppFeedback.warning(
+        context,
+        'La duración debe ser al menos ${AppConstants.duracionMinimaLlamada} minutos. Actual: $duracion min.',
       );
       return;
     }
@@ -376,22 +366,12 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
     try {
       await context.read<AppProvider>().registrarLlamada(r);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Llamada registrada correctamente'),
-            backgroundColor: AppConstants.verdeMeta,
-          ),
-        );
+        AppFeedback.success(context, 'Llamada registrada correctamente');
         Navigator.pop(context);
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppConstants.rojoCritico,
-          ),
-        );
+        AppFeedback.error(context, 'Error al registrar: $e');
       }
     }
   }

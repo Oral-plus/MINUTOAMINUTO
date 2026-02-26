@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
@@ -10,66 +11,108 @@ import '../models/alerta.dart';
 import 'debug_alert_service.dart';
 
 class ApiService {
-  static String _activeBase = ApiConfig.baseUrl;
-  static bool _fallbackTried = false;
-  static String get _base => _activeBase;
+  static const Duration _readRequestTimeout = Duration(seconds: 12);
+  static const Duration _writeRequestTimeout = Duration(seconds: 25);
+  static const int _transientRetries = 1;
+  static String get _base => ApiConfig.baseUrl;
 
   static Future<http.Response> _get(String path) async {
-    return _requestWithFallback(() => http.get(Uri.parse('$_base$path')));
+    return _requestWithRetry(
+      (base) => http.get(Uri.parse('$base$path')),
+      timeout: _readRequestTimeout,
+    );
   }
 
   static Future<http.Response> _delete(String path) async {
-    return _requestWithFallback(() => http.delete(Uri.parse('$_base$path')));
+    return _requestWithRetry(
+      (base) => http.delete(Uri.parse('$base$path')),
+      timeout: _writeRequestTimeout,
+    );
   }
 
   static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
-    return _requestWithFallback(
-      () => http.post(
-        Uri.parse('$_base$path'),
+    return _requestWithRetry(
+      (base) => http.post(
+        Uri.parse('$base$path'),
         body: jsonEncode(body),
         headers: {'Content-Type': 'application/json'},
       ),
+      timeout: _writeRequestTimeout,
     );
   }
 
   static Future<http.Response> _patch(String path, Map<String, dynamic> body) async {
-    return _requestWithFallback(
-      () => http.patch(
-        Uri.parse('$_base$path'),
+    return _requestWithRetry(
+      (base) => http.patch(
+        Uri.parse('$base$path'),
         body: jsonEncode(body),
         headers: {'Content-Type': 'application/json'},
       ),
+      timeout: _writeRequestTimeout,
     );
   }
 
-  static Future<http.Response> _requestWithFallback(
-    Future<http.Response> Function() request,
+  static Future<http.Response> _requestWithRetry(
+    Future<http.Response> Function(String base) requestBuilder,
+    {required Duration timeout}
   ) async {
-    try {
-      final r = await request().timeout(const Duration(seconds: 8));
-      if (_shouldSwitchToFallback(r.statusCode)) {
-        await _switchToFallbackBase();
-        return request().timeout(const Duration(seconds: 8));
+    Object? lastError;
+    StackTrace? lastStack;
+
+    for (var attempt = 0; attempt <= _transientRetries; attempt++) {
+      try {
+        return await requestBuilder(_base).timeout(timeout);
+      } on TimeoutException catch (e, st) {
+        lastError = e;
+        lastStack = st;
+      } on http.ClientException catch (e, st) {
+        lastError = e;
+        lastStack = st;
       }
-      return r;
-    } catch (e) {
-      if (!_fallbackTried) {
-        await _switchToFallbackBase();
-        return request().timeout(const Duration(seconds: 8));
+
+      if (attempt < _transientRetries) {
+        await Future.delayed(Duration(milliseconds: 350 * (attempt + 1)));
       }
-      rethrow;
     }
+
+    if (lastError != null && lastStack != null) {
+      Error.throwWithStackTrace(lastError, lastStack);
+    }
+    throw Exception('Error de conexión con API LAN');
   }
 
-  static bool _shouldSwitchToFallback(int statusCode) {
-    return !_fallbackTried && (statusCode == 404 || statusCode == 502 || statusCode == 503);
+  static Future<bool> _existsSupervisor(String id) async {
+    for (var i = 0; i < 3; i++) {
+      try {
+        final r = await _requestWithRetry(
+          (base) => http.get(Uri.parse('$base/supervisores/$id')),
+          timeout: _readRequestTimeout,
+        );
+        if (r.statusCode == 200) {
+          final data = jsonDecode(r.body);
+          if (data != null) return true;
+        }
+      } catch (_) {}
+      await Future.delayed(Duration(milliseconds: 300 * (i + 1)));
+    }
+    return false;
   }
 
-  static Future<void> _switchToFallbackBase() async {
-    if (_fallbackTried) return;
-    _fallbackTried = true;
-    _activeBase = ApiConfig.fallbackBaseUrl;
-    DebugAlertService.warning('API fallback activado: $_activeBase');
+  static Future<bool> _existsVendedor(String id) async {
+    for (var i = 0; i < 3; i++) {
+      try {
+        final r = await _requestWithRetry(
+          (base) => http.get(Uri.parse('$base/vendedores/$id')),
+          timeout: _readRequestTimeout,
+        );
+        if (r.statusCode == 200) {
+          final data = jsonDecode(r.body);
+          if (data != null) return true;
+        }
+      } catch (_) {}
+      await Future.delayed(Duration(milliseconds: 300 * (i + 1)));
+    }
+    return false;
   }
 
   static Future<List<Vendedor>> getVendedores() async {
@@ -102,14 +145,30 @@ class ApiService {
 
   static Future<void> insertSupervisor(Supervisor s) async {
     final body = s.toMap();
-    final r = await _post('/supervisores', body);
-    if (r.statusCode != 200) throw Exception(r.body);
+    try {
+      final r = await _post('/supervisores', body);
+      if (r.statusCode != 200) throw Exception(r.body);
+    } on TimeoutException {
+      final exists = await _existsSupervisor(s.id);
+      if (!exists) rethrow;
+    } on http.ClientException {
+      final exists = await _existsSupervisor(s.id);
+      if (!exists) rethrow;
+    }
   }
 
   static Future<void> insertVendedor(Vendedor v) async {
     final body = v.toMap();
-    final r = await _post('/vendedores', body);
-    if (r.statusCode != 200) throw Exception(r.body);
+    try {
+      final r = await _post('/vendedores', body);
+      if (r.statusCode != 200) throw Exception(r.body);
+    } on TimeoutException {
+      final exists = await _existsVendedor(v.id);
+      if (!exists) rethrow;
+    } on http.ClientException {
+      final exists = await _existsVendedor(v.id);
+      if (!exists) rethrow;
+    }
   }
 
   static Future<void> deleteSupervisor(String id) async {
@@ -164,7 +223,15 @@ class ApiService {
       queryParameters: qp.isEmpty ? null : qp,
     );
     DebugAlertService.info('API GET: $uri');
-    final r = await _requestWithFallback(() => http.get(uri));
+    final r = await _requestWithRetry(
+      (base) {
+        final targetUri = Uri.parse('$base/llamadas').replace(
+          queryParameters: qp.isEmpty ? null : qp,
+        );
+        return http.get(targetUri);
+      },
+      timeout: _readRequestTimeout,
+    );
     if (r.statusCode != 200) throw Exception(r.body);
     final list = jsonDecode(r.body) as List;
     DebugAlertService.success('API OK /llamadas (${list.length} registros)');
@@ -204,12 +271,13 @@ class ApiService {
     };
     final uri = Uri.parse('$_base/llamadas');
     DebugAlertService.info('API POST: $uri');
-    final res = await _requestWithFallback(
-      () => http.post(
-        uri,
+    final res = await _requestWithRetry(
+      (base) => http.post(
+        Uri.parse('$base/llamadas'),
         body: jsonEncode(body),
         headers: {'Content-Type': 'application/json'},
       ),
+      timeout: _writeRequestTimeout,
     );
     if (res.statusCode != 200) throw Exception(res.body);
     final parsed = jsonDecode(res.body);

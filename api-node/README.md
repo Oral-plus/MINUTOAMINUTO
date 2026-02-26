@@ -6,8 +6,14 @@ Backend Express + SQL Server para desplegar en Render.
 
 - `GET /health` -> estado de la API (sin DB)
 - `GET /health/db` -> valida conexion SQL Server
-- `GET /api/test` -> prueba API + DB
-- `GET /api/invoices/by-cardcode/:cardcode` -> consulta principal
+- `GET /test` -> prueba API + DB
+- `GET /vendedores`
+- `GET /supervisores`
+- `GET /llamadas`
+- `GET /ppvc`
+- `GET /rvc`
+- `GET /alertas`
+- `POST /transcribe` -> transcripción de audio vía Gemini
 
 ## Variables de entorno (Render)
 
@@ -20,6 +26,9 @@ Backend Express + SQL Server para desplegar en Render.
 - `DB_TRUST_SERVER_CERT` (`true` recomendado en entornos privados)
 - `DB_CONNECT_TIMEOUT` (`30000`)
 - `DB_REQUEST_TIMEOUT` (`30000`)
+- `GEMINI_API_KEY` (obligatoria para `/transcribe`)
+- `GEMINI_MODEL` (default `gemini-2.5-flash`)
+- `GEMINI_FALLBACK_MODEL` (default `gemini-2.5-flash-lite`)
 
 ## Despliegue en Render
 

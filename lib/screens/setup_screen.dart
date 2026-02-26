@@ -10,6 +10,7 @@ import 'registro_supervisor_screen.dart';
 import 'registro_vendedor_screen.dart';
 import 'admin_screen.dart';
 import 'login_screen.dart';
+import '../widgets/app_loading_screen.dart';
 
 /// Pantalla de configuración inicial cuando no hay datos.
 /// Permite registrar Jefe, KAM, Coaches y Vendedores.
@@ -33,17 +34,37 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Future<void> _cargar() async {
     setState(() => _cargando = true);
-    final sp = await DataService.getSupervisores();
-    final vd = await DataService.getVendedores();
-    setState(() {
-      _supervisores = sp;
-      _vendedores = vd;
-      _cargando = false;
-    });
+    try {
+      final sp = await DataService.getSupervisores().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => <Supervisor>[],
+      );
+      final vd = await DataService.getVendedores().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => <Vendedor>[],
+      );
+      if (!mounted) return;
+      setState(() {
+        _supervisores = sp;
+        _vendedores = vd;
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _supervisores = [];
+        _vendedores = [];
+        _cargando = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_cargando) {
+      return const AppLoadingScreen();
+    }
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -58,11 +79,7 @@ class _SetupScreenState extends State<SetupScreen> {
           ),
         ),
         child: SafeArea(
-          child: _cargando
-              ? const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-              : CustomScrollView(
+          child: CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(
                       child: Padding(

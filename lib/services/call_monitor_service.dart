@@ -14,9 +14,11 @@ import '../models/tipo_llamada.dart';
 import '../models/nivel_cargo.dart';
 import 'call_audio_recording_service.dart';
 import 'data_service.dart';
+import 'database_service.dart';
 import 'ip_service.dart';
 import 'location_service.dart';
 import 'post_call_notification_service.dart';
+import 'transcription_service.dart';
 
 /// Monitor de llamadas para Android: registra llamadas (y opcionalmente audio) en segundo plano.
 ///
@@ -36,11 +38,11 @@ class CallMonitorService {
   static const int _delayAfterNotificationMs = 600;
   static const int _delayAfterPhoneMs = 600;
   static const int _delayAfterMicMs = 500;
-  static const int _delayBeforeStartServiceSec = 3;
-  static const int _delayBeforeMonitoringSec = 5;
-  static const int _pollIntervalWithListenerSec = 12;
-  static const int _pollIntervalOnlyPollingSec = 8;
-  static const int _firstPollDelaySec = 2;
+  static const int _delayBeforeStartServiceSec = 1;
+  static const int _delayBeforeMonitoringSec = 2;
+  static const int _pollIntervalWithListenerSec = 8;
+  static const int _pollIntervalOnlyPollingSec = 5;
+  static const int _firstPollDelaySec = 1;
 
   static StreamSubscription? _callStateSub;
   static bool _isInCall = false;
@@ -50,7 +52,7 @@ class CallMonitorService {
   static bool _usePhoneStateListener = true;
   static bool _isManualRecording = false;
   static bool get isManualRecording => _isManualRecording;
-  static const int _delayBeforePhoneStateListenerSec = 2;
+  static const int _delayBeforePhoneStateListenerSec = 1;
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   static bool _guardAndroid() {
@@ -231,7 +233,7 @@ class CallMonitorService {
           debugPrint('CallMonitor PostCallNotification init: $e');
         }
       });
-      Future.delayed(const Duration(seconds: _delayBeforeMonitoringSec), () async {
+      unawaited(Future.delayed(const Duration(seconds: _delayBeforeMonitoringSec), () async {
         runZonedGuarded(() async {
           await _runSafe(() async {
             try {
@@ -244,7 +246,7 @@ class CallMonitorService {
         }, (error, stack) {
           debugPrint('CallMonitor start zone: $error\n$stack');
         });
-      });
+      }));
     } catch (e, st) {
       debugPrint('CallMonitor start error: $e $st');
       try {
@@ -390,6 +392,7 @@ class CallMonitorService {
       await _runSafe(() async {
         try {
           if (!await isEnabled()) return;
+          await _checkAndStartRecordingIfInCall();
           await _onCallEnded();
         } catch (e) {
           debugPrint('CallMonitor polling error: $e');
@@ -400,10 +403,49 @@ class CallMonitorService {
       await _runSafe(() async {
         try {
           if (!await isEnabled()) return;
+          await _checkAndStartRecordingIfInCall();
           await _onCallEnded();
         } catch (_) {}
       });
     });
+  }
+
+  static Future<void> _checkAndStartRecordingIfInCall() async {
+    try {
+      final entries = await CallLog.get();
+      if (entries.isEmpty) return;
+      final last = entries.first;
+      final ts = last.timestamp ?? 0;
+      final callTime = DateTime.fromMillisecondsSinceEpoch(ts);
+      final now = DateTime.now();
+      final diffSec = now.difference(callTime).inSeconds;
+      final dur = last.duration ?? 0;
+
+      if (dur == 0 && diffSec < 120) {
+        if (!_isInCall) {
+          _isInCall = true;
+          debugPrint('CallMonitor polling: llamada activa detectada, iniciando grabación');
+          try {
+            final path = await CallAudioRecordingService.start();
+            if (path != null) {
+              debugPrint('CallMonitor polling: grabación iniciada');
+              try {
+                if (await FlutterForegroundTask.isRunningService) {
+                  await FlutterForegroundTask.updateService(
+                    notificationTitle: 'Grabando llamada...',
+                    notificationText: 'Minuto a Minuto - Grabación activa',
+                  );
+                }
+              } catch (_) {}
+            }
+          } catch (e) {
+            debugPrint('CallMonitor polling start recording: $e');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('CallMonitor _checkAndStartRecordingIfInCall: $e');
+    }
   }
 
   static void _initForegroundTask() {
@@ -413,7 +455,11 @@ class CallMonitorService {
         channelName: 'Grabación de llamadas',
         channelDescription:
             'App en segundo plano. Graba y registra llamadas automáticamente.',
+        channelImportance: NotificationChannelImportance.HIGH,
+        priority: NotificationPriority.HIGH,
         onlyAlertOnce: true,
+        showWhen: true,
+        visibility: NotificationVisibility.VISIBILITY_PUBLIC,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: false,
@@ -442,24 +488,30 @@ class CallMonitorService {
                   : const <String, dynamic>{};
               final state = (data['state']?.toString() ?? '').toLowerCase();
               if (state == 'start') {
-                if (!_isInCall) {
-                  _isInCall = true;
-                  // Pequeña pausa para que la llamada esté conectada antes de grabar.
-                  await Future.delayed(const Duration(milliseconds: 400));
+                _isInCall = true;
+                await Future.delayed(const Duration(milliseconds: 500));
+                for (var attempt = 0; attempt < 3; attempt++) {
                   try {
-                    await CallAudioRecordingService.start();
-                  } catch (e) {
-                    debugPrint('CallMonitor start recording: $e');
-                  }
-                  try {
-                    if (await FlutterForegroundTask.isRunningService) {
-                      await FlutterForegroundTask.updateService(
-                        notificationTitle: 'Grabando llamada',
-                        notificationText: 'Minuto a Minuto',
-                      );
+                    final path = await CallAudioRecordingService.start();
+                    if (path != null) {
+                      debugPrint('CallMonitor: grabación iniciada (intento $attempt)');
+                      break;
                     }
-                  } catch (_) {}
+                  } catch (e) {
+                    debugPrint('CallMonitor start recording intento $attempt: $e');
+                  }
+                  if (attempt < 2) {
+                    await Future.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+                  }
                 }
+                try {
+                  if (await FlutterForegroundTask.isRunningService) {
+                    await FlutterForegroundTask.updateService(
+                      notificationTitle: 'Grabando llamada',
+                      notificationText: 'Minuto a Minuto',
+                    );
+                  }
+                } catch (_) {}
               } else if (state == 'end') {
                 String? audioPath;
                 try {
@@ -470,16 +522,23 @@ class CallMonitorService {
                     );
                   }
                 } catch (_) {}
-                if (_isInCall) {
-                  try {
-                    audioPath = await CallAudioRecordingService.stop();
-                    if (audioPath != null) {
-                      final file = File(audioPath);
-                      if (!await file.exists()) audioPath = null;
+                try {
+                  audioPath = await CallAudioRecordingService.stop();
+                  if (audioPath != null) {
+                    final file = File(audioPath);
+                    if (await file.exists()) {
+                      final size = await file.length();
+                      if (size <= 0) {
+                        await Future.delayed(const Duration(milliseconds: 500));
+                        final retrySize = await file.length();
+                        if (retrySize <= 0) audioPath = null;
+                      }
+                    } else {
+                      audioPath = null;
                     }
-                  } catch (e) {
-                    debugPrint('CallMonitor stop recording: $e');
                   }
+                } catch (e) {
+                  debugPrint('CallMonitor stop recording: $e');
                 }
                 _isInCall = false;
                 await _onCallEnded(audioPath: audioPath);
@@ -522,7 +581,18 @@ class CallMonitorService {
       await DataService.updateRegistroLlamadaRutaGrabacion(registroId, audioPath);
       debugPrint('CallMonitor: audio vinculado al registro $registroId');
     } catch (e) {
-      debugPrint('CallMonitor attach audio: $e');
+      debugPrint('CallMonitor attach audio remoto: $e');
+      try {
+        await DatabaseService.updateRegistroLlamadaRutaGrabacion(
+          registroId,
+          audioPath,
+        );
+        debugPrint(
+          'CallMonitor: audio vinculado en SQLite respaldo ($registroId)',
+        );
+      } catch (e2) {
+        debugPrint('CallMonitor attach audio sqlite: $e2');
+      }
     }
   }
 
@@ -631,8 +701,17 @@ class CallMonitorService {
         await prefs.setString(_keyLastRegistroId, r.id);
         debugPrint('CallMonitor: $tipoTexto - $nombreContactado ($duration min)');
       } catch (e) {
-        debugPrint('CallMonitor insertRegistro: $e');
-        return;
+        debugPrint('CallMonitor insertRegistro remoto: $e');
+        try {
+          await DatabaseService.insertRegistroLlamada(r);
+          await prefs.setString(_keyLastRegistroId, r.id);
+          debugPrint(
+            'CallMonitor: registro guardado en SQLite respaldo (${r.id})',
+          );
+        } catch (e2) {
+          debugPrint('CallMonitor insertRegistro sqlite: $e2');
+          return;
+        }
       }
 
       try {
@@ -644,8 +723,49 @@ class CallMonitorService {
       } catch (e) {
         debugPrint('PostCallNotification: $e');
       }
+
+      if (audioPath != null && audioPath.isNotEmpty) {
+        unawaited(_transcribirEnSegundoPlano(r.id, audioPath));
+      }
     } catch (e, st) {
       debugPrint('CallMonitor _onCallEnded: $e $st');
     }
+  }
+
+  static Future<void> _transcribirEnSegundoPlano(
+    String registroId,
+    String rutaAudio,
+  ) async {
+    try {
+      if (await FlutterForegroundTask.isRunningService) {
+        await FlutterForegroundTask.updateService(
+          notificationTitle: 'Transcribiendo llamada...',
+          notificationText: 'Minuto a Minuto - IA procesando audio',
+        );
+      }
+    } catch (_) {}
+
+    try {
+      final text = await TranscriptionService.transcribeAndSave(
+        registroId: registroId,
+        rutaAudio: rutaAudio,
+      );
+      if (text != null) {
+        debugPrint('CallMonitor: transcripción completada (${text.length} chars)');
+      } else {
+        debugPrint('CallMonitor: transcripción devolvió null');
+      }
+    } catch (e) {
+      debugPrint('CallMonitor transcripción error: $e');
+    }
+
+    try {
+      if (await FlutterForegroundTask.isRunningService) {
+        await FlutterForegroundTask.updateService(
+          notificationTitle: 'Minuto a Minuto - Activo',
+          notificationText: 'Registrando y grabando llamadas automáticamente.',
+        );
+      }
+    } catch (_) {}
   }
 }

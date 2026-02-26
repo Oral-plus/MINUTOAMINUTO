@@ -7,7 +7,6 @@ import 'providers/app_provider.dart';
 import 'utils/constants.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/setup_screen.dart';
 import 'widgets/monitor_floating_bubble.dart';
 import 'widgets/splash_screen.dart';
 
@@ -198,10 +197,6 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
               if (provider.usuarioActual != null ||
                   provider.vendedorActual != null) {
                 return const HomeScreen();
-              }
-              if (provider.supervisores.isEmpty &&
-                  provider.vendedores.isEmpty) {
-                return const SetupScreen();
               }
               return const LoginScreen();
             },

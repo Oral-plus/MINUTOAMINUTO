@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/supervisor.dart';
 import '../models/nivel_cargo.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
+import '../widgets/app_feedback.dart';
 
 class RegistroSupervisorScreen extends StatefulWidget {
   final NivelCargo cargoInicial;
@@ -21,11 +23,13 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
   final _zonaCtrl = TextEditingController();
   String? _superiorId;
   bool _guardando = false;
+  Future<List<Supervisor>>? _supervisoresFuture;
 
   @override
   void initState() {
     super.initState();
     _cargo = widget.cargoInicial;
+    _supervisoresFuture = _loadSupervisores();
   }
 
   @override
@@ -36,13 +40,33 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
     super.dispose();
   }
 
+  Future<List<Supervisor>> _loadSupervisores() async {
+    try {
+      return await DataService.getSupervisores().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => <Supervisor>[],
+      );
+    } catch (_) {
+      return <Supervisor>[];
+    }
+  }
+
+  String _mensajeErrorRegistro(Object e) {
+    final msg = e.toString();
+    if (e is TimeoutException || msg.contains('TimeoutException')) {
+      return 'La API LAN tardó en responder. '
+          'El registro quedó guardado localmente y se puede sincronizar luego.';
+    }
+    return 'Error: $e';
+  }
+
   Future<void> _guardar() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _guardando = true);
     try {
       String? superiorId = _superiorId;
       if (_cargo != NivelCargo.jefe && superiorId == null) {
-        final lista = await DataService.getSupervisores();
+        final lista = await _loadSupervisores();
         final superiores = _cargo == NivelCargo.kam
             ? lista.where((s) => s.esJefe).toList()
             : lista.where((s) => s.esKam).toList();
@@ -62,24 +86,12 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
       );
       await DataService.insertSupervisor(s);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${_cargo.displayName} registrado en ${DataService.userRegistrationDestination}',
-            ),
-            backgroundColor: AppConstants.verdeMeta,
-          ),
-        );
+        AppFeedback.success(context, '${_cargo.displayName} registrado correctamente');
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppConstants.rojoCritico,
-          ),
-        );
+        AppFeedback.error(context, _mensajeErrorRegistro(e));
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -140,7 +152,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
               if (_cargo != NivelCargo.jefe) ...[
                 const SizedBox(height: 20),
                 FutureBuilder<List<Supervisor>>(
-                  future: DataService.getSupervisores(),
+                  future: _supervisoresFuture,
                   builder: (context, snap) {
                     final lista = snap.data ?? [];
                     final superiores = _cargo == NivelCargo.kam

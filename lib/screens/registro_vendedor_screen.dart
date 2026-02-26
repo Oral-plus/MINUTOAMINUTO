@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/vendedor.dart';
 import '../models/supervisor.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
+import '../widgets/app_feedback.dart';
 
 class RegistroVendedorScreen extends StatefulWidget {
   const RegistroVendedorScreen({super.key});
@@ -20,6 +22,13 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
   final _presupuestoMensualCtrl = TextEditingController(text: '0');
   final _presupuestoDiarioCtrl = TextEditingController(text: '0');
   bool _guardando = false;
+  Future<List<Supervisor>>? _supervisoresFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _supervisoresFuture = _loadSupervisores();
+  }
 
   @override
   void dispose() {
@@ -31,15 +40,30 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
     super.dispose();
   }
 
+  Future<List<Supervisor>> _loadSupervisores() async {
+    try {
+      return await DataService.getSupervisores().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => <Supervisor>[],
+      );
+    } catch (_) {
+      return <Supervisor>[];
+    }
+  }
+
+  String _mensajeErrorRegistro(Object e) {
+    final msg = e.toString();
+    if (e is TimeoutException || msg.contains('TimeoutException')) {
+      return 'La API LAN tardó en responder. '
+          'El registro quedó guardado localmente y se puede sincronizar luego.';
+    }
+    return 'Error: $e';
+  }
+
   Future<void> _guardar() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_coachId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Seleccione un Coach'),
-          backgroundColor: AppConstants.rojoCritico,
-        ),
-      );
+      AppFeedback.warning(context, 'Seleccione un Coach');
       return;
     }
     setState(() => _guardando = true);
@@ -59,24 +83,12 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
       );
       await DataService.insertVendedor(v);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Vendedor registrado en ${DataService.userRegistrationDestination}',
-            ),
-            backgroundColor: AppConstants.verdeMeta,
-          ),
-        );
+        AppFeedback.success(context, 'Vendedor registrado correctamente');
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppConstants.rojoCritico,
-          ),
-        );
+        AppFeedback.error(context, _mensajeErrorRegistro(e));
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -126,7 +138,7 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
               ),
               const SizedBox(height: 20),
               FutureBuilder<List<Supervisor>>(
-                future: DataService.getSupervisores(),
+                future: _supervisoresFuture,
                 builder: (context, snap) {
                   final coaches = (snap.data ?? []).where((s) => s.esCoach).toList();
                   if (coaches.isEmpty) {

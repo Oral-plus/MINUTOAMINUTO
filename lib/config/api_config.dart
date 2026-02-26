@@ -5,25 +5,27 @@
 ///
 /// Opciones de baseUrl:
 /// - API Dart local (memoria): 'http://localhost:8080'
-/// - API Node Render:         'https://minutoaminuto-2.onrender.com'
+/// - API LAN Node:            'http://192.168.2.253:3005'
 ///
 /// Para SQL Server: usar API remota con endpoints compatibles.
 class ApiConfig {
   /// URL de la API.
-  /// - Render desplegado: 'https://minutoaminuto-2.onrender.com'
-  /// - Respaldo: 'https://minutoaminuto-2.onrender.com'
+  /// - Principal (LAN): 'http://192.168.2.253:3005'
   /// - Se puede sobreescribir con --dart-define=API_BASE_URL=...
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://minutoaminuto-2.onrender.com',
+    defaultValue: 'http://192.168.2.253:3005',
   );
 
-  /// URL alternativa cuando el servidor publica la API sin el prefijo /api.
+  /// Mantiene compatibilidad con código existente.
+  /// Debe ser la misma URL LAN; no se usa fallback externo.
   /// Se puede sobreescribir con --dart-define=API_FALLBACK_BASE_URL=...
   static const String fallbackBaseUrl = String.fromEnvironment(
     'API_FALLBACK_BASE_URL',
-    defaultValue: 'https://minutoaminuto-2.onrender.com',
+    defaultValue: 'http://192.168.2.253:3005',
   );
-  /// false = SQLite local. true = API remota (inserta en servidor).
-  static const bool useRemoteApi = true;
+  /// false = SQLite local (todo queda en el dispositivo).
+  /// true = API remota (inserta en servidor).
+  /// Cambiar a true cuando el dominio/API LAN esté disponible.
+  static const bool useRemoteApi = false;
 }

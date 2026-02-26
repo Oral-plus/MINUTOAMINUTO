@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
+import 'app_loading_screen.dart';
 
 class BloquePpvcRvc extends StatelessWidget {
   const BloquePpvcRvc({super.key});
@@ -46,10 +47,12 @@ class BloquePpvcRvc extends StatelessWidget {
               future: _calcularMetricas(context),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: AppLoadingIndicator(
+                      logoHeight: 84,
+                      dotSize: 8,
+                      showMessage: false,
                     ),
                   );
                 }

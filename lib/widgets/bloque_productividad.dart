@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../utils/constants.dart';
+import 'app_loading_screen.dart';
 
 class BloqueProductividad extends StatelessWidget {
   const BloqueProductividad({super.key});
@@ -46,10 +47,12 @@ class BloqueProductividad extends StatelessWidget {
               future: context.read<AppProvider>().obtenerMetricasProductividad(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: AppLoadingIndicator(
+                      logoHeight: 84,
+                      dotSize: 8,
+                      showMessage: false,
                     ),
                   );
                 }
