@@ -19,17 +19,18 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// Suprimir notas de deprecation/unchecked en todos los proyectos (incl. plugins)
 gradle.projectsEvaluated {
     allprojects {
         tasks.withType<JavaCompile>().configureEach {
-            options.isWarnings = false
-            options.compilerArgs.removeAll { it.startsWith("-Xlint") || it == "-nowarn" }
             options.compilerArgs.addAll(
                 listOf(
                     "-nowarn",
                     "-Xlint:-deprecation",
                     "-Xlint:-unchecked",
                     "-Xlint:-options",
+                    "-Xlint:-rawtypes",
+                    "-Xlint:-varargs",
                 ),
             )
         }

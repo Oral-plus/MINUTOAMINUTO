@@ -6,6 +6,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
@@ -33,6 +39,12 @@ android {
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        val gmapsKey = project.findProperty("GOOGLE_MAPS_API_KEY")?.toString()
+            ?: System.getenv("GOOGLE_MAPS_API_KEY")
+            ?: localProperties.getProperty("GOOGLE_MAPS_API_KEY")
+            ?: ""
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = gmapsKey
     }
 
     signingConfigs {

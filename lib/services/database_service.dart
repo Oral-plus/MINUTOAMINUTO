@@ -10,7 +10,7 @@ import '../models/alerta.dart';
 class DatabaseService {
   static Database? _database;
   static const String _dbName = 'minuto_a_minuto.db';
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 3;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -78,7 +78,9 @@ class DatabaseService {
         observaciones TEXT,
         confirmacionVeracidad INTEGER NOT NULL,
         rutaGrabacion TEXT,
-        transcripcionTexto TEXT
+        transcripcionTexto TEXT,
+        latitud REAL,
+        longitud REAL
       )
     ''');
     await db.execute('''
@@ -138,12 +140,14 @@ class DatabaseService {
   static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       try {
-        await db.execute(
-          'ALTER TABLE registro_llamadas ADD COLUMN rutaGrabacion TEXT',
-        );
-        await db.execute(
-          'ALTER TABLE registro_llamadas ADD COLUMN transcripcionTexto TEXT',
-        );
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN rutaGrabacion TEXT');
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN transcripcionTexto TEXT');
+      } catch (_) {}
+    }
+    if (oldVersion < 3) {
+      try {
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN latitud REAL');
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN longitud REAL');
       } catch (_) {}
     }
   }

@@ -1014,7 +1014,7 @@ async function shutdown() {
   } catch (err) {
     console.error("Error cerrando recursos:", err.message);
   } finally {
-    process.exit(0);
+      process.exit(0);
   }
 }
 

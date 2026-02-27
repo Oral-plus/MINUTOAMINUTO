@@ -2,11 +2,16 @@ import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart' show FlutterError, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
+import 'services/call_monitor_service.dart';
 import 'utils/constants.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/call_saving_progress_service.dart';
+import 'widgets/call_saving_overlay.dart';
 import 'widgets/monitor_floating_bubble.dart';
 import 'widgets/splash_screen.dart';
 
@@ -26,48 +31,54 @@ void overlayMain() {
   );
 }
 
-void main() async {
+void main() {
+  // main() NO es async — evita bloquear el hilo principal antes del primer frame
   WidgetsFlutterBinding.ensureInitialized();
-  // No rethrow: evita que cualquier error de Flutter cierre la app.
+
   FlutterError.onError = (details) {
-    debugPrint('FlutterError: ${details.exception}\n${details.stack}');
+    debugPrint('FlutterError: ${details.exception}');
   };
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('PlatformDispatcher.onError: $error\n$stack');
-    return true; // true = error manejado, la app no se cierra
+    debugPrint('PlatformDispatcher.onError: $error');
+    return true;
   };
-  ErrorWidget.builder = (details) => Material(
-    color: Colors.white,
-    child: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange[700]),
-            const SizedBox(height: 16),
-            Text(
-              'Error de visualización',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Reinicia la app',
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    ),
+
+  // Arrancar la UI de inmediato — sin await, sin trabajo pesado aquí
+  runZonedGuarded(
+    () {
+      runApp(const MinutoAMinutoApp());
+    },
+    (error, stack) {
+      debugPrint('runZonedGuarded: $error');
+    },
   );
-  runZonedGuarded(() async {
-    try {
-      if (!kIsWeb) db_init.initDatabase();
-    } catch (_) {}
-    runApp(const MinutoAMinutoApp());
-  }, (error, stack) {
-    debugPrint('runZonedGuarded: $error\n$stack');
+
+  // Todo el trabajo pesado va DESPUÉS del primer frame, en microtasks
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _initBackground();
   });
+}
+
+/// Inicialización pesada — corre después del primer frame visible
+Future<void> _initBackground() async {
+  try {
+    FlutterForegroundTask.initCommunicationPort();
+  } catch (_) {}
+  try {
+    if (!kIsWeb) db_init.initDatabase();
+  } catch (_) {}
+  // Monitor de llamadas con delay adicional para no saturar el arranque
+  await Future.delayed(const Duration(seconds: 3));
+  try {
+    if (!kIsWeb) {
+      await CallMonitorService.init().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => debugPrint('CallMonitor.init timeout'),
+      );
+    }
+  } catch (e) {
+    debugPrint('CallMonitor.init error: $e');
+  }
 }
 
 class MinutoAMinutoApp extends StatefulWidget {
@@ -103,6 +114,21 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
           scaffoldMessengerKey: AppKeys.scaffoldMessengerKey,
           title: 'Minuto a Minuto',
           debugShowCheckedModeBanner: false,
+          // El overlay de guardado va aquí: dentro de MaterialApp, con Directionality garantizada
+          builder: (context, child) {
+            // Interceptar el botón de atrás para minimizar en lugar de cerrar
+            // Esto evita que la app se cierre al colgar una llamada
+            return PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, result) {
+                if (!didPop) {
+                  // Minimizar la app en lugar de cerrarla
+                  SystemNavigator.pop(animated: true);
+                }
+              },
+              child: _CallSavingOverlayWrapper(child: child ?? const SizedBox.shrink()),
+            );
+          },
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
               seedColor: AppConstants.azulCorporativo,
@@ -203,7 +229,80 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
           ),
         ),
     );
-    // Sin WithForegroundTask para evitar bloqueos frecuentes; el servicio se inicia al activar.
     return child;
+  }
+}
+
+/// Wrapper interno del overlay de guardado — vive dentro de MaterialApp
+/// para tener Directionality y MediaQuery disponibles.
+class _CallSavingOverlayWrapper extends StatefulWidget {
+  final Widget child;
+  const _CallSavingOverlayWrapper({required this.child});
+
+  @override
+  State<_CallSavingOverlayWrapper> createState() =>
+      _CallSavingOverlayWrapperState();
+}
+
+class _CallSavingOverlayWrapperState extends State<_CallSavingOverlayWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double> _slideAnim;
+  StreamSubscription<CallSavingProgress>? _sub;
+  CallSavingProgress _progress = CallSavingProgressService.current;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _slideAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+
+    _sub = CallSavingProgressService.stream.listen((p) {
+      if (!mounted) return;
+      setState(() => _progress = p);
+      if (p.isActive) {
+        _animCtrl.forward();
+      } else if (p.isDone) {
+        Future.delayed(const Duration(milliseconds: 2500), () {
+          if (mounted) _animCtrl.reverse();
+        });
+      } else {
+        _animCtrl.reverse();
+      }
+    });
+
+    if (_progress.isActive) _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      textDirection: TextDirection.ltr,
+      children: [
+        widget.child,
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(_slideAnim),
+            child: SavingBanner(progress: _progress),
+          ),
+        ),
+      ],
+    );
   }
 }

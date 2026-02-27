@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Minuto a Minuto utiliza este servicio para capturar el audio completo de las llamadas telefónicas (tu voz y la del interlocutor) para el seguimiento comercial corporativo. Este servicio debe estar activo para que la grabación funcione correctamente.</string>
+</resources>

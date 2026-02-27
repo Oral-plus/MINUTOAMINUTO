@@ -8,6 +8,7 @@ import '../config/api_config.dart';
 import '../services/data_service.dart';
 import '../services/location_service.dart';
 import '../services/call_monitor_service.dart';
+import '../services/media_projection_service.dart';
 import '../services/debug_alert_service.dart';
 import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
@@ -26,14 +27,15 @@ class AppProvider with ChangeNotifier {
   bool _monitorLlamadasActivo = false;
   StreamSubscription? _locationSub;
   bool _isInitialized = false;
+  bool _sessionResolved = false; // true cuando sabemos si hay sesión o no
   String? _initError;
-  static const Duration _initTimeout = Duration(seconds: 8);
+  static const Duration _initTimeout = Duration(seconds: 4);
 
   List<Vendedor> get vendedores => _vendedores;
   List<Supervisor> get supervisores => _supervisores;
   List<RegistroLlamada> get llamadas => _llamadas;
   List<Alerta> get alertas => _alertas;
-  bool get isInitialized => _isInitialized;
+  bool get isInitialized => _isInitialized && _sessionResolved;
   String? get initError => _initError;
   Supervisor? get usuarioActual => _usuarioActual;
   Vendedor? get vendedorActual => _vendedorActual;
@@ -51,11 +53,12 @@ class AppProvider with ChangeNotifier {
     await runZonedGuarded(() async {
       try {
         DebugAlertService.info('Inicializando app...');
+        // Solo operaciones locales rápidas — la UI aparece en < 1s
         await DataService.init();
         await _withTimeout(
           _readStoredSessionIds(),
           'lectura de sesión local',
-          timeout: const Duration(seconds: 2),
+          timeout: const Duration(seconds: 1),
         );
         DebugAlertService.success('Inicio instantáneo completado');
       } catch (e, st) {
@@ -65,33 +68,56 @@ class AppProvider with ChangeNotifier {
         if (!ApiConfig.useRemoteApi) _initError = '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
       } finally {
         _isInitialized = true;
-        notifyListeners();
+        // Si no hay sesión guardada localmente, mostrar login de inmediato
+        if (_storedSupervisorId == null && _storedVendedorId == null) {
+          _sessionResolved = true;
+          notifyListeners();
+        } else {
+          notifyListeners();
+        }
       }
+      // Resolver sesión en red y cargar datos (puede tardar, pero con timeout corto)
       unawaited(_warmUpPostInit());
     }, (error, stack) {
       debugPrint('AppProvider zone: $error\n$stack');
       _initError = 'Error inesperado: $error';
       _isInitialized = true;
+      _sessionResolved = true;
       notifyListeners();
     });
   }
 
   Future<void> _warmUpPostInit() async {
-    await _runInitStep(
-      'resolver sesión guardada',
-      _resolverUsuarioGuardado,
-      timeout: _initTimeout,
-    );
-    _vendedores = await _loadListOrEmpty<Vendedor>(
-      DataService.getVendedores,
-      'vendedores (background)',
-      timeout: _initTimeout,
-    );
-    _supervisores = await _loadListOrEmpty<Supervisor>(
-      DataService.getSupervisores,
-      'supervisores (background)',
-      timeout: _initTimeout,
-    );
+    // Resolver usuario guardado con timeout máximo de 3s
+    // Si tarda más, mostrar login y seguir en segundo plano
+    await Future.any([
+      _runInitStep(
+        'resolver sesión guardada',
+        _resolverUsuarioGuardado,
+        timeout: const Duration(seconds: 3),
+      ),
+      Future.delayed(const Duration(seconds: 3)),
+    ]);
+    // Siempre marcar como resuelto tras el timeout
+    if (!_sessionResolved) {
+      _sessionResolved = true;
+      notifyListeners();
+    }
+    // Cargar listas en paralelo en segundo plano
+    final results = await Future.wait([
+      _loadListOrEmpty<Vendedor>(
+        DataService.getVendedores,
+        'vendedores (background)',
+        timeout: _initTimeout,
+      ),
+      _loadListOrEmpty<Supervisor>(
+        DataService.getSupervisores,
+        'supervisores (background)',
+        timeout: _initTimeout,
+      ),
+    ]);
+    _vendedores = results[0] as List<Vendedor>;
+    _supervisores = results[1] as List<Supervisor>;
     notifyListeners();
   }
 
@@ -204,11 +230,11 @@ class AppProvider with ChangeNotifier {
 
   Future<void> _asegurarMonitorActivo() async {
     try {
-      final activo = await CallMonitorService.isEnabled();
+      final activo = await CallMonitorService.isActive();
       if (!activo) {
         await CallMonitorService.start();
       }
-      _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+      _monitorLlamadasActivo = await CallMonitorService.isActive();
       notifyListeners();
     } catch (e) {
       debugPrint('_asegurarMonitorActivo: $e');
@@ -298,13 +324,27 @@ class AppProvider with ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 200));
     try {
       await CallMonitorService.start();
-      _monitorLlamadasActivo = await CallMonitorService.isEnabled();
+      _monitorLlamadasActivo = await CallMonitorService.isActive();
     } catch (e, st) {
       debugPrint('iniciarMonitorLlamadas: $e\n$st');
       _monitorLlamadasActivo = false;
     }
     notifyListeners();
   }
+
+  /// Solicita el permiso de MediaProjection al usuario.
+  /// Debe llamarse desde un contexto con BuildContext (UI).
+  Future<bool> solicitarPermisoMediaProjection() async {
+    try {
+      final granted = await MediaProjectionService.requestPermission();
+      return granted;
+    } catch (e) {
+      debugPrint('solicitarPermisoMediaProjection: $e');
+      return false;
+    }
+  }
+
+  bool get mediaProjectionGranted => MediaProjectionService.hasPermission;
 
   Future<void> detenerMonitorLlamadas() async {
     try {

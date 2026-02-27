@@ -24,6 +24,8 @@ class RegistroLlamada {
   final bool confirmacionVeracidad;
   final String? rutaGrabacion;
   final String? transcripcionTexto;
+  final double? latitud;
+  final double? longitud;
 
   RegistroLlamada({
     required this.id,
@@ -48,6 +50,8 @@ class RegistroLlamada {
     required this.confirmacionVeracidad,
     this.rutaGrabacion,
     this.transcripcionTexto,
+    this.latitud,
+    this.longitud,
   });
 
   Map<String, dynamic> toMap() => {
@@ -73,6 +77,8 @@ class RegistroLlamada {
         'confirmacionVeracidad': confirmacionVeracidad ? 1 : 0,
         'rutaGrabacion': rutaGrabacion,
         'transcripcionTexto': transcripcionTexto,
+        'latitud': latitud,
+        'longitud': longitud,
       };
 
   factory RegistroLlamada.fromMap(Map<String, dynamic> map) => RegistroLlamada(
@@ -104,5 +110,7 @@ class RegistroLlamada {
         confirmacionVeracidad: (map['confirmacionVeracidad'] ?? 0) == 1,
         rutaGrabacion: map['rutaGrabacion'] as String?,
         transcripcionTexto: map['transcripcionTexto'] as String?,
+        latitud: (map['latitud'] as num?)?.toDouble(),
+        longitud: (map['longitud'] as num?)?.toDouble(),
       );
 }

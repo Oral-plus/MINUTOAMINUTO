@@ -6,9 +6,12 @@ import 'data_service.dart';
 
 class TranscriptionService {
   static const String _apiKey = 'AIzaSyAtI2xz5kiSnxUn6vejkAeUnN2hAxOlxZ8';
+
+  // Modelos en orden de preferencia (los más capaces primero)
   static const List<String> _models = [
-    'gemini-2.5-flash',
     'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
   ];
 
   static Future<String?> transcribeAndSave({
@@ -28,22 +31,39 @@ class TranscriptionService {
         return null;
       }
 
+      // Determinar MIME type correcto según extensión
+      final ext = rutaAudio.toLowerCase().split('.').last;
+      final mime = switch (ext) {
+        'wav' => 'audio/wav',
+        'mp3' => 'audio/mpeg',
+        'aac' => 'audio/aac',
+        'ogg' => 'audio/ogg',
+        'flac' => 'audio/flac',
+        _ => 'audio/mp4', // m4a y otros
+      };
+
       final bytes = await file.readAsBytes();
       final b64 = base64Encode(bytes);
-      final mime = rutaAudio.toLowerCase().endsWith('.m4a')
-          ? 'audio/mp4'
-          : 'audio/aac';
+
+      debugPrint('TranscriptionService: transcribiendo ${(size / 1024).toStringAsFixed(0)} KB, mime=$mime');
 
       String? text;
       for (final model in _models) {
         text = await _callGemini(model: model, audioBase64: b64, mimeType: mime);
-        if (text != null && text.isNotEmpty) break;
+        if (text != null && text.isNotEmpty) {
+          debugPrint('TranscriptionService: éxito con modelo $model (${text.length} chars)');
+          break;
+        }
       }
 
-      if (text == null || text.isEmpty) return null;
+      if (text == null || text.isEmpty) {
+        debugPrint('TranscriptionService: todos los modelos fallaron');
+        return null;
+      }
 
       try {
         await DataService.updateRegistroLlamadaTranscripcion(registroId, text);
+        debugPrint('TranscriptionService: transcripción guardada en registro $registroId');
       } catch (e) {
         debugPrint('TranscriptionService: error guardando transcripción: $e');
       }
@@ -74,17 +94,18 @@ class TranscriptionService {
             },
             {
               'text':
-                  'Transcribe esta grabación de llamada telefónica a texto. '
-                  'Incluye todo lo que se dice, tanto del usuario como de la otra persona. '
-                  'Si no se entiende algo, pon [inaudible]. '
-                  'Devuelve solo la transcripción, sin explicaciones adicionales.',
+                  'Transcribe esta grabación de llamada telefónica al español. '
+                  'Incluye todo lo que dicen ambas personas. '
+                  'Usa formato: "Persona 1: [texto]" y "Persona 2: [texto]" si puedes distinguir las voces. '
+                  'Si no se entiende algo, escribe [inaudible]. '
+                  'Devuelve únicamente la transcripción, sin explicaciones ni comentarios.',
             },
           ],
         },
       ],
       'generationConfig': {
-        'temperature': 0.1,
-        'maxOutputTokens': 4096,
+        'temperature': 0.0,
+        'maxOutputTokens': 8192,
       },
     };
 
@@ -95,16 +116,22 @@ class TranscriptionService {
             body: jsonEncode(body),
             headers: {'Content-Type': 'application/json'},
           )
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 120));
 
       if (r.statusCode != 200) {
-        debugPrint('Gemini $model error ${r.statusCode}: ${r.body.length > 200 ? r.body.substring(0, 200) : r.body}');
+        debugPrint(
+          'Gemini $model HTTP ${r.statusCode}: '
+          '${r.body.length > 300 ? r.body.substring(0, 300) : r.body}',
+        );
         return null;
       }
 
       final data = jsonDecode(r.body) as Map<String, dynamic>;
       final candidates = data['candidates'] as List?;
-      if (candidates == null || candidates.isEmpty) return null;
+      if (candidates == null || candidates.isEmpty) {
+        debugPrint('Gemini $model: sin candidatos en respuesta');
+        return null;
+      }
 
       final content = candidates[0]['content'] as Map<String, dynamic>?;
       if (content == null) return null;

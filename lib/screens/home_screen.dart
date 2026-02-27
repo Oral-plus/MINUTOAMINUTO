@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/media_projection_service.dart';
 import '../utils/constants.dart';
 import '../widgets/app_loading_screen.dart';
 import 'admin_screen.dart';
@@ -16,6 +18,34 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _mediaProjGranted = false;
+  bool _mediaProjChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMediaProjection();
+  }
+
+  Future<void> _checkMediaProjection() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final granted = await MediaProjectionService.checkPermission();
+    if (mounted) setState(() { _mediaProjGranted = granted; _mediaProjChecked = true; });
+  }
+
+  Future<void> _solicitarMediaProjection() async {
+    final granted = await context.read<AppProvider>().solicitarPermisoMediaProjection();
+    if (mounted) setState(() => _mediaProjGranted = granted);
+    if (granted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Permiso concedido. Las llamadas se grabarán con audio completo.'),
+          backgroundColor: Color(0xFF065F46),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
@@ -136,7 +166,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 16),
                 _MonitorStatusBadge(activo: provider.monitorLlamadasActivo),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
+                // Banner de permiso MediaProjection (solo Android, solo si no está concedido)
+                if (!kIsWeb &&
+                    defaultTargetPlatform == TargetPlatform.android &&
+                    _mediaProjChecked &&
+                    !_mediaProjGranted)
+                  _MediaProjectionBanner(onTap: _solicitarMediaProjection),
+                if (!kIsWeb &&
+                    defaultTargetPlatform == TargetPlatform.android &&
+                    _mediaProjChecked &&
+                    !_mediaProjGranted)
+                  const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 const Text(
                   'Accesos rápidos',
                   style: TextStyle(
@@ -313,6 +355,56 @@ class _AccionHome {
     required this.color,
     required this.onTap,
   });
+}
+
+/// Banner que solicita al usuario el permiso de captura de audio del sistema.
+class _MediaProjectionBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MediaProjectionBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFED7AA)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.mic_external_on_rounded,
+                color: Color(0xFFD97706), size: 20),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Activar grabación de audio completa',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Toca para permitir capturar la voz de ambos lados de la llamada.',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309)),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFFD97706), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AccionTile extends StatelessWidget {

@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -9,6 +12,7 @@ import '../services/post_call_notification_service.dart';
 import '../services/transcription_service.dart';
 import '../utils/constants.dart';
 import '../widgets/app_feedback.dart';
+import '../widgets/map_location_modal.dart';
 
 class MisLlamadasScreen extends StatefulWidget {
   const MisLlamadasScreen({super.key});
@@ -110,36 +114,6 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
           final llamadasConTranscripcion =
               llamadas.where((l) => _isConTranscripcion(l)).length;
 
-          Widget chipEstado({
-            required IconData icono,
-            required String texto,
-            required Color color,
-            Color? fondo,
-          }) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: fondo ?? color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icono, size: 14, color: color),
-                  const SizedBox(width: 6),
-                  Text(
-                    texto,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return RefreshIndicator(
             onRefresh: () => provider.cargarDatosHoy(),
             child: ListView.separated(
@@ -169,237 +143,16 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
                     ? 'A: ${l.nombreContactado}'
                     : 'De: ${l.nombreLider}';
 
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: tipoColor.withOpacity(0.14),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.phone_in_talk_rounded,
-                                color: tipoColor,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    contacto,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF111827),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${DateFormat('HH:mm').format(l.horaInicio)} - ${DateFormat('HH:mm').format(l.horaFin)}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            chipEstado(
-                              icono: Icons.schedule_rounded,
-                              texto: '${l.duracionMinutos} min',
-                              color: const Color(0xFF374151),
-                              fondo: const Color(0xFFF3F4F6),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            chipEstado(
-                              icono: Icons.label_rounded,
-                              texto: l.tipoLlamada.displayName,
-                              color: tipoColor,
-                            ),
-                            if (tieneAudio)
-                              chipEstado(
-                                icono: Icons.mic_rounded,
-                                texto: 'Audio guardado',
-                                color: AppConstants.verdeMeta,
-                              ),
-                            if (tieneTranscripcion)
-                              chipEstado(
-                                icono: Icons.auto_awesome_rounded,
-                                texto: 'Transcripción',
-                                color: const Color(0xFF7C3AED),
-                              ),
-                          ],
-                        ),
-                        if (l.ventaDia > 0 || l.recaudoDia > 0) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: Wrap(
-                              spacing: 14,
-                              runSpacing: 8,
-                              children: [
-                                if (l.ventaDia > 0)
-                                  Text(
-                                    'Venta: \$${NumberFormat('#,##0').format(l.ventaDia)}',
-                                    style: const TextStyle(
-                                      color: AppConstants.verdeMeta,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                if (l.recaudoDia > 0)
-                                  Text(
-                                    'Recaudo: \$${NumberFormat('#,##0').format(l.recaudoDia)}',
-                                    style: const TextStyle(
-                                      color: AppConstants.azulCorporativo,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        if (l.observaciones.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF9FAFB),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
-                            ),
-                            child: Text(
-                              l.observaciones,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                height: 1.5,
-                                color: Color(0xFF374151),
-                              ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                        if (provider.usuarioActual != null) ...[
-                          const SizedBox(height: 10),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _mostrarDialogoEditarObservaciones(context, l),
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              label: const Text('Editar observaciones'),
-                            ),
-                          ),
-                        ],
-                        if (tieneAudio || tieneTranscripcion) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (tieneAudio)
-                                  _AudioPlayerWidget(
-                                    url: l.rutaGrabacion!,
-                                    registroId: l.id,
-                                    transcripcion: l.transcripcionTexto,
-                                    onTranscripcionGuardada: () {
-                                      provider.cargarDatosHoy();
-                                    },
-                                  ),
-                                if (tieneTranscripcion) ...[
-                                  if (tieneAudio) const SizedBox(height: 8),
-                                  Theme(
-                                    data: Theme.of(context).copyWith(
-                                      dividerColor: Colors.transparent,
-                                    ),
-                                    child: ExpansionTile(
-                                      tilePadding: EdgeInsets.zero,
-                                      childrenPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Transcripción (Gemini)',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppConstants.azulCorporativo,
-                                        ),
-                                      ),
-                                      children: [
-                                        Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: const Color(0xFFE5E7EB),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            l.transcripcionTexto!,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              height: 1.55,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                return _LlamadaCard(
+                  llamada: l,
+                  contacto: contacto,
+                  tipoColor: tipoColor,
+                  tieneAudio: tieneAudio,
+                  tieneTranscripcion: tieneTranscripcion,
+                  esUsuarioActual: provider.usuarioActual != null,
+                  onEditarObservaciones: () =>
+                      _mostrarDialogoEditarObservaciones(context, l),
+                  onTranscripcionGuardada: () => provider.cargarDatosHoy(),
                 );
               },
             ),
@@ -432,6 +185,428 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
       default:
         return AppConstants.azulCorporativo;
     }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Card expandible de llamada
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LlamadaCard extends StatefulWidget {
+  final RegistroLlamada llamada;
+  final String contacto;
+  final Color tipoColor;
+  final bool tieneAudio;
+  final bool tieneTranscripcion;
+  final bool esUsuarioActual;
+  final VoidCallback onEditarObservaciones;
+  final VoidCallback onTranscripcionGuardada;
+
+  const _LlamadaCard({
+    required this.llamada,
+    required this.contacto,
+    required this.tipoColor,
+    required this.tieneAudio,
+    required this.tieneTranscripcion,
+    required this.esUsuarioActual,
+    required this.onEditarObservaciones,
+    required this.onTranscripcionGuardada,
+  });
+
+  @override
+  State<_LlamadaCard> createState() => _LlamadaCardState();
+}
+
+class _LlamadaCardState extends State<_LlamadaCard> {
+  bool _expandido = false;
+
+  static ({double lat, double lng})? _parseCoords(RegistroLlamada l) {
+    // Primero usar campos directos (más precisos)
+    if (l.latitud != null && l.longitud != null &&
+        !(l.latitud == 0 && l.longitud == 0)) {
+      return (lat: l.latitud!, lng: l.longitud!);
+    }
+    // Fallback: parsear desde observaciones (llamadas antiguas)
+    final m = RegExp(
+      r'[Uu]bicaci[oó]n:\s*([-\d.]+)\s*,\s*([-\d.]+)',
+      caseSensitive: false,
+    ).firstMatch(l.observaciones);
+    if (m == null) return null;
+    final lat = double.tryParse(m.group(1) ?? '');
+    final lng = double.tryParse(m.group(2) ?? '');
+    if (lat == null || lng == null) return null;
+    if (lat == 0 && lng == 0) return null;
+    return (lat: lat, lng: lng);
+  }
+
+  Widget _chip(IconData icon, String text, Color color, {Color? bg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg ?? color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Text(text,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = widget.llamada;
+    final coords = _parseCoords(l);
+    final horaStr =
+        '${DateFormat('HH:mm').format(l.horaInicio)} – ${DateFormat('HH:mm').format(l.horaFin)}';
+
+    return GestureDetector(
+      onTap: () => setState(() => _expandido = !_expandido),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _expandido
+                ? AppConstants.azulCorporativo.withOpacity(0.4)
+                : const Color(0xFFE5E7EB),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(_expandido ? 0.06 : 0.03),
+              blurRadius: _expandido ? 20 : 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Cabecera siempre visible ──────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: widget.tipoColor.withOpacity(0.13),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.phone_in_talk_rounded,
+                        color: widget.tipoColor, size: 21),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.contacto,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827))),
+                        const SizedBox(height: 3),
+                        Text(horaStr,
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF6B7280))),
+                      ],
+                    ),
+                  ),
+                  // Duración
+                  _chip(Icons.schedule_rounded, '${l.duracionMinutos} min',
+                      const Color(0xFF374151),
+                      bg: const Color(0xFFF3F4F6)),
+                  const SizedBox(width: 8),
+                  // Flecha expandir
+                  AnimatedRotation(
+                    turns: _expandido ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: Color(0xFF9CA3AF), size: 22),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Chips de estado ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: Wrap(spacing: 7, runSpacing: 7, children: [
+                _chip(Icons.label_rounded, l.tipoLlamada.displayName,
+                    widget.tipoColor),
+                if (widget.tieneAudio)
+                  _chip(Icons.mic_rounded, 'Audio guardado',
+                      AppConstants.verdeMeta),
+                if (widget.tieneTranscripcion)
+                  _chip(Icons.auto_awesome_rounded, 'Transcripción',
+                      const Color(0xFF7C3AED)),
+                if (coords != null)
+                  GestureDetector(
+                    onTap: () => MapLocationModal.show(
+                      context,
+                      latitude: coords.lat,
+                      longitude: coords.lng,
+                      contactName: l.nombreContactado,
+                    ),
+                    child: _chip(Icons.location_on_rounded, 'Ver en mapa',
+                        AppConstants.azulCorporativo,
+                        bg: AppConstants.azulCorporativo.withOpacity(0.12)),
+                  ),
+              ]),
+            ),
+
+            // ── Contenido expandido ───────────────────────────────────────
+            if (_expandido) ...[
+              const Divider(height: 1, color: Color(0xFFF3F4F6)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Venta / Recaudo
+                    if (l.ventaDia > 0 || l.recaudoDia > 0) ...[
+                      Row(children: [
+                        if (l.ventaDia > 0)
+                          _InfoPill(
+                              icon: Icons.trending_up_rounded,
+                              label: 'Venta',
+                              value:
+                                  '\$${NumberFormat('#,##0').format(l.ventaDia)}',
+                              color: AppConstants.verdeMeta),
+                        if (l.ventaDia > 0 && l.recaudoDia > 0)
+                          const SizedBox(width: 8),
+                        if (l.recaudoDia > 0)
+                          _InfoPill(
+                              icon: Icons.payments_rounded,
+                              label: 'Recaudo',
+                              value:
+                                  '\$${NumberFormat('#,##0').format(l.recaudoDia)}',
+                              color: AppConstants.azulCorporativo),
+                      ]),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Observaciones limpias (sin la metadata técnica)
+                    if (l.observaciones.isNotEmpty) ...[
+                      _SectionLabel(
+                          icon: Icons.notes_rounded, label: 'Observaciones'),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Text(
+                          _limpiarObservaciones(l.observaciones),
+                          style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.5,
+                              color: Color(0xFF374151)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Mapa de ubicación (siempre visible si hay coords)
+                    if (coords != null) ...[
+                      _SectionLabel(
+                          icon: Icons.location_on_rounded,
+                          label: 'Ubicación de la llamada'),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          height: 180,
+                          child: GestureDetector(
+                            onTap: () => MapLocationModal.show(
+                              context,
+                              latitude: coords.lat,
+                              longitude: coords.lng,
+                              contactName: l.nombreContactado,
+                            ),
+                            child: Stack(children: [
+                              MapLocationModal.miniMap(
+                                latitude: coords.lat,
+                                longitude: coords.lng,
+                              ),
+                              Positioned(
+                                right: 8,
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppConstants.azulCorporativo,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.open_in_full_rounded,
+                                          size: 13, color: Colors.white),
+                                      SizedBox(width: 4),
+                                      Text('Ver mapa',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Audio
+                    if (widget.tieneAudio) ...[
+                      _SectionLabel(
+                          icon: Icons.mic_rounded,
+                          label: 'Grabación de llamada'),
+                      const SizedBox(height: 6),
+                      _AudioPlayerWidget(
+                        url: l.rutaGrabacion!,
+                        registroId: l.id,
+                        transcripcion: l.transcripcionTexto,
+                        onTranscripcionGuardada: widget.onTranscripcionGuardada,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Transcripción
+                    if (widget.tieneTranscripcion) ...[
+                      _SectionLabel(
+                          icon: Icons.auto_awesome_rounded,
+                          label: 'Transcripción IA'),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F3FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFF7C3AED).withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          l.transcripcionTexto!,
+                          style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.55,
+                              color: Color(0xFF374151)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Acciones
+                    Row(children: [
+                      if (widget.esUsuarioActual)
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: widget.onEditarObservaciones,
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: const Text('Editar'),
+                            style: OutlinedButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Elimina la metadata técnica de las observaciones para mostrar solo
+  /// lo que el usuario escribió o la info relevante.
+  static String _limpiarObservaciones(String obs) {
+    // Quitar líneas de metadata técnica
+    final lines = obs.split('. ').where((s) {
+      final lower = s.toLowerCase();
+      return !lower.startsWith('ip:') &&
+          !lower.startsWith('ubicación:') &&
+          !lower.startsWith('audio:');
+    }).toList();
+    return lines.join('. ').trim();
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  const _InfoPill(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 6),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10,
+                  color: color.withOpacity(0.8),
+                  fontWeight: FontWeight.w500)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: color,
+                  fontWeight: FontWeight.w700)),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _SectionLabel({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Icon(icon, size: 14, color: const Color(0xFF6B7280)),
+      const SizedBox(width: 5),
+      Text(label,
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF6B7280))),
+    ]);
   }
 }
 
@@ -643,9 +818,69 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   Duration _duracionTotal = Duration.zero;
   Duration _posicionActual = Duration.zero;
 
+  /// Busca el archivo de audio en múltiples rutas posibles.
+  static Future<String?> _resolveAudioPath(String originalPath) async {
+    // 1. Ruta original exacta
+    if (await File(originalPath).exists()) {
+      final size = await File(originalPath).length();
+      if (size > 0) return originalPath;
+    }
+
+    // 2. Extraer nombre del archivo
+    final fileName = originalPath.split('/').last.split('\\').last;
+    if (fileName.isEmpty) return null;
+
+    final searchDirs = <String>[];
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      // Ruta exacta que usa el nativo: <data>/app_flutter/call_recordings
+      searchDirs.add('${appDir.path}/call_recordings');
+      searchDirs.add('${appDir.parent.path}/app_flutter/call_recordings');
+      searchDirs.add('${appDir.parent.path}/files/call_recordings');
+      searchDirs.add(appDir.path);
+    } catch (_) {}
+
+    for (final dir in searchDirs) {
+      // Buscar con el nombre exacto
+      final candidate = '$dir/$fileName';
+      final f = File(candidate);
+      if (await f.exists() && await f.length() > 0) {
+        debugPrint('AudioPlayer: ruta resuelta → $candidate');
+        return candidate;
+      }
+      // Buscar con extensiones alternativas
+      final baseName = fileName.replaceAll(RegExp(r'\.(m4a|wav|aac|mp4)$'), '');
+      for (final ext in ['.m4a', '.wav', '.aac']) {
+        final alt = '$dir/$baseName$ext';
+        final af = File(alt);
+        if (await af.exists() && await af.length() > 0) {
+          debugPrint('AudioPlayer: extensión alternativa → $alt');
+          return alt;
+        }
+      }
+    }
+    debugPrint('AudioPlayer: no encontrado: $originalPath');
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
+    unawaited(
+      _player.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            audioMode: AndroidAudioMode.normal,
+            contentType: AndroidContentType.speech,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+        ),
+      ),
+    );
+    unawaited(_player.setPlayerMode(PlayerMode.mediaPlayer));
+    unawaited(_player.setVolume(1.0));
     _player.onPlayerStateChanged.listen((state) {
       if (mounted) setState(() => _playing = state == PlayerState.playing);
     });
@@ -688,14 +923,43 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
       }
 
       setState(() => _cargandoAudio = true);
+
       final isUrl = widget.url.startsWith('http://') ||
           widget.url.startsWith('https://');
+
       if (isUrl) {
-        await _player.play(UrlSource(widget.url));
+        await _player.play(
+          UrlSource(widget.url),
+          volume: 1.0,
+          mode: PlayerMode.mediaPlayer,
+        );
       } else {
-        await _player.play(DeviceFileSource(widget.url));
+        // Resolver la ruta real del archivo (puede haber cambiado entre versiones)
+        final resolvedPath = await _resolveAudioPath(widget.url);
+        if (resolvedPath == null) {
+          if (mounted) {
+            AppFeedback.error(
+              context,
+              'Grabación no disponible en este dispositivo',
+            );
+          }
+          return;
+        }
+        final size = await File(resolvedPath).length();
+        if (size <= 0) {
+          if (mounted) {
+            AppFeedback.error(context, 'El archivo de audio está vacío');
+          }
+          return;
+        }
+        await _player.play(
+          DeviceFileSource(resolvedPath),
+          volume: 1.0,
+          mode: PlayerMode.mediaPlayer,
+        );
       }
     } catch (e) {
+      debugPrint('AudioPlayer error: $e — url: ${widget.url}');
       if (mounted) {
         AppFeedback.error(context, 'No se pudo reproducir el audio');
       }
