@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:art_sweetalert_new/art_sweetalert_new.dart';
 import '../providers/app_provider.dart';
 import '../models/supervisor.dart';
 import '../models/vendedor.dart';
 import '../models/nivel_cargo.dart';
 import '../services/data_service.dart';
-import '../utils/constants.dart';
+import '../services/api_service.dart';
+import '../config/api_config.dart';
 import 'registro_supervisor_screen.dart';
 import 'registro_vendedor_screen.dart';
 import 'admin_screen.dart';
@@ -30,6 +32,24 @@ class _SetupScreenState extends State<SetupScreen> {
   void initState() {
     super.initState();
     _cargar();
+    if (ApiConfig.useRemoteApi) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _verificarConexionApi());
+    }
+  }
+
+  Future<void> _verificarConexionApi() async {
+    try {
+      final ok = await ApiService.testConnection();
+      if (!mounted) return;
+      if (ok) {
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('API conectada'),
+          content: const Text('La conexión con el servidor está funcionando correctamente.'),
+          type: ArtAlertType.success,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _cargar() async {
@@ -72,9 +92,9 @@ class _SetupScreenState extends State<SetupScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF0D47A1),
-              Color(0xFF1565C0),
-              Color(0xFF1976D2),
+              Color(0xFF212121),
+              Color(0xFF424242),
+              Color(0xFF616161),
             ],
           ),
         ),
@@ -90,7 +110,7 @@ class _SetupScreenState extends State<SetupScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -201,7 +221,7 @@ class _SetupScreenState extends State<SetupScreen> {
                                 icon: const Icon(Icons.login),
                                 label: const Text('Ir a Inicio de sesión'),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: AppConstants.azulCorporativo,
+                                  backgroundColor: Colors.black,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
@@ -280,10 +300,10 @@ class _TarjetaRegistro extends StatelessWidget {
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: AppConstants.azulCorporativo.withOpacity(0.1),
+          color: Colors.black.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icono, color: AppConstants.azulCorporativo, size: 24),
+        child: Icon(icono, color: Colors.black, size: 24),
       ),
       title: Text(
         titulo,
@@ -304,8 +324,8 @@ class _TarjetaRegistro extends StatelessWidget {
       trailing: FilledButton.tonal(
         onPressed: onAgregar,
         style: FilledButton.styleFrom(
-          backgroundColor: AppConstants.azulCorporativo.withOpacity(0.15),
-          foregroundColor: AppConstants.azulCorporativo,
+          backgroundColor: Colors.black.withOpacity(0.1),
+          foregroundColor: Colors.black,
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
         child: Text(vacio ? 'Agregar' : 'Añadir otro'),

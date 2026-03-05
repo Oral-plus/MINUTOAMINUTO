@@ -10,7 +10,7 @@ import '../models/alerta.dart';
 class DatabaseService {
   static Database? _database;
   static const String _dbName = 'minuto_a_minuto.db';
-  static const int _dbVersion = 3;
+  static const int _dbVersion = 4;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -38,6 +38,7 @@ class DatabaseService {
         codigo TEXT NOT NULL,
         zona TEXT NOT NULL,
         coachId TEXT NOT NULL,
+        telefono TEXT,
         geolocalizacionActiva INTEGER DEFAULT 0,
         horaInicioJornada TEXT,
         presupuestoMensual REAL DEFAULT 0,
@@ -51,6 +52,7 @@ class DatabaseService {
         codigo TEXT NOT NULL,
         zona TEXT NOT NULL,
         cargo TEXT NOT NULL,
+        telefono TEXT,
         superiorId TEXT,
         subordinadosIds TEXT
       )
@@ -78,6 +80,9 @@ class DatabaseService {
         observaciones TEXT,
         confirmacionVeracidad INTEGER NOT NULL,
         rutaGrabacion TEXT,
+        rutaGrabacionPuntoB TEXT,
+        numeroContacto TEXT,
+        numeroPropietario TEXT,
         transcripcionTexto TEXT,
         latitud REAL,
         longitud REAL
@@ -148,6 +153,13 @@ class DatabaseService {
       try {
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN latitud REAL');
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN longitud REAL');
+      } catch (_) {}
+    }
+    if (oldVersion < 4) {
+      try {
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN numeroContacto TEXT');
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN numeroPropietario TEXT');
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN rutaGrabacionPuntoB TEXT');
       } catch (_) {}
     }
   }

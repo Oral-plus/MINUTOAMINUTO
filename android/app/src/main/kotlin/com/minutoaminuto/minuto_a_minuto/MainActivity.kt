@@ -205,17 +205,22 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
-        startPhoneStateMonitorService()
+        // NO iniciar PhoneStateMonitorService aquí: Flutter lo inicia cuando el usuario activa el monitor.
+        // Iniciar en onResume puede causar crash en Android 12+ si la app aún no está lista.
         // Si el teléfono está en IDLE al volver al frente, detener cualquier grabación activa
-        val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-        if (tm?.callState == TelephonyManager.CALL_STATE_IDLE) {
-            stopRecorderService()
-            stopMediaProjectionRecorderService()
-            Log.d(TAG, "onResume: teléfono IDLE → grabadores detenidos")
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            if (tm?.callState == TelephonyManager.CALL_STATE_IDLE) {
+                stopRecorderService()
+                stopMediaProjectionRecorderService()
+                Log.d(TAG, "onResume: teléfono IDLE → grabadores detenidos")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "onResume: ${e.message}")
         }
     }
 
-    private fun startPhoneStateMonitorService() {
+    fun startPhoneStateMonitorService() {
         try {
             val intent = Intent(this, PhoneStateMonitorService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

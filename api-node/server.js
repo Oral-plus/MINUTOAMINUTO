@@ -2,8 +2,18 @@
 
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 const os = require("os");
 const sql = require("mssql");
+
+const UPLOADS_DIR = path.join(process.cwd(), "uploads", "audio");
+if (!fs.existsSync(path.dirname(UPLOADS_DIR))) {
+  fs.mkdirSync(path.dirname(UPLOADS_DIR), { recursive: true });
+}
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 const app = express();
 const port = Number(process.env.PORT || 3005);
@@ -625,6 +635,7 @@ app.post("/vendedores", async (req, res) => {
       codigo: requireStringField(body, "codigo"),
       zona: requireStringField(body, "zona"),
       coachId: requireStringField(body, "coachId"),
+      telefono: asNullableString(body.telefono),
       geolocalizacionActiva: asInt(body.geolocalizacionActiva, 0),
       horaInicioJornada: asNullableString(body.horaInicioJornada),
       presupuestoMensual: asDouble(body.presupuestoMensual, 0),
@@ -684,6 +695,7 @@ app.post("/supervisores", async (req, res) => {
       codigo: requireStringField(body, "codigo"),
       zona: requireStringField(body, "zona"),
       cargo: asString(body.cargo, "coach"),
+      telefono: asNullableString(body.telefono),
       superiorId: asNullableString(body.superiorId),
       subordinadosIds: asCsv(body.subordinadosIds),
     };
@@ -741,10 +753,56 @@ app.get("/llamadas", async (req, res) => {
   }
 });
 
+function normalizePhone(n) {
+  if (!n || typeof n !== "string") return "";
+  return n.replace(/[\s\-\(\)\+]/g, "").replace(/\D/g, "");
+}
+
+function phonesMatch(a, b) {
+  const na = normalizePhone(a);
+  const nb = normalizePhone(b);
+  if (!na || !nb) return false;
+  return na === nb || na.endsWith(nb) || nb.endsWith(na);
+}
+
 app.post("/llamadas", async (req, res) => {
   try {
     const body = req.body || {};
     const id = asString(body.id, "") || makeId("llamada");
+    const numeroPropietario = asNullableString(body.numeroPropietario);
+    const numeroContacto = asNullableString(body.numeroContacto);
+    const horaInicio = asString(body.horaInicio, "");
+
+    if (numeroPropietario && numeroContacto && horaInicio) {
+      const fechaStr = asString(body.fecha, "").split("T")[0];
+      const nP = normalizePhone(numeroPropietario);
+      const nC = normalizePhone(numeroContacto);
+      if (nP && nC) {
+      const rows = await runQuery(
+        `SELECT id, horaInicio FROM ${TABLES.llamadas}
+         WHERE fecha = @fecha
+         AND numeroPropietario IS NOT NULL AND numeroContacto IS NOT NULL
+         AND numeroPropietario = @nC AND numeroContacto = @nP`,
+        (request) => {
+          request.input("fecha", fechaStr);
+          request.input("nP", nP);
+          request.input("nC", nC);
+        }
+      );
+      const list = (rows.recordset || []).filter((row) => {
+        const diffMs = Math.abs(new Date(horaInicio) - new Date(row.horaInicio));
+        return diffMs <= 600000;
+      });
+      if (list.length > 0) {
+        return res.json({
+          success: true,
+          mergeTarget: list[0].id,
+          id: list[0].id,
+        });
+      }
+      }
+    } // fin if nP && nC
+
     const payload = {
       fecha: requireStringField(body, "fecha"),
       horaInicio: requireStringField(body, "horaInicio"),
@@ -755,6 +813,8 @@ app.post("/llamadas", async (req, res) => {
       zona: requireStringField(body, "zona"),
       nombreLider: requireStringField(body, "nombreLider"),
       nombreContactado: requireStringField(body, "nombreContactado"),
+      numeroContacto: body.numeroContacto ? (normalizePhone(body.numeroContacto) || null) : null,
+      numeroPropietario: body.numeroPropietario ? (normalizePhone(body.numeroPropietario) || null) : null,
       clientesProgramados: asInt(body.clientesProgramados, 0),
       clientesVisitados: asInt(body.clientesVisitados, 0),
       ventaDia: asDouble(body.ventaDia, 0),
@@ -775,6 +835,37 @@ app.post("/llamadas", async (req, res) => {
   }
 });
 
+app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id) {
+      return res.status(400).json({ success: false, error: "id requerido" });
+    }
+    const body = req.body || {};
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) {
+      return res.status(400).json({ success: false, error: "audioBase64 requerido" });
+    }
+    const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("mp3") ? "mp3" : "m4a";
+    const filename = `${id}_punto_b.${ext}`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    const buf = Buffer.from(audioBase64, "base64");
+    fs.writeFileSync(filepath, buf);
+    const rutaRelativa = `/audio/${filename}`;
+    await runExecute(
+      `UPDATE ${TABLES.llamadas} SET rutaGrabacionPuntoB = @path WHERE id = @id`,
+      (request) => {
+        request.input("path", rutaRelativa);
+        request.input("id", id);
+      }
+    );
+    return res.json({ success: true, id, rutaGrabacionPuntoB: rutaRelativa });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.patch("/llamadas/:id", async (req, res) => {
   try {
     const id = asString(req.params.id, "");
@@ -789,6 +880,9 @@ app.patch("/llamadas/:id", async (req, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(body, "rutaGrabacion")) {
       updates.rutaGrabacion = asNullableString(body.rutaGrabacion);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "rutaGrabacionPuntoB")) {
+      updates.rutaGrabacionPuntoB = asNullableString(body.rutaGrabacionPuntoB);
     }
     if (Object.prototype.hasOwnProperty.call(body, "transcripcionTexto")) {
       updates.transcripcionTexto = asNullableString(body.transcripcionTexto);

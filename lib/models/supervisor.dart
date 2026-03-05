@@ -6,6 +6,7 @@ class Supervisor {
   final String codigo;
   final String zona;
   final NivelCargo cargo;
+  final String? telefono;
   final String? superiorId; // Coach -> KAM, KAM -> Jefe
   final List<String> subordinadosIds; // IDs de vendedores o coaches
 
@@ -15,6 +16,7 @@ class Supervisor {
     required this.codigo,
     required this.zona,
     required this.cargo,
+    this.telefono,
     this.superiorId,
     this.subordinadosIds = const [],
   });
@@ -29,6 +31,7 @@ class Supervisor {
         'codigo': codigo,
         'zona': zona,
         'cargo': cargo.valor,
+        'telefono': telefono,
         'superiorId': superiorId,
         'subordinadosIds': subordinadosIds.join(','),
       };
@@ -42,6 +45,7 @@ class Supervisor {
           (e) => e.valor == map['cargo'],
           orElse: () => NivelCargo.coach,
         ),
+        telefono: map['telefono'] as String?,
         superiorId: map['superiorId'] as String?,
         subordinadosIds: (map['subordinadosIds'] as String?)
                 ?.split(',')

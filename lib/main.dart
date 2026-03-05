@@ -32,28 +32,26 @@ void overlayMain() {
 }
 
 void main() {
-  // main() NO es async — evita bloquear el hilo principal antes del primer frame
   WidgetsFlutterBinding.ensureInitialized();
 
   FlutterError.onError = (details) {
-    debugPrint('FlutterError: ${details.exception}');
+    debugPrint('FlutterError: ${details.exception}\n${details.stack}');
   };
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('PlatformDispatcher.onError: $error');
-    return true;
+    debugPrint('PlatformDispatcher.onError: $error\n$stack');
+    return true; // Evita que el error crashee la app
   };
 
-  // Arrancar la UI de inmediato — sin await, sin trabajo pesado aquí
   runZonedGuarded(
     () {
       runApp(const MinutoAMinutoApp());
     },
     (error, stack) {
-      debugPrint('runZonedGuarded: $error');
+      debugPrint('runZonedGuarded: $error\n$stack');
+      // No re-throw: evitar crash
     },
   );
 
-  // Todo el trabajo pesado va DESPUÉS del primer frame, en microtasks
   WidgetsBinding.instance.addPostFrameCallback((_) {
     _initBackground();
   });
@@ -67,7 +65,6 @@ Future<void> _initBackground() async {
   try {
     if (!kIsWeb) db_init.initDatabase();
   } catch (_) {}
-  // Monitor de llamadas con delay adicional para no saturar el arranque
   await Future.delayed(const Duration(seconds: 3));
   try {
     if (!kIsWeb) {
@@ -76,8 +73,8 @@ Future<void> _initBackground() async {
         onTimeout: () => debugPrint('CallMonitor.init timeout'),
       );
     }
-  } catch (e) {
-    debugPrint('CallMonitor.init error: $e');
+  } catch (e, st) {
+    debugPrint('CallMonitor.init error: $e\n$st');
   }
 }
 
@@ -146,14 +143,14 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
               elevation: 0,
               scrolledUnderElevation: 4,
               backgroundColor: Colors.white,
-              foregroundColor: Color(0xFF1F2937),
+              foregroundColor: Colors.black,
             ),
             cardTheme: CardThemeData(
               elevation: 0,
               shadowColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                side: const BorderSide(color: Color(0xFFE0E0E0)),
               ),
               margin: EdgeInsets.zero,
               clipBehavior: Clip.antiAlias,

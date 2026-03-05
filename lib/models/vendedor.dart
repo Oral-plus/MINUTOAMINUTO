@@ -4,6 +4,7 @@ class Vendedor {
   final String codigo;
   final String zona;
   final String coachId;
+  final String? telefono;
   final bool geolocalizacionActiva;
   final DateTime? horaInicioJornada;
   final double presupuestoMensual;
@@ -15,6 +16,7 @@ class Vendedor {
     required this.codigo,
     required this.zona,
     required this.coachId,
+    this.telefono,
     this.geolocalizacionActiva = false,
     this.horaInicioJornada,
     this.presupuestoMensual = 0,
@@ -27,6 +29,7 @@ class Vendedor {
         'codigo': codigo,
         'zona': zona,
         'coachId': coachId,
+        'telefono': telefono,
         'geolocalizacionActiva': geolocalizacionActiva ? 1 : 0,
         'horaInicioJornada': horaInicioJornada?.toIso8601String(),
         'presupuestoMensual': presupuestoMensual,
@@ -39,6 +42,7 @@ class Vendedor {
         codigo: map['codigo'] as String,
         zona: map['zona'] as String,
         coachId: map['coachId'] as String,
+        telefono: map['telefono'] as String?,
         geolocalizacionActiva: (map['geolocalizacionActiva'] ?? 0) == 1,
         horaInicioJornada: map['horaInicioJornada'] != null
             ? DateTime.parse(map['horaInicioJornada'] as String)

@@ -52,6 +52,7 @@ dependencies:
   flutter_overlay_window: ^0.5.0
   google_maps_flutter: ^2.10.0
   flutter_native_splash: ^2.4.3
+  art_sweetalert_new: ^1.0.0
 
 dev_dependencies:
   flutter_test:

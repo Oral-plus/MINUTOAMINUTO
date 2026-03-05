@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:art_sweetalert_new/art_sweetalert_new.dart';
 import '../providers/app_provider.dart';
 import '../models/supervisor.dart';
 import '../models/vendedor.dart';
 import '../services/data_service.dart';
-import '../utils/constants.dart';
+import '../services/api_service.dart';
+import '../config/api_config.dart';
 import 'home_screen.dart';
 import 'setup_screen.dart';
 import '../widgets/app_loading_screen.dart';
@@ -31,6 +33,24 @@ class _LoginScreenState extends State<LoginScreen> {
     _vendedoresFuture = DataService.getVendedores()
         .timeout(const Duration(seconds: 20), onTimeout: () => <Vendedor>[])
         .catchError((_) => <Vendedor>[]);
+    if (ApiConfig.useRemoteApi) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _verificarConexionApi());
+    }
+  }
+
+  Future<void> _verificarConexionApi() async {
+    try {
+      final ok = await ApiService.testConnection();
+      if (!mounted) return;
+      if (ok) {
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('API conectada'),
+          content: const Text('La conexión con el servidor está funcionando correctamente.'),
+          type: ArtAlertType.success,
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -51,10 +71,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 140,
                     fit: BoxFit.contain,
                     filterQuality: FilterQuality.high,
-                    errorBuilder: (context, error, stackTrace) => Icon(
+                    errorBuilder: (context, error, stackTrace) =>                     Icon(
                       Icons.schedule,
                       size: 64,
-                      color: AppConstants.azulCorporativo,
+                      color: Colors.black,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -139,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? null
                               : () => _login(context),
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppConstants.azulCorporativo,
+                            backgroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -173,15 +193,34 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login(BuildContext context) async {
     if (_selectedId == null) return;
     final provider = context.read<AppProvider>();
-    if (_esSupervisor) {
-      await provider.loginSupervisor(_selectedId!);
-    } else {
-      await provider.loginVendedor(_selectedId!);
-    }
-    if (context.mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+    try {
+      if (_esSupervisor) {
+        await provider.loginSupervisor(_selectedId!);
+      } else {
+        await provider.loginVendedor(_selectedId!);
+      }
+      if (context.mounted) {
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('¡Bienvenido!'),
+          content: const Text('Sesión iniciada correctamente.'),
+          type: ArtAlertType.success,
+        );
+        if (context.mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('Error'),
+          content: Text('No se pudo iniciar sesión: $e'),
+          type: ArtAlertType.error,
+        );
+      }
     }
   }
 }

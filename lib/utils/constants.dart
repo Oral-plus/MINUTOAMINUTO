@@ -7,16 +7,16 @@ class AppKeys {
 }
 
 class AppConstants {
-  // Colores corporativos
-  static const Color azulCorporativo = Color(0xFF1565C0);
-  static const Color verdeMeta = Color(0xFF2E7D32);
-  static const Color amarilloAdvertencia = Color(0xFFF9A825);
-  static const Color rojoCritico = Color(0xFFC62828);
+  // Tema blanco y negro
+  static const Color azulCorporativo = Color(0xFF000000);
+  static const Color verdeMeta = Color(0xFF212121);
+  static const Color amarilloAdvertencia = Color(0xFF424242);
+  static const Color rojoCritico = Color(0xFF616161);
 
-  // Semáforo
-  static const Color semaforoVerde = Color(0xFF4CAF50);
-  static const Color semaforoAmarillo = Color(0xFFFFC107);
-  static const Color semaforoRojo = Color(0xFFF44336);
+  // Semáforo (escala de grises)
+  static const Color semaforoVerde = Color(0xFF212121);
+  static const Color semaforoAmarillo = Color(0xFF616161);
+  static const Color semaforoRojo = Color(0xFF9E9E9E);
 
   // Umbrales semáforo
   static const double umbralVerde = 90.0;

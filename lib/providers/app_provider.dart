@@ -209,6 +209,9 @@ class AppProvider with ChangeNotifier {
       await prefs.remove('vendedor_id');
       _storedSupervisorId = id;
       _storedVendedorId = null;
+      if (_usuarioActual!.telefono != null && _usuarioActual!.telefono!.trim().isNotEmpty) {
+        await prefs.setString('numero_telefono_propietario', _usuarioActual!.telefono!.trim());
+      }
     }
     notifyListeners();
     unawaited(_asegurarMonitorActivo());
@@ -223,6 +226,9 @@ class AppProvider with ChangeNotifier {
       await prefs.remove('supervisor_id');
       _storedVendedorId = id;
       _storedSupervisorId = null;
+      if (_vendedorActual!.telefono != null && _vendedorActual!.telefono!.trim().isNotEmpty) {
+        await prefs.setString('numero_telefono_propietario', _vendedorActual!.telefono!.trim());
+      }
     }
     notifyListeners();
     unawaited(_asegurarMonitorActivo());

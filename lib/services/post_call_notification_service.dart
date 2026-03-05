@@ -74,16 +74,24 @@ class PostCallNotificationService {
   }
 
   /// Notificación única: llamada grabada y registrada en Mis Llamadas (con duración).
+  /// [correlacionada] = true cuando el audio se unió a un registro existente (punto A + punto B).
   static Future<void> showLlamadaGrabadaYRegistrada(
     String registroId,
     String contacto,
-    int duracionMinutos,
-  ) async {
+    int duracionMinutos, {
+    bool correlacionada = false,
+  }) async {
     if (!_isAndroid || !_initialized) return;
     try {
       final logo = await _loadLogoBytes();
       final duracionTexto =
           duracionMinutos == 1 ? '1 min' : '$duracionMinutos min';
+      final titulo = correlacionada
+          ? 'Llamada correlacionada (punto A + punto B)'
+          : 'Llamada grabada y registrada';
+      final body = correlacionada
+          ? 'Tu audio se unió al registro con $contacto. Duración: $duracionTexto. Ambos lados grabados.'
+          : 'Con $contacto. Duración: $duracionTexto. Toca para ver en Mis Llamadas.';
       final android = AndroidNotificationDetails(
         'llamada_registrada',
         'Llamadas grabadas',
@@ -94,8 +102,8 @@ class PostCallNotificationService {
       );
       await _instance.show(
         registroId.hashCode.abs() % 100000,
-        'Llamada grabada y registrada',
-        'Con $contacto. Duración: $duracionTexto. Toca para ver en Mis Llamadas.',
+        titulo,
+        body,
         NotificationDetails(android: android),
         payload: registroId,
       );

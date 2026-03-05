@@ -931,6 +931,9 @@ class CallMonitorService {
 
       final nombreLider = sup?.nombre ?? ven?.nombre ?? 'Usuario';
       final zona = sup?.zona ?? ven?.zona ?? '';
+      final numeroPropietario = sup?.telefono ?? ven?.telefono ??
+          prefs.getString('numero_telefono_propietario');
+      final numeroContacto = last.number;
 
       final r = RegistroLlamada(
         id: const Uuid().v4(),
@@ -946,22 +949,29 @@ class CallMonitorService {
         confirmacionVeracidad: true,
         observaciones: observaciones,
         rutaGrabacion: audioPath,
+        numeroContacto: numeroContacto,
+        numeroPropietario: numeroPropietario,
         latitud: latitud,
         longitud: longitud,
       );
 
       bool insertOk = false;
+      String finalRegistroId = r.id;
+      bool wasMerged = false;
       try {
         CallSavingProgressService.notifySubiendoAudio(0.5);
-        await DataService.insertRegistroLlamada(r);
-        await prefs.setString(_keyLastRegistroId, r.id);
-        debugPrint('CallMonitor: $tipoTexto - $nombreContactado ($duration min)');
+        final result = await DataService.insertRegistroLlamadaWithCorrelation(r);
+        await prefs.setString(_keyLastRegistroId, result.registroId);
+        finalRegistroId = result.registroId;
+        wasMerged = result.merged;
+        debugPrint('CallMonitor: $tipoTexto - $nombreContactado ($duration min)${result.merged ? ' [correlacionado]' : ''}');
         insertOk = true;
       } catch (e) {
         debugPrint('CallMonitor insertRegistro remoto: $e');
         try {
           await DatabaseService.insertRegistroLlamada(r);
           await prefs.setString(_keyLastRegistroId, r.id);
+          finalRegistroId = r.id;
           debugPrint(
             'CallMonitor: registro guardado en SQLite respaldo (${r.id})',
           );
@@ -979,16 +989,17 @@ class CallMonitorService {
 
       try {
         await PostCallNotificationService.showLlamadaGrabadaYRegistrada(
-          r.id,
+          finalRegistroId,
           nombreContactado,
           duration,
+          correlacionada: wasMerged,
         );
       } catch (e) {
         debugPrint('PostCallNotification: $e');
       }
 
-      if (audioPath != null && audioPath.isNotEmpty) {
-        unawaited(_transcribirEnSegundoPlano(r.id, audioPath));
+      if (audioPath != null && audioPath.isNotEmpty && !wasMerged) {
+        unawaited(_transcribirEnSegundoPlano(finalRegistroId, audioPath));
       } else {
         CallSavingProgressService.notifyListo();
       }

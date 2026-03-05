@@ -103,6 +103,23 @@ class DataService {
     DebugAlertService.success('Llamada registrada: ${r.nombreContactado}');
   }
 
+  /// Inserta con correlación dual (punto A + punto B). Retorna (registroId, merged).
+  static Future<({String registroId, bool merged})> insertRegistroLlamadaWithCorrelation(RegistroLlamada r) async {
+    if (_useApi) {
+      final result = await ApiService.insertRegistroLlamadaWithCorrelation(r);
+      if (result.merged && r.rutaGrabacion != null && r.rutaGrabacion!.isNotEmpty) {
+        try {
+          await ApiService.uploadAudioPuntoB(result.registroId, r.rutaGrabacion!);
+        } catch (e) {
+          DebugAlertService.warning('No se pudo subir audio punto B: $e');
+        }
+      }
+      return result;
+    }
+    await DatabaseService.insertRegistroLlamada(r);
+    return (registroId: r.id, merged: false);
+  }
+
   static Future<RegistroLlamada?> getRegistroLlamada(String id) =>
       _useApi ? ApiService.getRegistroLlamada(id) : DatabaseService.getRegistroLlamada(id);
 

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:art_sweetalert_new/art_sweetalert_new.dart';
 import '../models/vendedor.dart';
 import '../models/supervisor.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
-import '../widgets/app_feedback.dart';
 
 class RegistroVendedorScreen extends StatefulWidget {
   const RegistroVendedorScreen({super.key});
@@ -18,6 +18,7 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
   final _nombreCtrl = TextEditingController();
   final _codigoCtrl = TextEditingController();
   final _zonaCtrl = TextEditingController();
+  final _telefonoCtrl = TextEditingController();
   String? _coachId;
   final _presupuestoMensualCtrl = TextEditingController(text: '0');
   final _presupuestoDiarioCtrl = TextEditingController(text: '0');
@@ -35,6 +36,7 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
     _nombreCtrl.dispose();
     _codigoCtrl.dispose();
     _zonaCtrl.dispose();
+    _telefonoCtrl.dispose();
     _presupuestoMensualCtrl.dispose();
     _presupuestoDiarioCtrl.dispose();
     super.dispose();
@@ -63,7 +65,12 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
   Future<void> _guardar() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_coachId == null) {
-      AppFeedback.warning(context, 'Seleccione un Coach');
+      await ArtSweetAlert.show(
+        context: context,
+        title: const Text('Atención'),
+        content: const Text('Seleccione un Coach'),
+        type: ArtAlertType.warning,
+      );
       return;
     }
     setState(() => _guardando = true);
@@ -77,18 +84,29 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
         codigo: _codigoCtrl.text.trim().toUpperCase(),
         zona: _zonaCtrl.text.trim(),
         coachId: _coachId!,
+        telefono: _telefonoCtrl.text.trim().isEmpty ? null : _telefonoCtrl.text.trim(),
         geolocalizacionActiva: false,
         presupuestoMensual: presupM,
         presupuestoDiario: presupD,
       );
       await DataService.insertVendedor(v);
       if (mounted) {
-        AppFeedback.success(context, 'Vendedor registrado correctamente');
-        Navigator.pop(context);
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('¡Registro exitoso!'),
+          content: const Text('Vendedor registrado correctamente.'),
+          type: ArtAlertType.success,
+        );
+        if (mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        AppFeedback.error(context, _mensajeErrorRegistro(e));
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('Error'),
+          content: Text(_mensajeErrorRegistro(e)),
+          type: ArtAlertType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -135,6 +153,12 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                 decoration: _inputDecoration('Zona'),
                 textCapitalization: TextCapitalization.words,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _telefonoCtrl,
+                decoration: _inputDecoration('Teléfono (para correlación dual)'),
+                keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 20),
               FutureBuilder<List<Supervisor>>(

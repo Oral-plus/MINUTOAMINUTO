@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import '../utils/phone_utils.dart';
 import '../models/vendedor.dart';
 import '../models/supervisor.dart';
 import '../models/registro_llamada.dart';
@@ -256,6 +258,8 @@ class ApiService {
       'zona': r.zona,
       'nombreLider': r.nombreLider,
       'nombreContactado': r.nombreContactado,
+      'numeroContacto': r.numeroContacto,
+      'numeroPropietario': r.numeroPropietario,
       'clientesProgramados': r.clientesProgramados,
       'clientesVisitados': r.clientesVisitados,
       'ventaDia': r.ventaDia,
@@ -267,6 +271,8 @@ class ApiService {
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
       'rutaGrabacion': r.rutaGrabacion,
+      'numeroContacto': r.numeroContacto,
+      'numeroPropietario': r.numeroPropietario,
       'transcripcionTexto': r.transcripcionTexto,
     };
     final uri = Uri.parse('$_base/llamadas');
@@ -285,6 +291,79 @@ class ApiService {
       throw Exception('Respuesta invalida al guardar llamada: ${res.body}');
     }
     DebugAlertService.success('API OK: llamada guardada');
+  }
+
+  /// Inserta con correlación dual (punto A + punto B). Si existe registro coincidente, retorna mergeTarget.
+  static Future<({String registroId, bool merged})> insertRegistroLlamadaWithCorrelation(RegistroLlamada r) async {
+    final body = {
+      'id': r.id,
+      'fecha': r.fecha.toIso8601String().split('T')[0],
+      'horaInicio': r.horaInicio.toIso8601String(),
+      'horaFin': r.horaFin.toIso8601String(),
+      'duracionMinutos': r.duracionMinutos,
+      'tipoLlamada': r.tipoLlamada.valor,
+      'cargoLider': r.cargoLider.valor,
+      'zona': r.zona,
+      'nombreLider': r.nombreLider,
+      'nombreContactado': r.nombreContactado,
+      'numeroContacto': r.numeroContacto != null ? PhoneUtils.normalize(r.numeroContacto!) : null,
+      'numeroPropietario': r.numeroPropietario != null ? PhoneUtils.normalize(r.numeroPropietario!) : null,
+      'clientesProgramados': r.clientesProgramados,
+      'clientesVisitados': r.clientesVisitados,
+      'ventaDia': r.ventaDia,
+      'recaudoDia': r.recaudoDia,
+      'cumplioMeta': r.cumplioMeta ? 1 : 0,
+      'coincidenciaPpvcRvc': r.coincidenciaPpvcRvc ? 1 : 0,
+      'conversion60': r.conversion60,
+      'recuperacionPerdidos': r.recuperacionPerdidos,
+      'observaciones': r.observaciones,
+      'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
+      'rutaGrabacion': r.rutaGrabacion,
+      'transcripcionTexto': r.transcripcionTexto,
+    };
+    final res = await _requestWithRetry(
+      (base) => http.post(
+        Uri.parse('$base/llamadas'),
+        body: jsonEncode(body),
+        headers: {'Content-Type': 'application/json'},
+      ),
+      timeout: _writeRequestTimeout,
+    );
+    if (res.statusCode != 200) throw Exception(res.body);
+    final parsed = jsonDecode(res.body) as Map<String, dynamic>;
+    if (parsed['success'] != true) {
+      throw Exception('Respuesta invalida al guardar llamada: ${res.body}');
+    }
+    final mergeTarget = parsed['mergeTarget'] as String?;
+    final merged = mergeTarget != null;
+    final registroId = merged ? mergeTarget : (parsed['id'] as String? ?? r.id);
+    DebugAlertService.success(merged ? 'API OK: audio correlacionado (punto B)' : 'API OK: llamada guardada');
+    return (registroId: registroId, merged: merged);
+  }
+
+  static Future<void> uploadAudioPuntoB(String registroId, String rutaAudio) async {
+    final file = File(rutaAudio);
+    if (!await file.exists()) return;
+    final bytes = await file.readAsBytes();
+    final b64 = base64Encode(bytes);
+    final ext = rutaAudio.toLowerCase().split('.').last;
+    final mime = switch (ext) {
+      'wav' => 'audio/wav',
+      'mp3' => 'audio/mpeg',
+      'aac' => 'audio/aac',
+      _ => 'audio/mp4',
+    };
+    final body = {'audioBase64': b64, 'mimeType': mime};
+    final res = await _requestWithRetry(
+      (base) => http.post(
+        Uri.parse('$base/llamadas/$registroId/audio-punto-b'),
+        body: jsonEncode(body),
+        headers: {'Content-Type': 'application/json'},
+      ),
+      timeout: _writeRequestTimeout,
+    );
+    if (res.statusCode != 200) throw Exception(res.body);
+    DebugAlertService.success('Audio punto B subido correctamente');
   }
 
   static Future<List<RegistroLlamada>> getLlamadasHoy(String? contactadoId) async {

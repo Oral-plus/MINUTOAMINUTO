@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:art_sweetalert_new/art_sweetalert_new.dart';
 import '../models/supervisor.dart';
 import '../models/nivel_cargo.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
-import '../widgets/app_feedback.dart';
 
 class RegistroSupervisorScreen extends StatefulWidget {
   final NivelCargo cargoInicial;
@@ -21,6 +21,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
   final _nombreCtrl = TextEditingController();
   final _codigoCtrl = TextEditingController();
   final _zonaCtrl = TextEditingController();
+  final _telefonoCtrl = TextEditingController();
   String? _superiorId;
   bool _guardando = false;
   Future<List<Supervisor>>? _supervisoresFuture;
@@ -37,6 +38,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
     _nombreCtrl.dispose();
     _codigoCtrl.dispose();
     _zonaCtrl.dispose();
+    _telefonoCtrl.dispose();
     super.dispose();
   }
 
@@ -81,17 +83,28 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
         codigo: _codigoCtrl.text.trim().toUpperCase(),
         zona: _zonaCtrl.text.trim(),
         cargo: _cargo,
+        telefono: _telefonoCtrl.text.trim().isEmpty ? null : _telefonoCtrl.text.trim(),
         superiorId: superiorId,
         subordinadosIds: [],
       );
       await DataService.insertSupervisor(s);
       if (mounted) {
-        AppFeedback.success(context, '${_cargo.displayName} registrado correctamente');
-        Navigator.pop(context);
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('¡Registro exitoso!'),
+          content: Text('${_cargo.displayName} registrado correctamente.'),
+          type: ArtAlertType.success,
+        );
+        if (mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        AppFeedback.error(context, _mensajeErrorRegistro(e));
+        await ArtSweetAlert.show(
+          context: context,
+          title: const Text('Error'),
+          content: Text(_mensajeErrorRegistro(e)),
+          type: ArtAlertType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -148,6 +161,12 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                 decoration: _inputDecoration('Zona (ej: Norte, Nacional)'),
                 textCapitalization: TextCapitalization.words,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _telefonoCtrl,
+                decoration: _inputDecoration('Teléfono (para correlación dual)'),
+                keyboardType: TextInputType.phone,
               ),
               if (_cargo != NivelCargo.jefe) ...[
                 const SizedBox(height: 20),

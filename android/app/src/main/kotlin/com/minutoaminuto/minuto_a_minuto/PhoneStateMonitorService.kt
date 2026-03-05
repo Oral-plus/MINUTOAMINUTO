@@ -61,11 +61,16 @@ class PhoneStateMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        isRunning = true
-        createNotificationChannel()
-        startForegroundNotification()
-        registerTelephonyListener()
-        Log.d(TAG, "Servicio iniciado")
+        try {
+            isRunning = true
+            createNotificationChannel()
+            startForegroundNotification()
+            registerTelephonyListener()
+            Log.d(TAG, "Servicio iniciado")
+        } catch (e: Exception) {
+            Log.e(TAG, "onCreate error: ${e.message}")
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -254,19 +259,24 @@ class PhoneStateMonitorService : Service() {
     }
 
     private fun startForegroundNotification() {
-        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Minuto a Minuto")
-            .setContentText("Monitoreando llamadas...")
-            .setSmallIcon(android.R.drawable.ic_menu_call)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setOngoing(true)
-            .setSilent(true)
-            .build()
+        try {
+            val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Minuto a Minuto")
+                .setContentText("Monitoreando llamadas...")
+                .setSmallIcon(android.R.drawable.ic_menu_call)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setOngoing(true)
+                .setSilent(true)
+                .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        } else {
-            startForeground(NOTIF_ID, notif)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "startForegroundNotification error: ${e.message}")
+            throw e
         }
     }
 }

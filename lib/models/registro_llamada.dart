@@ -23,6 +23,9 @@ class RegistroLlamada {
   final String observaciones;
   final bool confirmacionVeracidad;
   final String? rutaGrabacion;
+  final String? rutaGrabacionPuntoB;
+  final String? numeroContacto;
+  final String? numeroPropietario;
   final String? transcripcionTexto;
   final double? latitud;
   final double? longitud;
@@ -49,6 +52,9 @@ class RegistroLlamada {
     this.observaciones = '',
     required this.confirmacionVeracidad,
     this.rutaGrabacion,
+    this.rutaGrabacionPuntoB,
+    this.numeroContacto,
+    this.numeroPropietario,
     this.transcripcionTexto,
     this.latitud,
     this.longitud,
@@ -76,6 +82,9 @@ class RegistroLlamada {
         'observaciones': observaciones,
         'confirmacionVeracidad': confirmacionVeracidad ? 1 : 0,
         'rutaGrabacion': rutaGrabacion,
+        'rutaGrabacionPuntoB': rutaGrabacionPuntoB,
+        'numeroContacto': numeroContacto,
+        'numeroPropietario': numeroPropietario,
         'transcripcionTexto': transcripcionTexto,
         'latitud': latitud,
         'longitud': longitud,
@@ -109,6 +118,9 @@ class RegistroLlamada {
         observaciones: map['observaciones'] as String? ?? '',
         confirmacionVeracidad: (map['confirmacionVeracidad'] ?? 0) == 1,
         rutaGrabacion: map['rutaGrabacion'] as String?,
+        rutaGrabacionPuntoB: map['rutaGrabacionPuntoB'] as String?,
+        numeroContacto: map['numeroContacto'] as String?,
+        numeroPropietario: map['numeroPropietario'] as String?,
         transcripcionTexto: map['transcripcionTexto'] as String?,
         latitud: (map['latitud'] as num?)?.toDouble(),
         longitud: (map['longitud'] as num?)?.toDouble(),

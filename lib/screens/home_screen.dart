@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
 import '../services/media_projection_service.dart';
 import '../utils/constants.dart';
+import '../utils/phone_utils.dart';
 import '../widgets/app_loading_screen.dart';
 import 'admin_screen.dart';
 import 'dashboard_screen.dart';
@@ -44,6 +46,62 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _mostrarDialogoMiNumero(BuildContext context, AppProvider provider) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actual = prefs.getString('numero_telefono_propietario') ??
+        provider.usuarioActual?.telefono ??
+        provider.vendedorActual?.telefono ??
+        '';
+    final ctrl = TextEditingController(text: actual);
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mi número para correlación dual'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Si ambos tienen la app, cuando llamen entre sí cada uno graba solo su propio audio. '
+              'El sistema une ambos audios en un solo registro.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              decoration: const InputDecoration(
+                labelText: 'Mi número de teléfono',
+                hintText: 'Ej: +57 300 123 4567',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final num = ctrl.text.trim();
+              if (num.isEmpty) {
+                await prefs.remove('numero_telefono_propietario');
+              } else {
+                await prefs.setString('numero_telefono_propietario', num);
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -124,6 +182,11 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.white,
             foregroundColor: const Color(0xFF111827),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.phone_android_rounded),
+                tooltip: 'Mi número para correlación dual',
+                onPressed: () => _mostrarDialogoMiNumero(context, provider),
+              ),
               if (isSupervisor)
                 IconButton(
                   icon: const Icon(Icons.manage_accounts_outlined),
