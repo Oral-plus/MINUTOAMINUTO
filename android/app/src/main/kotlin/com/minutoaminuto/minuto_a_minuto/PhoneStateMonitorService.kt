@@ -41,6 +41,8 @@ class PhoneStateMonitorService : Service() {
         private const val KEY_LAST_NUMBER = "native_last_call_number"
         // Clave que indica que hay una llamada terminada pendiente de guardar en Flutter
         private const val KEY_PENDING_SAVE = "flutter.native_pending_call_save"
+        // Clave para verificar si MediaProjection esta autorizado
+        private const val KEY_MEDIA_PROJ_GRANTED = "flutter.media_projection_granted"
 
         @Volatile
         var isRunning = false
@@ -215,14 +217,35 @@ class PhoneStateMonitorService : Service() {
 
     private fun startCallRecorder(number: String) {
         try {
-            val intent = Intent(this, CallRecorderService::class.java).apply {
-                action = CallRecorderService.ACTION_START
-                putExtra(CallRecorderService.EXTRA_CALL_NUMBER, number)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
+            // Verificar si MediaProjection esta autorizado
+            val prefs = getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
+            val hasMediaProjection = prefs.getBoolean(KEY_MEDIA_PROJ_GRANTED, false)
+            
+            if (hasMediaProjection && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Usar MediaProjection si esta disponible (mejor calidad de audio)
+                Log.d(TAG, "Iniciando MediaProjectionRecorderService para número=$number")
+                val intent = Intent(this, MediaProjectionRecorderService::class.java).apply {
+                    action = MediaProjectionRecorderService.ACTION_START
+                    putExtra(MediaProjectionRecorderService.EXTRA_CALL_NUMBER, number)
+                    // No pasamos result code/data aquí porque el servicio usará MIC-only como fallback
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
             } else {
-                startService(intent)
+                // Usar CallRecorderService como fallback
+                Log.d(TAG, "Iniciando CallRecorderService para número=$number")
+                val intent = Intent(this, CallRecorderService::class.java).apply {
+                    action = CallRecorderService.ACTION_START
+                    putExtra(CallRecorderService.EXTRA_CALL_NUMBER, number)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "startCallRecorder error: ${e.message}")
@@ -231,10 +254,18 @@ class PhoneStateMonitorService : Service() {
 
     private fun stopCallRecorder() {
         try {
-            val intent = Intent(this, CallRecorderService::class.java).apply {
+            // Detener ambos servicios para asegurar que la grabación termine
+            Log.d(TAG, "Deteniendo servicios de grabación")
+            
+            val mediaProjIntent = Intent(this, MediaProjectionRecorderService::class.java).apply {
+                action = MediaProjectionRecorderService.ACTION_STOP
+            }
+            startService(mediaProjIntent)
+            
+            val callRecIntent = Intent(this, CallRecorderService::class.java).apply {
                 action = CallRecorderService.ACTION_STOP
             }
-            startService(intent)
+            startService(callRecIntent)
         } catch (e: Exception) {
             Log.e(TAG, "stopCallRecorder error: ${e.message}")
         }

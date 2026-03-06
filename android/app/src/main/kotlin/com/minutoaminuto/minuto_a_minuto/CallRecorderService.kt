@@ -540,7 +540,7 @@ class CallRecorderService : Service() {
     // ─── Watchdog ─────────────────────────────────────────────────────────────
 
     private fun scheduleWatchdogAndTimeout() {
-        mainHandler?.postDelayed({ Log.w(TAG, "Timeout 60min → deteniendo"); stopAndSave() }, MAX_RECORD_MS)
+        mainHandler?.postDelayed({ Log.w(TAG, "Timeout 90min → deteniendo"); stopAndSave() }, MAX_RECORD_MS)
         scheduleWatchdog()
     }
 
