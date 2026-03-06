@@ -98,9 +98,10 @@
         <!-- Servicio nativo de grabación de llamadas -->
         <service
             android:name=".CallRecorderService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="microphone|specialUse"
             android:exported="false"
-            android:stopWithTask="false">
+            android:stopWithTask="false"
+            android:process=":recording">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Grabación de llamadas telefónicas para registro comercial" />
@@ -116,9 +117,10 @@
         <!-- Grabación de audio del sistema via MediaProjection (voz remota + micrófono) -->
         <service
             android:name=".MediaProjectionRecorderService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="mediaProjection|microphone|specialUse"
             android:exported="false"
-            android:stopWithTask="false">
+            android:stopWithTask="false"
+            android:process=":recording">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Grabación de audio de llamadas para registro comercial" />

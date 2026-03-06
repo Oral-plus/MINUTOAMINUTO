@@ -9,6 +9,7 @@ import android.os.*
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import android.os.PowerManager
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -44,8 +45,10 @@ class CallRecorderService : Service() {
         private const val SAMPLE_RATE = 44100
         private const val CHANNEL_CFG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FMT   = AudioFormat.ENCODING_PCM_16BIT
-        private const val MAX_RECORD_MS     = 60L * 60 * 1000
-        private const val WATCHDOG_INTERVAL = 20_000L
+        private const val MAX_RECORD_MS     = 90L * 60 * 1000  // 90 minutos
+        private const val WATCHDOG_INTERVAL = 10_000L  // Verificar cada 10s
+        private const val AUDIO_BUFFER_MULTIPLIER = 8  // Buffer más grande para evitar cortes
+        private const val WRITE_BUFFER_SIZE = 16384    // Buffer de escritura optimizado
 
         val isRecording = AtomicBoolean(false)
 
@@ -53,6 +56,7 @@ class CallRecorderService : Service() {
         // mientras el servicio está grabando
         @Volatile var staticMediaRecorder: MediaRecorder? = null
         @Volatile var staticAudioRecord:   AudioRecord?   = null
+        @Volatile var staticService: CallRecorderService? = null
     }
 
     private var mediaRecorder: MediaRecorder? = null
@@ -68,14 +72,33 @@ class CallRecorderService : Service() {
     private var prevAudioMode = AudioManager.MODE_NORMAL
     private var prevSpeakerOn = false
     private var speakerActivated = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
+        staticService = this
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         mainHandler  = Handler(Looper.getMainLooper())
         createNotificationChannel()
+        // Configurar el proceso como prioritario para evitar que Android lo mate
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
+        } catch (_: Exception) {}
+        
+        // Adquirir WakeLock para mantener la CPU activa durante la grabación
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "MinutoAMinuto::CallRecordingWakeLock"
+            ).apply {
+                setReferenceCounted(false)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo crear WakeLock: ${e.message}")
+        }
         // Limpiar mutex al crear el servicio por si quedó sucio de una sesión anterior
         if (!isRecording.get()) {
             try {
@@ -142,6 +165,14 @@ class CallRecorderService : Service() {
     private fun startRecording(number: String) {
         val dir = resolveRecordingDir()
         val ts  = System.currentTimeMillis()
+
+        // Adquirir WakeLock para la duración de la grabación (máximo 90 minutos)
+        try {
+            wakeLock?.acquire(MAX_RECORD_MS)
+            Log.d(TAG, "WakeLock adquirido para grabación")
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo adquirir WakeLock: ${e.message}")
+        }
 
         // Activar altavoz para que el MIC capture ambas voces
         activateSpeaker()
@@ -226,16 +257,36 @@ class CallRecorderService : Service() {
             mr.setAudioSource(audioSource)
             mr.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             mr.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            mr.setAudioEncodingBitRate(128_000)
-            mr.setAudioSamplingRate(44100)
+            // Bitrate más alto para mejor calidad y menos cortes
+            mr.setAudioEncodingBitRate(192_000)
+            mr.setAudioSamplingRate(SAMPLE_RATE)
             mr.setAudioChannels(1)
             mr.setOutputFile(path)
+            
+            // Configurar listener para errores durante la grabación
+            mr.setOnErrorListener { _, what, extra ->
+                Log.e(TAG, "MediaRecorder error: what=$what extra=$extra")
+                // Intentar recuperarse reiniciando con AudioRecord
+                if (isRecording.get() && !usingAudioRecord) {
+                    mainHandler?.post { attemptRecoveryWithAudioRecord() }
+                }
+            }
+            
+            mr.setOnInfoListener { _, what, extra ->
+                Log.d(TAG, "MediaRecorder info: what=$what extra=$extra")
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED ||
+                    what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                    mainHandler?.post { stopAndSave() }
+                }
+            }
+            
             mr.prepare()
             mr.start()
 
-            Thread.sleep(1200)
+            // Dar más tiempo para estabilizar la grabación
+            Thread.sleep(1500)
             val size = File(path).length()
-            if (size < 1024) {
+            if (size < 512) {
                 try { mr.stop() } catch (_: Exception) {}
                 mr.release()
                 File(path).delete()
@@ -252,33 +303,89 @@ class CallRecorderService : Service() {
             false
         }
     }
+    
+    private fun attemptRecoveryWithAudioRecord() {
+        if (!isRecording.get()) return
+        Log.d(TAG, "Intentando recuperación con AudioRecord...")
+        
+        // Detener MediaRecorder si está activo
+        val mr = mediaRecorder
+        mediaRecorder = null
+        try { mr?.stop() } catch (_: Exception) {}
+        try { mr?.release() } catch (_: Exception) {}
+        
+        val dir = resolveRecordingDir()
+        val ts = System.currentTimeMillis()
+        val sources = listOf(
+            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        )
+        
+        for ((idx, src) in sources.withIndex()) {
+            val path = "${dir.absolutePath}/call_${ts}_recovery_$idx.wav"
+            if (tryAudioRecord(path, src)) {
+                currentPath = path
+                usingAudioRecord = true
+                Log.d(TAG, "Recuperación exitosa con AudioRecord: $path")
+                return
+            }
+        }
+        Log.e(TAG, "No se pudo recuperar la grabación")
+    }
 
     // ─── AudioRecord (PCM → WAV) ──────────────────────────────────────────────
 
     private fun tryAudioRecord(wavPath: String, audioSource: Int): Boolean {
         return try {
-            val bufSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CFG, AUDIO_FMT)
-                .coerceAtLeast(8192)
+            val minBufSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CFG, AUDIO_FMT)
+            if (minBufSize == AudioRecord.ERROR || minBufSize == AudioRecord.ERROR_BAD_VALUE) {
+                Log.w(TAG, "AudioRecord src=$audioSource: buffer size inválido")
+                return false
+            }
+            // Buffer significativamente más grande para evitar overruns y cortes
+            val bufSize = (minBufSize * AUDIO_BUFFER_MULTIPLIER).coerceAtLeast(32768)
+            
             val ar = AudioRecord(
                 audioSource,
-                SAMPLE_RATE, CHANNEL_CFG, AUDIO_FMT, bufSize * 4
+                SAMPLE_RATE, CHANNEL_CFG, AUDIO_FMT, bufSize
             )
             if (ar.state != AudioRecord.STATE_INITIALIZED) {
                 ar.release()
                 Log.w(TAG, "AudioRecord src=$audioSource: no inicializado")
                 return false
             }
+            
+            // Configurar notificación de posición para monitorear la grabación
+            ar.positionNotificationPeriod = SAMPLE_RATE // Cada segundo
+            ar.setRecordPositionUpdateListener(object : AudioRecord.OnRecordPositionUpdateListener {
+                override fun onMarkerReached(recorder: AudioRecord?) {}
+                override fun onPeriodicNotification(recorder: AudioRecord?) {
+                    // Verificar que la grabación sigue activa
+                    if (recorder?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                        Log.w(TAG, "AudioRecord detenido inesperadamente")
+                    }
+                }
+            })
+            
             ar.startRecording()
-            Thread.sleep(300)
+            Thread.sleep(400)
             if (ar.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                 ar.stop(); ar.release()
                 Log.w(TAG, "AudioRecord src=$audioSource: no grabando")
                 return false
             }
             audioRecord = ar
-            recordThread = Thread { writePcmToWav(ar, wavPath, bufSize) }
-                .also { it.isDaemon = true; it.start() }
-            Log.d(TAG, "AudioRecord src=$audioSource OK → $wavPath")
+            
+            // Thread de grabación con prioridad alta
+            recordThread = Thread {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
+                writePcmToWav(ar, wavPath, bufSize)
+            }.also { 
+                it.isDaemon = false  // No daemon para evitar terminación prematura
+                it.priority = Thread.MAX_PRIORITY
+                it.start() 
+            }
+            Log.d(TAG, "AudioRecord src=$audioSource OK (buffer=${bufSize}) → $wavPath")
             true
         } catch (e: Exception) {
             Log.w(TAG, "AudioRecord src=$audioSource falló: ${e.message}")
@@ -288,21 +395,76 @@ class CallRecorderService : Service() {
 
     private fun writePcmToWav(ar: AudioRecord, wavPath: String, bufSize: Int) {
         val pcmPath = wavPath.replace(".wav", ".pcm")
+        var totalBytesWritten = 0L
+        var consecutiveErrors = 0
+        val maxConsecutiveErrors = 5
+        
         try {
             FileOutputStream(pcmPath).use { fos ->
-                val buf = ByteArray(bufSize)
-                while (ar.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                // Buffer optimizado para escritura
+                val buf = ByteArray(WRITE_BUFFER_SIZE.coerceAtMost(bufSize))
+                var lastLogTime = System.currentTimeMillis()
+                
+                while (isRecording.get() && ar.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val n = ar.read(buf, 0, buf.size)
-                    if (n > 0) fos.write(buf, 0, n)
+                    when {
+                        n > 0 -> {
+                            fos.write(buf, 0, n)
+                            totalBytesWritten += n
+                            consecutiveErrors = 0
+                            
+                            // Log cada 30 segundos para monitoreo
+                            val now = System.currentTimeMillis()
+                            if (now - lastLogTime > 30_000) {
+                                Log.d(TAG, "Grabación en progreso: ${totalBytesWritten / 1024}KB")
+                                lastLogTime = now
+                            }
+                        }
+                        n == AudioRecord.ERROR_INVALID_OPERATION -> {
+                            Log.w(TAG, "AudioRecord: ERROR_INVALID_OPERATION")
+                            consecutiveErrors++
+                            if (consecutiveErrors >= maxConsecutiveErrors) {
+                                Log.e(TAG, "Demasiados errores consecutivos, deteniendo")
+                                break
+                            }
+                            Thread.sleep(50)
+                        }
+                        n == AudioRecord.ERROR_BAD_VALUE -> {
+                            Log.w(TAG, "AudioRecord: ERROR_BAD_VALUE")
+                            consecutiveErrors++
+                            if (consecutiveErrors >= maxConsecutiveErrors) break
+                            Thread.sleep(50)
+                        }
+                        n == AudioRecord.ERROR_DEAD_OBJECT -> {
+                            Log.e(TAG, "AudioRecord: DEAD_OBJECT - grabación terminada")
+                            break
+                        }
+                        n == 0 -> {
+                            // Sin datos disponibles, esperar un poco
+                            Thread.sleep(10)
+                        }
+                    }
                 }
+                
+                // Flush final
+                fos.flush()
             }
-            convertPcmToWav(pcmPath, wavPath)
-            File(pcmPath).delete()
-            Log.d(TAG, "WAV listo: $wavPath (${File(wavPath).length()} bytes)")
-            val f = File(wavPath)
-            if (f.exists() && f.length() > 1024) savePathToPrefs(wavPath)
+            
+            Log.d(TAG, "PCM completado: $totalBytesWritten bytes")
+            
+            if (totalBytesWritten > 1024) {
+                convertPcmToWav(pcmPath, wavPath)
+                File(pcmPath).delete()
+                Log.d(TAG, "WAV listo: $wavPath (${File(wavPath).length()} bytes)")
+                val f = File(wavPath)
+                if (f.exists() && f.length() > 1024) savePathToPrefs(wavPath)
+            } else {
+                Log.w(TAG, "Grabación muy corta: $totalBytesWritten bytes")
+                File(pcmPath).delete()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "writePcmToWav error: ${e.message}")
+            try { File(pcmPath).delete() } catch (_: Exception) {}
         }
     }
 
@@ -344,6 +506,16 @@ class CallRecorderService : Service() {
 
         // Restaurar audio DESPUÉS de detener la grabación
         restoreSpeaker()
+        
+        // Liberar WakeLock
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "WakeLock liberado")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error liberando WakeLock: ${e.message}")
+        }
 
         val path = currentPath
         currentPath = null
