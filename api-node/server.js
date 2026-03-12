@@ -1,9 +1,11 @@
 "use strict";
 
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
-const path = require("path");
 const os = require("os");
 const sql = require("mssql");
 
@@ -20,6 +22,7 @@ const port = Number(process.env.PORT || 3005);
 
 app.use(cors());
 app.use(express.json({ limit: "30mb" }));
+app.use("/audio", express.static(UPLOADS_DIR));
 
 function parseBool(value, fallback) {
   if (value === undefined || value === null || value === "") {
@@ -56,9 +59,11 @@ const dbConfig = {
   },
 };
 
+// Modelos Gemini: gemini-2.5-flash (principal), gemini-2.5-flash-lite (fallback), gemini-2.0-flash (compatibilidad)
 const geminiConfig = {
   modelPrimary: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   modelFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite",
+  modelLegacy: "gemini-2.0-flash", // Fallback adicional si 2.5 no está disponible
 };
 
 let poolPromise = null;
@@ -75,6 +80,7 @@ const TABLES = Object.freeze({
 });
 
 const SAFE_COLUMN_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SAFE_ID = /^[a-zA-Z0-9_.-]{1,80}$/; // Evita path traversal en endpoints de audio
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}`;
@@ -210,9 +216,13 @@ async function upsertById(tableRef, id, payload) {
 }
 
 function getGeminiModels() {
-  const models = [geminiConfig.modelPrimary, geminiConfig.modelFallback]
-    .map((m) => asString(m, ""))
-    .where((m) => m.length > 0);
+  const models = [
+    geminiConfig.modelPrimary,
+    geminiConfig.modelFallback,
+    geminiConfig.modelLegacy,
+  ]
+    .map((m) => (typeof m === "string" ? m : ""))
+    .filter((m) => m && m.length > 0);
   return [...new Set(models)];
 }
 
@@ -248,8 +258,8 @@ async function callGeminiModel({ apiKey, model, audioBase64, mimeType }) {
         role: "user",
         parts: [
           {
-            inline_data: {
-              mime_type: mimeType,
+            inlineData: {
+              mimeType: mimeType,
               data: audioBase64,
             },
           },
@@ -436,22 +446,39 @@ function mapInvoice(row) {
 
 async function runDbHealth() {
   const pool = await getPool();
-
   const ping = await pool.request().query("SELECT 1 AS ok, DB_NAME() AS db_name, GETDATE() AS server_time");
-  const tableCheck = await pool
-    .request()
-    .query("SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'CONSULTA_CARTERA'");
 
-  let tableRows = null;
-  if (Number(tableCheck.recordset[0]?.total || 0) > 0) {
-    const countResult = await pool.request().query("SELECT COUNT(*) AS total FROM CONSULTA_CARTERA");
-    tableRows = Number(countResult.recordset[0]?.total || 0);
+  let tableCarteraExists = false;
+  let tableCarteraRows = null;
+  let registroLlamadasExists = false;
+  let registroLlamadasRows = null;
+
+  try {
+    const tables = await pool.request().query(
+      "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME IN ('CONSULTA_CARTERA','registro_llamadas')"
+    );
+    const names = (tables.recordset || []).map((r) => r.TABLE_NAME);
+    tableCarteraExists = names.includes("CONSULTA_CARTERA");
+    registroLlamadasExists = names.includes("registro_llamadas");
+
+    if (tableCarteraExists) {
+      const r = await pool.request().query("SELECT COUNT(*) AS total FROM CONSULTA_CARTERA");
+      tableCarteraRows = Number(r.recordset[0]?.total || 0);
+    }
+    if (registroLlamadasExists) {
+      const r = await pool.request().query("SELECT COUNT(*) AS total FROM registro_llamadas");
+      registroLlamadasRows = Number(r.recordset[0]?.total || 0);
+    }
+  } catch (_) {
+    // Tablas opcionales, no fallar el health
   }
 
   return {
     ping: ping.recordset[0],
-    tableExists: Number(tableCheck.recordset[0]?.total || 0) > 0,
-    tableRows,
+    tables: {
+      CONSULTA_CARTERA: tableCarteraExists ? { exists: true, rows: tableCarteraRows } : { exists: false },
+      registro_llamadas: registroLlamadasExists ? { exists: true, rows: registroLlamadasRows } : { exists: false },
+    },
   };
 }
 
@@ -561,6 +588,14 @@ app.post("/transcribe", async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "audioBase64 es requerido",
+      });
+    }
+    // Validar tamaño mínimo (~1KB) para evitar envíos vacíos a Gemini
+    const buf = Buffer.from(audioBase64, "base64");
+    if (buf.length < 512) {
+      return res.status(400).json({
+        success: false,
+        error: "El audio es demasiado corto o está vacío",
       });
     }
 
@@ -765,6 +800,16 @@ function phonesMatch(a, b) {
   return na === nb || na.endsWith(nb) || nb.endsWith(na);
 }
 
+// Columnas permitidas para registro_llamadas (evita errores por columnas inexistentes)
+const LLAMADAS_COLUMNS = new Set([
+  "fecha", "horaInicio", "horaFin", "duracionMinutos", "tipoLlamada", "cargoLider",
+  "zona", "nombreLider", "nombreContactado", "numeroContacto", "numeroPropietario",
+  "clientesProgramados", "clientesVisitados", "ventaDia", "recaudoDia", "cumplioMeta",
+  "coincidenciaPpvcRvc", "conversion60", "recuperacionPerdidos", "observaciones",
+  "confirmacionVeracidad", "rutaGrabacion", "rutaGrabacionPuntoB", "transcripcionTexto",
+  "latitud", "longitud",
+]);
+
 app.post("/llamadas", async (req, res) => {
   try {
     const body = req.body || {};
@@ -772,42 +817,55 @@ app.post("/llamadas", async (req, res) => {
     const numeroPropietario = asNullableString(body.numeroPropietario);
     const numeroContacto = asNullableString(body.numeroContacto);
     const horaInicio = asString(body.horaInicio, "");
+    const fechaStr = asString(body.fecha, "").split("T")[0];
 
+    // Validación mínima
+    if (!fechaStr || !asString(body.horaInicio, "") || !asString(body.horaFin, "")) {
+      return res.status(400).json({
+        success: false,
+        error: "fecha, horaInicio y horaFin son requeridos",
+      });
+    }
+
+    // Buscar correlación dual (punto A + punto B)
     if (numeroPropietario && numeroContacto && horaInicio) {
-      const fechaStr = asString(body.fecha, "").split("T")[0];
       const nP = normalizePhone(numeroPropietario);
       const nC = normalizePhone(numeroContacto);
       if (nP && nC) {
-      const rows = await runQuery(
-        `SELECT id, horaInicio FROM ${TABLES.llamadas}
-         WHERE fecha = @fecha
-         AND numeroPropietario IS NOT NULL AND numeroContacto IS NOT NULL
-         AND numeroPropietario = @nC AND numeroContacto = @nP`,
-        (request) => {
-          request.input("fecha", fechaStr);
-          request.input("nP", nP);
-          request.input("nC", nC);
+        try {
+          const rows = await runQuery(
+            `SELECT id, horaInicio FROM ${TABLES.llamadas}
+             WHERE fecha = @fecha
+             AND numeroPropietario IS NOT NULL AND numeroContacto IS NOT NULL
+             AND numeroPropietario = @nC AND numeroContacto = @nP`,
+            (request) => {
+              request.input("fecha", fechaStr);
+              request.input("nP", nP);
+              request.input("nC", nC);
+            }
+          );
+          const list = (rows.recordset || []).filter((row) => {
+            const diffMs = Math.abs(new Date(horaInicio) - new Date(row.horaInicio));
+            return diffMs <= 600000;
+          });
+          if (list.length > 0) {
+            return res.json({
+              success: true,
+              mergeTarget: list[0].id,
+              id: list[0].id,
+            });
+          }
+        } catch (dbErr) {
+          // Si falla la búsqueda (ej. tabla vacía), continuar con insert
         }
-      );
-      const list = (rows.recordset || []).filter((row) => {
-        const diffMs = Math.abs(new Date(horaInicio) - new Date(row.horaInicio));
-        return diffMs <= 600000;
-      });
-      if (list.length > 0) {
-        return res.json({
-          success: true,
-          mergeTarget: list[0].id,
-          id: list[0].id,
-        });
       }
-      }
-    } // fin if nP && nC
+    }
 
-    const payload = {
-      fecha: requireStringField(body, "fecha"),
+    const rawPayload = {
+      fecha: fechaStr,
       horaInicio: requireStringField(body, "horaInicio"),
       horaFin: requireStringField(body, "horaFin"),
-      duracionMinutos: asInt(body.duracionMinutos, 0),
+      duracionMinutos: Math.max(0, asInt(body.duracionMinutos, 1)),
       tipoLlamada: requireStringField(body, "tipoLlamada"),
       cargoLider: requireStringField(body, "cargoLider"),
       zona: requireStringField(body, "zona"),
@@ -824,22 +882,78 @@ app.post("/llamadas", async (req, res) => {
       conversion60: asInt(body.conversion60, 0),
       recuperacionPerdidos: asInt(body.recuperacionPerdidos, 0),
       observaciones: asString(body.observaciones, ""),
-      confirmacionVeracidad: asInt(body.confirmacionVeracidad, 0),
+      confirmacionVeracidad: asInt(body.confirmacionVeracidad, 1),
       rutaGrabacion: asNullableString(body.rutaGrabacion),
       transcripcionTexto: asNullableString(body.transcripcionTexto),
     };
+    if (body.latitud != null && body.longitud != null) {
+      rawPayload.latitud = asDouble(body.latitud, 0);
+      rawPayload.longitud = asDouble(body.longitud, 0);
+    }
+
+    const payload = {};
+    for (const [k, v] of Object.entries(rawPayload)) {
+      if (LLAMADAS_COLUMNS.has(k)) payload[k] = v;
+    }
+
     const mode = await upsertById(TABLES.llamadas, id, payload);
     return res.json({ success: true, id, mode });
   } catch (error) {
-    return res.status(400).json({ success: false, error: error.message });
+    const status = error.message?.includes("requerido") || error.message?.includes("permitido")
+      ? 400
+      : 500;
+    return res.status(status).json({
+      success: false,
+      error: error.message || String(error),
+    });
+  }
+});
+
+// Subir audio principal (rutaGrabacion) - como la app envía tras grabar
+app.post("/llamadas/:id/audio", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id || !SAFE_ID.test(id)) {
+      return res.status(400).json({ success: false, error: "id inválido" });
+    }
+    const body = req.body || {};
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) {
+      return res.status(400).json({ success: false, error: "audioBase64 requerido" });
+    }
+    const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+    const filename = `${id}.${ext}`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    let buf;
+    try {
+      buf = Buffer.from(audioBase64, "base64");
+    } catch (_) {
+      return res.status(400).json({ success: false, error: "audioBase64 inválido" });
+    }
+    if (buf.length > 30 * 1024 * 1024) {
+      return res.status(400).json({ success: false, error: "El audio supera el tamaño máximo (30MB)" });
+    }
+    fs.writeFileSync(filepath, buf);
+    const rutaRelativa = `/audio/${filename}`;
+    await runExecute(
+      `UPDATE ${TABLES.llamadas} SET rutaGrabacion = @path WHERE id = @id`,
+      (request) => {
+        request.input("path", rutaRelativa);
+        request.input("id", id);
+      }
+    );
+    return res.json({ success: true, id, rutaGrabacion: rutaRelativa });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
   try {
     const id = asString(req.params.id, "");
-    if (!id) {
-      return res.status(400).json({ success: false, error: "id requerido" });
+    if (!id || !SAFE_ID.test(id)) {
+      return res.status(400).json({ success: false, error: "id inválido" });
     }
     const body = req.body || {};
     const audioBase64 = asString(body.audioBase64, "");
@@ -850,7 +964,15 @@ app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
     const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("mp3") ? "mp3" : "m4a";
     const filename = `${id}_punto_b.${ext}`;
     const filepath = path.join(UPLOADS_DIR, filename);
-    const buf = Buffer.from(audioBase64, "base64");
+    let buf;
+    try {
+      buf = Buffer.from(audioBase64, "base64");
+    } catch (_) {
+      return res.status(400).json({ success: false, error: "audioBase64 inválido" });
+    }
+    if (buf.length > 30 * 1024 * 1024) {
+      return res.status(400).json({ success: false, error: "El audio supera el tamaño máximo (30MB)" });
+    }
     fs.writeFileSync(filepath, buf);
     const rutaRelativa = `/audio/${filename}`;
     await runExecute(
@@ -888,9 +1010,9 @@ app.patch("/llamadas/:id", async (req, res) => {
       updates.transcripcionTexto = asNullableString(body.transcripcionTexto);
     }
 
-    const columns = Object.keys(updates);
+    const columns = Object.keys(updates).filter((c) => LLAMADAS_COLUMNS.has(c));
     if (columns.length === 0) {
-      return res.status(400).json({ success: false, message: "Sin campos para actualizar" });
+      return res.status(400).json({ success: false, error: "Sin campos válidos para actualizar" });
     }
 
     const setClause = columns.map((c) => `[${c}] = @${c}`).join(", ");
@@ -906,7 +1028,10 @@ app.patch("/llamadas/:id", async (req, res) => {
 
     return res.json({ success: true, id, rows });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: error.message || String(error),
+    });
   }
 });
 
@@ -1061,13 +1186,18 @@ app.use((_req, res) => {
     success: false,
     error: "Ruta no encontrada",
     availableEndpoints: [
+      "GET /",
       "GET /health",
       "GET /health/db",
       "GET /test",
       "POST /transcribe",
+      "POST /llamadas",
+      "GET /llamadas",
+      "POST /llamadas/:id/audio",
+      "POST /llamadas/:id/audio-punto-b",
+      "PATCH /llamadas/:id",
       "GET /vendedores",
       "GET /supervisores",
-      "GET /llamadas",
       "GET /ppvc",
       "GET /rvc",
       "GET /alertas",
@@ -1084,6 +1214,9 @@ async function startServer() {
   console.log(`Puerto: ${port}`);
   console.log(`Host SQL: ${dbConfig.server}:${dbConfig.port}`);
   console.log(`DB SQL: ${dbConfig.database}`);
+  if (process.env.NODE_ENV === "production" && !process.env.DB_PASS) {
+    console.warn("ADVERTENCIA: DB_PASS no definido. Usa variables de entorno en producción.");
+  }
 
   httpServer = app.listen(port, "0.0.0.0", () => {
     console.log("API iniciada correctamente");
