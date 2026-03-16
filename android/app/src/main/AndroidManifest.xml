@@ -14,9 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -25,7 +23,7 @@
     <application
         android:usesCleartextTraffic="true"
         android:label="Minuto a Minuto"
-        android:name="${applicationName}"
+        android:name=".MinutoApplication"
         android:icon="@mipmap/ic_launcher"
         android:installLocation="auto"
         android:allowBackup="true">
@@ -68,22 +66,7 @@
             android:foregroundServiceType="dataSync"
             android:exported="false"
             android:stopWithTask="false" />
-        <service
-            android:name="com.redevrx.flutter_phone_call_state.receiver.CallMonitoringService"
-            android:foregroundServiceType="phoneCall"
-            android:exported="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Monitor de llamadas para registro comercial de ventas" />
-        </service>
-        <service
-            android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Indicador flotante para mostrar que el monitor esta activo" />
-        </service>
+
         <service
             android:name=".CallRecordAccessibilityService"
             android:exported="false"
@@ -95,34 +78,29 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-        <!-- Servicio nativo de grabación de llamadas -->
+        <!-- Servicio nativo de grabación -->
         <service
             android:name=".CallRecorderService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|microphone"
             android:exported="false"
             android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Grabación de llamadas telefónicas para registro comercial" />
+                android:value="Grabación de voz durante llamada para registro comercial de ventas" />
         </service>
 
-        <!-- Monitor de estado de llamadas (TelephonyCallback) — funciona en segundo plano -->
+        <!-- Monitor de estado de llamadas (TelephonyCallback) -->
         <service
             android:name=".PhoneStateMonitorService"
-            android:foregroundServiceType="microphone"
-            android:exported="false"
-            android:stopWithTask="false" />
-
-        <!-- Grabación de audio del sistema via MediaProjection (voz remota + micrófono) -->
-        <service
-            android:name=".MediaProjectionRecorderService"
             android:foregroundServiceType="specialUse"
             android:exported="false"
             android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Grabación de audio de llamadas para registro comercial" />
+                android:value="Monitoreo de estado de llamadas para disparar registro comercial" />
         </service>
+
+
 
         <!-- Receptor de estado de llamada (fallback para dispositivos más antiguos) -->
         <receiver
@@ -144,6 +122,8 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
     </application>

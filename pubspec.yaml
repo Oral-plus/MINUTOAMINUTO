@@ -79,8 +79,8 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/logo.png
-    - assets/images/logo_splash.png
+    - assets/images/LLAMADA.png
+    - assets/images/LOGO 2 1 (2).png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

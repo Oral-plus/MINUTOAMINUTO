@@ -29,12 +29,16 @@ void main() {
   img.fill(result, color: img.ColorRgba8(255, 255, 255, 255));
 
   // Escalar el recorte para que quepa
-  final scaled = img.copyResize(cropped, width: size, height: (size * cropH / cropW).round());
+  final scaled = img.copyResize(
+    cropped,
+    width: size,
+    height: (size * cropH / cropW).round(),
+  );
   final offsetY = ((size - scaled.height) / 2).round();
 
   img.compositeImage(result, scaled, dstY: offsetY);
 
   final out = File('assets/images/logo_splash.png');
   out.writeAsBytesSync(img.encodePng(result));
-  print('Guardado: ${out.path} (${size}x${size})');
+  print('Guardado: ${out.path} (${size}x$size)');
 }

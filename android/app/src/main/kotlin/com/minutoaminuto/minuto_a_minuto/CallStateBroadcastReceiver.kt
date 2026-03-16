@@ -37,6 +37,7 @@ class CallStateBroadcastReceiver : BroadcastReceiver() {
         private const val KEY_LAST_NUMBER    = "native_last_call_number"
         private const val LEGAL_CHANNEL      = "call_recording_legal"
         private const val LEGAL_NOTIF_ID     = 9002
+        private const val KEY_RECEIVER_TS    = "native_receiver_init_ts"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -45,6 +46,15 @@ class CallStateBroadcastReceiver : BroadcastReceiver() {
             action != "android.intent.action.NEW_OUTGOING_CALL"
         ) return
 
+        val pending = goAsync()
+        try {
+            handleStateChange(context, intent)
+        } finally {
+            pending.finish()
+        }
+    }
+
+    private fun handleStateChange(context: Context, intent: Intent) {
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
             ?: TelephonyManager.EXTRA_STATE_IDLE
 
@@ -52,9 +62,23 @@ class CallStateBroadcastReceiver : BroadcastReceiver() {
             ?: intent.getStringExtra("android.intent.extra.PHONE_NUMBER")
             ?: ""
 
-        val prefs    = context.getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
+        // Persistir tiempo de inicio del receptor para filtro de fantasmas
+        var initTs = prefs.getLong(KEY_RECEIVER_TS, 0L)
+        if (initTs == 0L) {
+            initTs = System.currentTimeMillis()
+            prefs.edit().putLong(KEY_RECEIVER_TS, initTs).apply()
+        }
+
         val prevState = prefs.getString(KEY_PREV_STATE, TelephonyManager.EXTRA_STATE_IDLE)
             ?: TelephonyManager.EXTRA_STATE_IDLE
+            
+        // Si el monitor en primer plano (PhoneStateMonitorService) está corriendo y es API >= 31,
+        // él se encarga de todo de forma más confiable. El BroadcastReceiver es un fallback.
+        if (PhoneStateMonitorService.isRunning && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Log.d(TAG, "PhoneStateMonitorService activo — ignorando broadcast")
+            return
+        }
 
         // Recordar número: si el nuevo no está vacío, actualizar; si no, usar el guardado
         val savedNumber = prefs.getString(KEY_LAST_NUMBER, "").orEmpty()
@@ -74,6 +98,14 @@ class CallStateBroadcastReceiver : BroadcastReceiver() {
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                 // Solo actuar si venimos de IDLE o RINGING (no si ya estábamos OFFHOOK)
                 if (prevState != TelephonyManager.EXTRA_STATE_OFFHOOK) {
+                    // GHOST FILTER: Si el receptor acaba de "despertar" (<2s) y no hubo RINGING,
+                    // podría ser un broadcast de estado pegajoso (sticky) del sistema.
+                    val timeSinceInit = System.currentTimeMillis() - initTs
+                    if (timeSinceInit < 2000 && prevState == TelephonyManager.EXTRA_STATE_IDLE) {
+                        Log.w(TAG, "Ghost Call Detectada (Broadcast): Ignorando OFFHOOK al arranque ($timeSinceInit ms)")
+                        return
+                    }
+
                     Log.d(TAG, "OFFHOOK → iniciando grabación")
                     writeSignal(editor, "start", number)
                     startRecorderService(context, number)

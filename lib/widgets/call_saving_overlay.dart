@@ -2,8 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/call_saving_progress_service.dart';
 
-/// Overlay que aparece en la parte inferior de la pantalla mientras se guarda
-/// la grabación post-llamada. Se muestra automáticamente y desaparece solo.
+/// Overlay premium que aparece en la parte inferior mientras se guarda la grabación.
 class CallSavingOverlay extends StatefulWidget {
   final Widget child;
   const CallSavingOverlay({super.key, required this.child});
@@ -24,9 +23,9 @@ class _CallSavingOverlayState extends State<CallSavingOverlay>
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
     );
-    _slideAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
 
     _sub = CallSavingProgressService.stream.listen((p) {
       if (!mounted) return;
@@ -34,7 +33,7 @@ class _CallSavingOverlayState extends State<CallSavingOverlay>
       if (p.isActive) {
         _animCtrl.forward();
       } else if (p.isDone) {
-        Future.delayed(const Duration(milliseconds: 2500), () {
+        Future.delayed(const Duration(milliseconds: 2800), () {
           if (mounted) _animCtrl.reverse();
         });
       } else {
@@ -42,7 +41,6 @@ class _CallSavingOverlayState extends State<CallSavingOverlay>
       }
     });
 
-    // Si ya hay progreso activo al montar (ej: segundo plano)
     if (_progress.isActive) _animCtrl.forward();
   }
 
@@ -59,12 +57,12 @@ class _CallSavingOverlayState extends State<CallSavingOverlay>
       children: [
         widget.child,
         Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
+          left: 12,
+          right: 12,
+          bottom: 12,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(0, 1),
+              begin: const Offset(0, 1.5),
               end: Offset.zero,
             ).animate(_slideAnim),
             child: SavingBanner(progress: _progress),
@@ -84,31 +82,51 @@ class SavingBanner extends StatelessWidget {
     final isDone = progress.stage == SavingStage.listo;
     final isError = progress.stage == SavingStage.error;
 
-    final Color bgColor = isError
-        ? const Color(0xFFC62828)
+    final Color accent = isError
+        ? const Color(0xFFE53935)
         : isDone
-            ? const Color(0xFF2E7D32)
-            : const Color(0xFF1565C0);
+            ? const Color(0xFF43A047)
+            : Colors.white;
 
     final IconData icon = isError
-        ? Icons.error_outline
+        ? Icons.error_outline_rounded
         : isDone
-            ? Icons.check_circle_outline
+            ? Icons.check_circle_outline_rounded
             : Icons.cloud_upload_outlined;
 
     return Material(
-      elevation: 8,
+      color: Colors.transparent,
       child: Container(
-        color: bgColor,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.07),
+          ),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accent, size: 18),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     progress.message,
@@ -116,30 +134,30 @@ class SavingBanner extends StatelessWidget {
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
+                      height: 1.3,
                     ),
                   ),
                 ),
                 if (!isDone && !isError)
                   Text(
                     '${(progress.percent * 100).toInt()}%',
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 13,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
               ],
             ),
             if (!isDone && !isError) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: progress.percent,
-                  backgroundColor: Colors.white24,
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(Colors.white),
-                  minHeight: 6,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  minHeight: 4,
                 ),
               ),
             ],

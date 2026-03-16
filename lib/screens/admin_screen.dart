@@ -109,7 +109,7 @@ class _AdminScreenState extends State<AdminScreen>
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text('Administracion de Equipo'),
         backgroundColor: Colors.white,
@@ -137,13 +137,13 @@ class _AdminScreenState extends State<AdminScreen>
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      border: Border.all(color: const Color(0xFFE0E0E0)),
                     ),
                     child: TabBar(
                       controller: _tabController,
                       indicatorColor: AppConstants.azulCorporativo,
                       labelColor: AppConstants.azulCorporativo,
-                      unselectedLabelColor: const Color(0xFF6B7280),
+                      unselectedLabelColor: Colors.black54,
                       tabs: const [
                         Tab(
                           text: 'Supervisores',
@@ -215,7 +215,7 @@ class _ResumenAdmin extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+          colors: [Colors.black87, Colors.black54],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

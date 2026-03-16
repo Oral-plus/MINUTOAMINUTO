@@ -10,7 +10,7 @@ import '../models/alerta.dart';
 class DatabaseService {
   static Database? _database;
   static const String _dbName = 'minuto_a_minuto.db';
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -143,24 +143,48 @@ class DatabaseService {
   }
 
   static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    print('DATABASE UPGRADE: $oldVersion -> $newVersion');
     if (oldVersion < 2) {
       try {
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN rutaGrabacion TEXT');
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN transcripcionTexto TEXT');
-      } catch (_) {}
+        print('DB Upgrade v2: OK');
+      } catch (e) {
+        print('DB Upgrade v2 ERROR: $e');
+      }
     }
     if (oldVersion < 3) {
       try {
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN latitud REAL');
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN longitud REAL');
-      } catch (_) {}
+        print('DB Upgrade v3: OK');
+      } catch (e) {
+        print('DB Upgrade v3 ERROR: $e');
+      }
     }
     if (oldVersion < 4) {
       try {
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN numeroContacto TEXT');
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN numeroPropietario TEXT');
         await db.execute('ALTER TABLE registro_llamadas ADD COLUMN rutaGrabacionPuntoB TEXT');
-      } catch (_) {}
+        print('DB Upgrade v4: OK');
+      } catch (e) {
+        print('DB Upgrade v4 ERROR: $e');
+      }
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute('ALTER TABLE supervisores ADD COLUMN telefono TEXT');
+        print('DB Upgrade v5 (supervisores): OK');
+      } catch (e) {
+        print('DB Upgrade v5 (supervisores) ERROR: $e');
+      }
+      try {
+        await db.execute('ALTER TABLE vendedores ADD COLUMN telefono TEXT');
+        print('DB Upgrade v5 (vendedores): OK');
+      } catch (e) {
+        print('DB Upgrade v5 (vendedores) ERROR: $e');
+      }
     }
   }
 

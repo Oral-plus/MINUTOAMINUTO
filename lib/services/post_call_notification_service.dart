@@ -11,7 +11,7 @@ import '../screens/mis_llamadas_screen.dart';
 /// Al tocar, abre la app para editar observaciones.
 class PostCallNotificationService {
   static const _keyPendingEditId = 'pending_edit_registro_id';
-  static const _logoAsset = 'assets/images/logo.png';
+  static const _logoAsset = 'assets/images/LLAMADA.png';
   static FlutterLocalNotificationsPlugin? _plugin;
   static bool _initialized = false;
   static Uint8List? _logoBytes;
@@ -75,23 +75,30 @@ class PostCallNotificationService {
 
   /// Notificación única: llamada grabada y registrada en Mis Llamadas (con duración).
   /// [correlacionada] = true cuando el audio se unió a un registro existente (punto A + punto B).
+  /// [guardadoEn] = 'API' o 'local' para indicar dónde se insertó.
   static Future<void> showLlamadaGrabadaYRegistrada(
     String registroId,
     String contacto,
     int duracionMinutos, {
     bool correlacionada = false,
+    String? guardadoEn,
   }) async {
     if (!_isAndroid || !_initialized) return;
     try {
       final logo = await _loadLogoBytes();
       final duracionTexto =
           duracionMinutos == 1 ? '1 min' : '$duracionMinutos min';
+      final destino = guardadoEn == 'local'
+          ? ' (guardada en dispositivo local)'
+          : guardadoEn == 'API'
+              ? ' (subida a servidor)'
+              : '';
       final titulo = correlacionada
           ? 'Llamada correlacionada (punto A + punto B)'
           : 'Llamada grabada y registrada';
       final body = correlacionada
-          ? 'Tu audio se unió al registro con $contacto. Duración: $duracionTexto. Ambos lados grabados.'
-          : 'Con $contacto. Duración: $duracionTexto. Toca para ver en Mis Llamadas.';
+          ? 'Tu audio se unió al registro con $contacto. Duración: $duracionTexto. Ambos lados grabados.$destino'
+          : 'Con $contacto. Duración: $duracionTexto.$destino Toca para ver en Mis Llamadas.';
       final android = AndroidNotificationDetails(
         'llamada_registrada',
         'Llamadas grabadas',
@@ -109,6 +116,33 @@ class PostCallNotificationService {
       );
     } catch (e) {
       debugPrint('PostCallNotification showLlamadaGrabadaYRegistrada: $e');
+    }
+  }
+
+  /// Notificación al coach: vendedor sin llamada antes de las 8:20.
+  /// Se muestra en el celular del coach cuando abre/refresca el dashboard.
+  static Future<void> showAlertaVendedorSinLlamada8am(String vendedorNombre) async {
+    if (!_isAndroid || !_initialized) return;
+    try {
+      final logo = await _loadLogoBytes();
+      final android = AndroidNotificationDetails(
+        'alerta_8am',
+        'Alerta 8:20',
+        channelDescription:
+            'Vendedores que no han hecho llamada antes de las 8:20',
+        importance: Importance.high,
+        priority: Priority.high,
+        largeIcon: logo != null ? ByteArrayAndroidBitmap(logo) : null,
+      );
+      final id = '8am_${vendedorNombre}_${DateTime.now().day}'.hashCode.abs() % 100000;
+      await _instance.show(
+        id,
+        'Alerta 8:20',
+        '$vendedorNombre no ha hecho ninguna llamada antes de las 8:20',
+        NotificationDetails(android: android),
+      );
+    } catch (e) {
+      debugPrint('PostCallNotification showAlertaVendedorSinLlamada8am: $e');
     }
   }
 

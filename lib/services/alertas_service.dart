@@ -7,26 +7,76 @@ import '../utils/constants.dart';
 class AlertasService {
   static const _uuid = Uuid();
 
-  /// Verifica y genera alertas según reglas del negocio
+  /// Verifica y genera alertas según reglas del negocio.
+  /// Optimizado para evitar N+1 queries.
   static Future<void> verificarAlertasDiarias() async {
     final ahora = DateTime.now();
     final hoy = DateTime(ahora.year, ahora.month, ahora.day);
+    
+    // Cargamos alertas pendientes una sola vez para filtrar en memoria
+    final alertasPendientes = await DataService.getAlertasPendientes();
+
+    // Si pasaron las 8:20 y vendedor no ha hecho llamada → alerta al coach
+    if (ahora.hour > AppConstants.horaAlerta8am ||
+        (ahora.hour == AppConstants.horaAlerta8am &&
+            ahora.minute >= AppConstants.minutoAlerta8am)) {
+      await _alertaVendedorSinLlamada8am(hoy, alertasPendientes);
+    }
 
     // Si a las 12m no hay registro de llamada → alerta
     if (ahora.hour >= AppConstants.horaAlertaSinLlamada) {
-      await _alertaSinLlamadaManana(hoy);
+      await _alertaSinLlamadaManana(hoy, alertasPendientes);
     }
 
     // Si a las 5 pm no hay cierre → alerta a KAM
     if (ahora.hour >= AppConstants.horaAlertaSinCierre) {
-      await _alertaSinCierreTarde(hoy);
+      await _alertaSinCierreTarde(hoy, alertasPendientes);
     }
 
     // Coach no cumple 2 días
-    await _alertaCoachNoCumple2Dias();
+    await _alertaCoachNoCumple2Dias(alertasPendientes);
   }
 
-  static Future<void> _alertaSinLlamadaManana(DateTime hoy) async {
+  /// Vendedor que no ha hecho ninguna llamada antes de las 8:20 → notificar al coach asignado.
+  static Future<void> _alertaVendedorSinLlamada8am(DateTime hoy, List<Alerta> alertasPendientes) async {
+    final limite = DateTime(
+      hoy.year,
+      hoy.month,
+      hoy.day,
+      AppConstants.horaAlerta8am,
+      AppConstants.minutoAlerta8am,
+    );
+    final llamadas = await DataService.getRegistroLlamadas(desde: hoy, hasta: hoy);
+    final queHicieronLlamada = llamadas
+        .where((l) => l.horaInicio.isBefore(limite))
+        .map((l) => l.nombreLider)
+        .toSet();
+
+    final vendedores = await DataService.getVendedores();
+    for (final v in vendedores) {
+      if (queHicieronLlamada.contains(v.nombre)) continue;
+      
+      final yaExiste = alertasPendientes.any((a) =>
+          a.tipo == TipoAlerta.vendedorSinLlamada8am &&
+          a.vendedorId == v.id &&
+          a.fecha.year == hoy.year &&
+          a.fecha.month == hoy.month &&
+          a.fecha.day == hoy.day);
+      if (!yaExiste) {
+        await DataService.insertAlerta(Alerta(
+          id: _uuid.v4(),
+          tipo: TipoAlerta.vendedorSinLlamada8am,
+          fecha: DateTime.now(),
+          mensaje: '${v.nombre} no ha hecho ninguna llamada antes de las 8:20',
+          vendedorId: v.id,
+          supervisorId: v.coachId,
+          zona: v.zona,
+        ));
+      }
+    }
+  }
+
+  static Future<void> _alertaSinLlamadaManana(DateTime hoy, List<Alerta> alertasPendientes) async {
     final vendedores = await DataService.getVendedores();
     final llamadas = await DataService.getRegistroLlamadas(
       desde: hoy,
@@ -39,9 +89,7 @@ class AlertasService {
 
     for (final v in vendedores) {
       if (!contactados.contains(v.nombre)) {
-        // Verificar si ya existe alerta
-        final alertas = await DataService.getAlertasPendientes();
-        final yaExiste = alertas.any((a) =>
+        final yaExiste = alertasPendientes.any((a) =>
             a.tipo == TipoAlerta.sinLlamada12m &&
             a.vendedorId == v.id &&
             a.fecha.year == hoy.year &&
@@ -61,7 +109,7 @@ class AlertasService {
     }
   }
 
-  static Future<void> _alertaSinCierreTarde(DateTime hoy) async {
+  static Future<void> _alertaSinCierreTarde(DateTime hoy, List<Alerta> alertasPendientes) async {
     final coaches = (await DataService.getSupervisores())
         .where((s) => s.cargo.name == 'coach')
         .toList();
@@ -76,8 +124,7 @@ class AlertasService {
 
     for (final c in coaches) {
       if (!contactadosTarde.contains(c.nombre)) {
-        final alertas = await DataService.getAlertasPendientes();
-        final yaExiste = alertas.any((a) =>
+        final yaExiste = alertasPendientes.any((a) =>
             a.tipo == TipoAlerta.sinCierre5pm &&
             a.supervisorId == c.id &&
             a.fecha.year == hoy.year &&
@@ -97,8 +144,7 @@ class AlertasService {
     }
   }
 
-  static Future<void> _alertaCoachNoCumple2Dias() async {
-    // Simplificado: verificar últimos 2 días
+  static Future<void> _alertaCoachNoCumple2Dias(List<Alerta> alertasPendientes) async {
     final ayer = DateTime.now().subtract(const Duration(days: 1));
     final anteayer = DateTime.now().subtract(const Duration(days: 2));
 
@@ -124,8 +170,7 @@ class AlertasService {
           .length;
 
       if (cumpleAyer < 2 && cumpleAnteayer < 2) {
-        final alertas = await DataService.getAlertasPendientes();
-        final yaExiste = alertas.any((a) =>
+        final yaExiste = alertasPendientes.any((a) =>
             a.tipo == TipoAlerta.coachNoCumple2Dias &&
             a.supervisorId == c.id);
         if (!yaExiste) {

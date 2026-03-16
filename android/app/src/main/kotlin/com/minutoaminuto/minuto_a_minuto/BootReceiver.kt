@@ -21,11 +21,13 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
         if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_USER_PRESENT &&
+            action != Intent.ACTION_MY_PACKAGE_REPLACED &&
             action != "android.intent.action.QUICKBOOT_POWERON" &&
             action != "com.htc.intent.action.QUICKBOOT_POWERON"
         ) return
 
-        Log.d(TAG, "Boot completado — iniciando PhoneStateMonitorService")
+        Log.d(TAG, "Persistence Trigger ($action) — iniciando PhoneStateMonitorService")
 
         // Verificar que el monitor esté habilitado en SharedPreferences
         val prefs = context.getSharedPreferences(

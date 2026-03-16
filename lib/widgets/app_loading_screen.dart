@@ -2,8 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../utils/constants.dart';
-
 /// Loader corporativo reutilizable: fondo blanco, logo y 3 bolitas animadas.
 class AppLoadingScreen extends StatelessWidget {
   final bool showMessage;
@@ -18,7 +16,7 @@ class AppLoadingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF080808),
       body: SafeArea(
         child: Center(
           child: AppLoadingIndicator(
@@ -52,31 +50,55 @@ class AppLoadingIndicator extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Image.asset(
-          'assets/images/logo.png',
-          height: logoHeight,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.schedule_rounded,
-            size: logoHeight * 0.45,
-            color: AppConstants.azulCorporativo,
-          ),
+        // Ambient glow behind logo
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: logoHeight * 1.5,
+              height: logoHeight * 1.5,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.04),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+            Image.asset(
+              'assets/images/LOGO 2 1 (2).png',
+              height: logoHeight,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (ctx, err, st) => Image.asset(
+                'assets/images/LLAMADA.png',
+                height: logoHeight,
+                fit: BoxFit.contain,
+                errorBuilder: (ctx2, err2, st2) => Icon(
+                  Icons.schedule_rounded,
+                  size: logoHeight * 0.45,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         _AnimatedLoadingDots(
           dotSize: dotSize,
           spacing: dotSpacing,
-          color: AppConstants.azulCorporativo,
+          color: Colors.white,
         ),
         if (showMessage) ...[
           const SizedBox(height: 12),
           Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
+              color: Colors.white.withValues(alpha: 0.3),
             ),
           ),
         ],

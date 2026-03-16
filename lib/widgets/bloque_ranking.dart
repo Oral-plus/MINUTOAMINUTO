@@ -11,8 +11,19 @@ class BloqueRanking extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -27,7 +38,7 @@ class BloqueRanking extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'BLOQUE 6 – RANKING DIARIO',
+                  'Ranking diario',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -151,13 +162,13 @@ class _RankingItem extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: esTop
-            ? AppConstants.verdeMeta.withOpacity(0.1)
-            : AppConstants.rojoCritico.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(8),
+            ? AppConstants.verdeMeta.withValues(alpha: 0.04)
+            : Colors.grey.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: esTop
-              ? AppConstants.verdeMeta.withOpacity(0.3)
-              : AppConstants.rojoCritico.withOpacity(0.2),
+              ? AppConstants.verdeMeta.withValues(alpha: 0.15)
+              : Colors.grey.withValues(alpha: 0.1),
         ),
       ),
       child: Row(
@@ -168,7 +179,7 @@ class _RankingItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: esTop
                   ? AppConstants.verdeMeta
-                  : AppConstants.rojoCritico.withOpacity(0.5),
+                  : AppConstants.rojoCritico.withValues(alpha: 0.5),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,

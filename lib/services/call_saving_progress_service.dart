@@ -75,10 +75,22 @@ class CallSavingProgressService {
         message: 'Guardando datos de la llamada...',
       ));
 
-  static void notifySubiendoAudio(double progress) => _emit(CallSavingProgress(
-        stage: SavingStage.subiendoAudio,
-        percent: 0.40 + (progress * 0.45).clamp(0, 0.45),
-        message: 'Subiendo grabación... ${(progress * 100).toInt()}%',
+  static void notifySubiendoAudio(double progress, {String? cruceCon}) {
+    final base = cruceCon != null && cruceCon.isNotEmpty
+        ? 'Cruce con $cruceCon - Subiendo tu audio'
+        : 'Subiendo grabación';
+    _emit(CallSavingProgress(
+      stage: SavingStage.subiendoAudio,
+      percent: 0.40 + (progress * 0.45).clamp(0, 0.45),
+      message: '$base... ${(progress * 100).toInt()}%',
+    ));
+  }
+
+  /// Indica que se detectó cruce (la otra persona también tiene la app).
+  static void notifyCruceDetectado(String contacto) => _emit(CallSavingProgress(
+        stage: SavingStage.guardandoDatos,
+        percent: 0.50,
+        message: 'Cruce detectado con $contacto — ambas partes con la app',
       ));
 
   static void notifyTranscribiendo() => _emit(const CallSavingProgress(
@@ -87,11 +99,14 @@ class CallSavingProgressService {
         message: 'Transcribiendo con IA...',
       ));
 
-  static void notifyListo() {
-    _emit(const CallSavingProgress(
+  static void notifyListo({bool cruce = false}) {
+    final msg = cruce
+        ? '¡Llamada guardada! Cruce A+B completado (ambas partes con la app)'
+        : '¡Llamada guardada!';
+    _emit(CallSavingProgress(
       stage: SavingStage.listo,
       percent: 1.0,
-      message: '¡Llamada guardada!',
+      message: msg,
     ));
     // Auto-reset después de 3 segundos
     Future.delayed(const Duration(seconds: 3), reset);

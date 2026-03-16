@@ -8,8 +8,19 @@ class BloquePpvcRvc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -25,7 +36,7 @@ class BloquePpvcRvc extends StatelessWidget {
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
-                    'BLOQUE 3 – EJECUCIÓN PPVC vs RVC',
+                    'Ejecución PPVC vs RVC',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

@@ -4,15 +4,18 @@ import 'package:art_sweetalert_new/art_sweetalert_new.dart';
 import '../models/supervisor.dart';
 import '../models/nivel_cargo.dart';
 import '../services/data_service.dart';
-import '../utils/constants.dart';
 
 class RegistroSupervisorScreen extends StatefulWidget {
   final NivelCargo cargoInicial;
 
-  const RegistroSupervisorScreen({super.key, this.cargoInicial = NivelCargo.coach});
+  const RegistroSupervisorScreen({
+    super.key,
+    this.cargoInicial = NivelCargo.coach,
+  });
 
   @override
-  State<RegistroSupervisorScreen> createState() => _RegistroSupervisorScreenState();
+  State<RegistroSupervisorScreen> createState() =>
+      _RegistroSupervisorScreenState();
 }
 
 class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
@@ -83,7 +86,9 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
         codigo: _codigoCtrl.text.trim().toUpperCase(),
         zona: _zonaCtrl.text.trim(),
         cargo: _cargo,
-        telefono: _telefonoCtrl.text.trim().isEmpty ? null : _telefonoCtrl.text.trim(),
+        telefono: _telefonoCtrl.text.trim().isEmpty
+            ? null
+            : _telefonoCtrl.text.trim(),
         superiorId: superiorId,
         subordinadosIds: [],
       );
@@ -112,17 +117,17 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
   }
 
   InputDecoration _inputDecoration(String label) => InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-      );
+    labelText: label,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    filled: true,
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Registrar ${_cargo.displayName}'),
-        backgroundColor: AppConstants.azulCorporativo,
+        backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
@@ -137,7 +142,12 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                 decoration: _inputDecoration('Cargo'),
                 items: NivelCargo.values
                     .where((c) => c != NivelCargo.vendedor)
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c.displayName)))
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(c.displayName),
+                      ),
+                    )
                     .toList(),
                 onChanged: (v) => setState(() => _cargo = v ?? _cargo),
               ),
@@ -151,7 +161,9 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
               const SizedBox(height: 20),
               TextFormField(
                 controller: _codigoCtrl,
-                decoration: _inputDecoration('Codigo (ej: JEF001, KAM001, COA001)'),
+                decoration: _inputDecoration(
+                  'Codigo (ej: JEF001, KAM001, COA001)',
+                ),
                 textCapitalization: TextCapitalization.characters,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
@@ -165,7 +177,9 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
               const SizedBox(height: 20),
               TextFormField(
                 controller: _telefonoCtrl,
-                decoration: _inputDecoration('Teléfono (para correlación dual)'),
+                decoration: _inputDecoration(
+                  'Teléfono (para correlación dual)',
+                ).copyWith(hintText: 'Ej: 300 123 4567'),
                 keyboardType: TextInputType.phone,
               ),
               if (_cargo != NivelCargo.jefe) ...[
@@ -186,13 +200,19 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                       );
                     }
                     return DropdownButtonFormField<String>(
-                      initialValue: _superiorId ?? (superiores.isNotEmpty ? superiores.first.id : null),
+                      initialValue:
+                          _superiorId ??
+                          (superiores.isNotEmpty ? superiores.first.id : null),
                       decoration: _inputDecoration('Reporta a'),
                       items: superiores
-                          .map((s) => DropdownMenuItem(
-                                value: s.id,
-                                child: Text('${s.nombre} (${s.cargo.displayName})'),
-                              ))
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s.id,
+                              child: Text(
+                                '${s.nombre} (${s.cargo.displayName})',
+                              ),
+                            ),
+                          )
                           .toList(),
                       onChanged: (v) => setState(() => _superiorId = v),
                     );
@@ -201,7 +221,10 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
               ],
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
@@ -209,12 +232,19 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.storage_rounded, size: 18, color: AppConstants.azulCorporativo),
+                    const Icon(
+                      Icons.storage_rounded,
+                      size: 18,
+                      color: Colors.black87,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Destino de registro: ${DataService.userRegistrationDestination}',
-                        style: TextStyle(color: Colors.grey[700], fontSize: 12.5),
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 12.5,
+                        ),
                       ),
                     ),
                   ],
@@ -224,15 +254,20 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
               FilledButton(
                 onPressed: _guardando ? null : _guardar,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppConstants.azulCorporativo,
+                  backgroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: _guardando
                     ? const SizedBox(
                         height: 24,
                         width: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Guardar'),
               ),

@@ -1,5 +1,6 @@
 enum TipoAlerta {
   sinLlamada12m,
+  vendedorSinLlamada8am,
   sinCierre5pm,
   coachNoCumple2Dias,
   vendedorSinVenta2pm,
@@ -35,6 +36,8 @@ class Alerta {
     switch (tipo) {
       case TipoAlerta.sinLlamada12m:
         return 'Sin registro de llamada al mediodía';
+      case TipoAlerta.vendedorSinLlamada8am:
+        return 'Vendedor sin llamada antes de las 8:20';
       case TipoAlerta.sinCierre5pm:
         return 'Sin cierre a las 5 PM';
       case TipoAlerta.coachNoCumple2Dias:

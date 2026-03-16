@@ -7,16 +7,16 @@ class AppKeys {
 }
 
 class AppConstants {
-  // Tema blanco y negro
-  static const Color azulCorporativo = Color(0xFF000000);
-  static const Color verdeMeta = Color(0xFF212121);
-  static const Color amarilloAdvertencia = Color(0xFF424242);
-  static const Color rojoCritico = Color(0xFF616161);
+  // Tema Premium Blanco y Negro
+  static const Color azulCorporativo = Color(0xFF0A0A0A); // Negro casi puro, más suave que 000000
+  static const Color verdeMeta = Color(0xFF262626);       // Gris muy oscuro
+  static const Color amarilloAdvertencia = Color(0xFF737373); // Gris medio
+  static const Color rojoCritico = Color(0xFFA3A3A3);     // Gris claro para contrastes suaves 
 
   // Semáforo (escala de grises)
-  static const Color semaforoVerde = Color(0xFF212121);
-  static const Color semaforoAmarillo = Color(0xFF616161);
-  static const Color semaforoRojo = Color(0xFF9E9E9E);
+  static const Color semaforoVerde = Color(0xFF262626);   // Éxito / Alta prioridad -> Negro mate
+  static const Color semaforoAmarillo = Color(0xFF737373); // Alerta media -> Gris
+  static const Color semaforoRojo = Color(0xFFD4D4D4);     // Crítico/Bajo -> Gris claro (fondo)
 
   // Umbrales semáforo
   static const double umbralVerde = 90.0;
@@ -32,6 +32,9 @@ class AppConstants {
   static const int horaCierreSistema = 18;
   static const int horaAlertaSinLlamada = 12;
   static const int horaAlertaSinCierre = 17;
+  // Alerta 8:20: vendedor sin llamada hecha antes de las 8:20 → notificar al coach
+  static const int horaAlerta8am = 8;
+  static const int minutoAlerta8am = 20;
 
   // Metas
   static const double metaLlamadasCoach = 95;

@@ -1,6 +1,7 @@
 package com.minutoaminuto.minuto_a_minuto
 
 import android.Manifest
+import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -16,6 +17,7 @@ import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
@@ -49,6 +51,7 @@ class PhoneStateMonitorService : Service() {
 
     private var telephonyManager: TelephonyManager? = null
     private var telephonyCallback: TelephonyCallback? = null
+    private var telephonyExecutor: ExecutorService? = null
 
     @Suppress("DEPRECATION")
     private var phoneStateListener: PhoneStateListener? = null
@@ -56,6 +59,7 @@ class PhoneStateMonitorService : Service() {
     private var lastState: Int = TelephonyManager.CALL_STATE_IDLE
     private var lastIncomingNumber: String = ""
     private var isIncoming: Boolean = false
+    private var serviceStartTime: Long = 0L
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -63,10 +67,19 @@ class PhoneStateMonitorService : Service() {
         super.onCreate()
         try {
             isRunning = true
+            serviceStartTime = System.currentTimeMillis()
+            
+            // V19: Inicializar estado real antes de registrar listener
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            lastState = tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
+            
             createNotificationChannel()
             startForegroundNotification()
+            unregisterTelephonyListener() 
             registerTelephonyListener()
-            Log.d(TAG, "Servicio iniciado")
+            
+            scheduleKeepAlive()
+            Log.d(TAG, "Servicio iniciado - Estado inicial: $lastState")
         } catch (e: Exception) {
             Log.e(TAG, "onCreate error: ${e.message}")
             stopSelf()
@@ -74,8 +87,38 @@ class PhoneStateMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Si el servicio ya estaba corriendo, solo refrescar
+        if (intent?.action == "RESTART_MONITOR") {
+            // No llamar a onCreate() manualmente. El sistema o startForegroundService ya lo hace.
+            // Solo asegurarnos de que la notificación esté activa si por alguna razón se perdió.
+            startForegroundNotification()
+        }
+        scheduleKeepAlive()
         return START_STICKY
+    }
+
+    private fun scheduleKeepAlive() {
+        try {
+            val alarm = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val intent = Intent(this, PhoneStateMonitorService::class.java).apply {
+                action = "RESTART_MONITOR"
+            }
+            val pi = android.app.PendingIntent.getService(
+                this, 1, intent, // RequestCode 1 para diferenciar
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) 
+                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                else android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            
+            // Intervalo de 15 minutos — suficiente para reanimar sin drenar batería
+            val triggerAt = System.currentTimeMillis() + 15 * 60 * 1000 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarm.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                alarm.set(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Keep-Alive error: ${e.message}")
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -84,6 +127,13 @@ class PhoneStateMonitorService : Service() {
         isRunning = false
         unregisterTelephonyListener()
         Log.d(TAG, "Servicio detenido")
+        
+        // Si el monitor debe estar activo, intentar reiniciarlo
+        val prefs = getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean("flutter.call_monitor_enabled", false)) {
+            Log.w(TAG, "Servicio destruido pero debería estar activo — rearmando alarma")
+            scheduleKeepAlive()
+        }
         super.onDestroy()
     }
 
@@ -99,33 +149,41 @@ class PhoneStateMonitorService : Service() {
             return
         }
 
-        telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+        try {
+            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val executor = Executors.newSingleThreadExecutor()
-            val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
-                override fun onCallStateChanged(state: Int) {
-                    // En API 31+ el número no viene en el callback
-                    val prefs = getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
-                    val number = prefs.getString(KEY_LAST_NUMBER, "").orEmpty()
-                    handleStateChange(state, number)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
+                    override fun onCallStateChanged(state: Int) {
+                        val prefs = getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
+                        val number = prefs.getString(KEY_LAST_NUMBER, "").orEmpty()
+                        handleStateChange(state, number)
+                    }
                 }
-            }
-            telephonyCallback = cb
-            telephonyManager?.registerTelephonyCallback(executor, cb)
-            Log.d(TAG, "TelephonyCallback registrado (API 31+)")
-        } else {
-            @Suppress("DEPRECATION")
-            val listener = object : PhoneStateListener() {
-                override fun onCallStateChanged(state: Int, incomingNumber: String?) {
-                    super.onCallStateChanged(state, incomingNumber ?: "")
-                    handleStateChange(state, incomingNumber ?: "")
+                telephonyCallback = cb
+                val executor = Executors.newSingleThreadExecutor()
+                telephonyExecutor = executor
+                telephonyManager?.registerTelephonyCallback(executor, cb)
+                Log.d(TAG, "TelephonyCallback registrado (API 31+)")
+            } else {
+                @Suppress("DEPRECATION")
+                val listener = object : PhoneStateListener() {
+                    override fun onCallStateChanged(state: Int, incomingNumber: String?) {
+                        super.onCallStateChanged(state, incomingNumber ?: "")
+                        handleStateChange(state, incomingNumber ?: "")
+                    }
                 }
+                phoneStateListener = listener
+                @Suppress("DEPRECATION")
+                telephonyManager?.listen(listener, PhoneStateListener.LISTEN_CALL_STATE)
+                Log.d(TAG, "PhoneStateListener registrado (API < 31)")
             }
-            phoneStateListener = listener
-            @Suppress("DEPRECATION")
-            telephonyManager?.listen(listener, PhoneStateListener.LISTEN_CALL_STATE)
-            Log.d(TAG, "PhoneStateListener registrado (API < 31)")
+        } catch (se: SecurityException) {
+            Log.e(TAG, "Error de seguridad (permisos) al registrar: ${se.message}")
+            stopSelf()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fatal al registrar listener: ${e.message}")
+            stopSelf()
         }
     }
 
@@ -134,7 +192,9 @@ class PhoneStateMonitorService : Service() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 telephonyCallback?.let { telephonyManager?.unregisterTelephonyCallback(it) }
+                telephonyExecutor?.shutdownNow()
                 telephonyCallback = null
+                telephonyExecutor = null
             } else {
                 phoneStateListener?.let {
                     telephonyManager?.listen(it, PhoneStateListener.LISTEN_NONE)
@@ -150,7 +210,7 @@ class PhoneStateMonitorService : Service() {
 
     private fun handleStateChange(state: Int, incomingNumber: String) {
         if (lastState == state) return
-        Log.d(TAG, "Estado: $lastState → $state  número=$incomingNumber")
+        Log.d(TAG, "HSC: $lastState -> $state (verified)")
 
         val prefs = getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
 
@@ -161,15 +221,27 @@ class PhoneStateMonitorService : Service() {
                     lastIncomingNumber = incomingNumber
                     prefs.edit().putString(KEY_LAST_NUMBER, incomingNumber).apply()
                 }
-                Log.d(TAG, "RINGING — número=$lastIncomingNumber")
             }
 
             TelephonyManager.CALL_STATE_OFFHOOK -> {
-                if (lastState != TelephonyManager.CALL_STATE_OFFHOOK) {
+                // VERIFICACIÓN HARDWARE V19: Asegurar que el teléfono realmente reporta OFFHOOK
+                val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+                val actualState = tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
+                
+                if (actualState == TelephonyManager.CALL_STATE_OFFHOOK) {
                     val number = incomingNumber.ifBlank { lastIncomingNumber }
                     isIncoming = lastState == TelephonyManager.CALL_STATE_RINGING
-                    Log.d(TAG, "OFFHOOK — iniciando grabación número=$number")
+                    
+                    // GHOST FILTER: Si el servicio acaba de iniciar (<2s) y no hubo RINGING, 
+                    // podría ser un callback de estado inicial falso/pestañeo.
+                    val timeSinceStart = System.currentTimeMillis() - serviceStartTime
+                    if (timeSinceStart < 2000 && !isIncoming && lastState == TelephonyManager.CALL_STATE_IDLE) {
+                        Log.w(TAG, "Ghost Call Detectada: Ignorando OFFHOOK al arranque ($timeSinceStart ms)")
+                        lastState = state
+                        return
+                    }
 
+                    Log.d(TAG, "OFFHOOK CONFIRMADO -> Iniciando grabador")
                     val tsNow = (System.currentTimeMillis() / 1000).toInt()
                     prefs.edit()
                         .putString(KEY_SIGNAL, "start")
@@ -178,32 +250,32 @@ class PhoneStateMonitorService : Service() {
                         .putBoolean(KEY_PENDING_SAVE, false)
                         .commit()
 
-                    // Iniciar servicio de grabación
                     startCallRecorder(number)
+                } else {
+                    Log.w(TAG, "Ghost Offhook: Callback dice OFFHOOK pero Hardware dice $actualState")
+                    return // No cambiar lastState para permitir re-disparo si el hardware cambia
                 }
             }
 
             TelephonyManager.CALL_STATE_IDLE -> {
-                if (lastState == TelephonyManager.CALL_STATE_OFFHOOK ||
-                    lastState == TelephonyManager.CALL_STATE_RINGING
-                ) {
+                val wasActive = lastState == TelephonyManager.CALL_STATE_OFFHOOK ||
+                               lastState == TelephonyManager.CALL_STATE_RINGING ||
+                               CallRecorderService.isRecording.get()
+
+                if (wasActive) {
                     val number = incomingNumber.ifBlank { lastIncomingNumber }
-                    Log.d(TAG, "IDLE — deteniendo grabación número=$number")
+                    Log.d(TAG, "IDLE CONFIRMADO -> Deteniendo grabador")
 
                     val tsNow = (System.currentTimeMillis() / 1000).toInt()
-                    // commit() síncrono: garantiza que Flutter lo lea aunque el proceso se reinicie
                     prefs.edit()
                         .putString(KEY_SIGNAL, "end")
                         .putInt(KEY_SIGNAL_TS, tsNow)
                         .putString(KEY_SIGNAL_NUMBER, number)
-                        // Marcar que hay una llamada pendiente de guardar en Flutter
                         .putBoolean(KEY_PENDING_SAVE, true)
                         .commit()
 
-                    // Detener servicio de grabación
                     stopCallRecorder()
                 }
-                // Limpiar número guardado
                 prefs.edit().putString(KEY_LAST_NUMBER, "").commit()
                 lastIncomingNumber = ""
                 isIncoming = false
@@ -247,10 +319,11 @@ class PhoneStateMonitorService : Service() {
             val ch = NotificationChannel(
                 CHANNEL_ID,
                 "Monitor de llamadas",
-                NotificationManager.IMPORTANCE_MIN
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Detecta inicio y fin de llamadas para registrarlas"
                 setSound(null, null)
+                enableVibration(false)
                 setShowBadge(false)
             }
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -264,13 +337,13 @@ class PhoneStateMonitorService : Service() {
                 .setContentTitle("Minuto a Minuto")
                 .setContentText("Monitoreando llamadas...")
                 .setSmallIcon(android.R.drawable.ic_menu_call)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setSilent(true)
                 .build()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
                 startForeground(NOTIF_ID, notif)
             }
@@ -278,5 +351,16 @@ class PhoneStateMonitorService : Service() {
             Log.e(TAG, "startForegroundNotification error: ${e.message}")
             throw e
         }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.w(TAG, "App swipeada (at task removed) — Reiniciando monitor...")
+        val intent = Intent(this, PhoneStateMonitorService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        super.onTaskRemoved(rootIntent)
     }
 }

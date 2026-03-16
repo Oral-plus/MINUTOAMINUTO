@@ -7,10 +7,13 @@ import '../models/alerta.dart';
 import '../config/api_config.dart';
 import 'database_service.dart';
 import 'api_service.dart';
+import 'demo_data_service.dart';
 import 'debug_alert_service.dart';
 
 /// Abstraction to use either SQLite (local) or API (SQL Server)
+/// useDemoData = true → datos de demostración para presentaciones
 class DataService {
+  static bool useDemoData = false;
   static bool get _useApi => ApiConfig.useRemoteApi;
   static String get userRegistrationDestination =>
       _useApi
@@ -26,17 +29,69 @@ class DataService {
     await DatabaseService.database;
   }
 
-  static Future<List<Vendedor>> getVendedores() =>
-      _useApi ? ApiService.getVendedores() : DatabaseService.getVendedores();
+  static Future<List<Vendedor>> getVendedores() async {
+    if (useDemoData) return DemoDataService.getVendedores();
+    if (!_useApi) return DatabaseService.getVendedores();
+    try {
+      final list = await ApiService.getVendedores();
+      // Refresh local cache with latest from API
+      if (list.isNotEmpty) {
+        for (final v in list) {
+          try { await DatabaseService.insertVendedor(v); } catch (_) {}
+        }
+      }
+      return list;
+    } catch (e) {
+      DebugAlertService.warning('API caída, usando caché local: ${e.toString().split('\n').first}');
+      return DatabaseService.getVendedores();
+    }
+  }
 
-  static Future<Vendedor?> getVendedor(String id) =>
-      _useApi ? ApiService.getVendedor(id) : DatabaseService.getVendedor(id);
+  static Future<Vendedor?> getVendedor(String id) async {
+    if (useDemoData) {
+      final list = DemoDataService.getVendedores();
+      try { return list.firstWhere((v) => v.id == id); } catch (_) { return null; }
+    }
+    if (!_useApi) return DatabaseService.getVendedor(id);
+    try {
+      return await ApiService.getVendedor(id);
+    } catch (e) {
+      DebugAlertService.warning('API caída, usando caché local para vendedor $id');
+      return DatabaseService.getVendedor(id);
+    }
+  }
 
-  static Future<List<Supervisor>> getSupervisores() =>
-      _useApi ? ApiService.getSupervisores() : DatabaseService.getSupervisores();
+  static Future<List<Supervisor>> getSupervisores() async {
+    if (useDemoData) return DemoDataService.getSupervisores();
+    if (!_useApi) return DatabaseService.getSupervisores();
+    try {
+      final list = await ApiService.getSupervisores();
+      // Refresh local cache with latest from API
+      if (list.isNotEmpty) {
+        for (final s in list) {
+          try { await DatabaseService.insertSupervisor(s); } catch (_) {}
+        }
+      }
+      return list;
+    } catch (e) {
+      DebugAlertService.warning('API caída, usando caché local: ${e.toString().split('\n').first}');
+      return DatabaseService.getSupervisores();
+    }
+  }
 
-  static Future<Supervisor?> getSupervisor(String id) =>
-      _useApi ? ApiService.getSupervisor(id) : DatabaseService.getSupervisor(id);
+  static Future<Supervisor?> getSupervisor(String id) async {
+    if (useDemoData) {
+      final list = DemoDataService.getSupervisores();
+      try { return list.firstWhere((s) => s.id == id); } catch (_) { return null; }
+    }
+    if (!_useApi) return DatabaseService.getSupervisor(id);
+    try {
+      return await ApiService.getSupervisor(id);
+    } catch (e) {
+      DebugAlertService.warning('API caída, usando caché local para supervisor $id');
+      return DatabaseService.getSupervisor(id);
+    }
+  }
 
   static Future<void> insertSupervisor(Supervisor s) async {
     final destino = _useApi
@@ -47,10 +102,10 @@ class DataService {
       try {
         await ApiService.insertSupervisor(s);
         await DatabaseService.insertSupervisor(s);
-      } catch (_) {
+      } catch (e) {
         // Cache local para no perder el alta aunque la API tarde/falle.
         await DatabaseService.insertSupervisor(s);
-        rethrow;
+        DebugAlertService.warning('API inactiva, guardado offline: ${e.toString().split('\n').first}');
       }
     } else {
       await DatabaseService.insertSupervisor(s);
@@ -67,10 +122,10 @@ class DataService {
       try {
         await ApiService.insertVendedor(v);
         await DatabaseService.insertVendedor(v);
-      } catch (_) {
+      } catch (e) {
         // Cache local para no perder el alta aunque la API tarde/falle.
         await DatabaseService.insertVendedor(v);
-        rethrow;
+        DebugAlertService.warning('API inactiva, guardado offline: ${e.toString().split('\n').first}');
       }
     } else {
       await DatabaseService.insertVendedor(v);
@@ -89,32 +144,90 @@ class DataService {
     DateTime? hasta,
     String? zona,
     String? nombreContactado,
-  }) =>
-      _useApi
-          ? ApiService.getRegistroLlamadas(desde: desde, hasta: hasta, zona: zona, nombreContactado: nombreContactado)
-          : DatabaseService.getRegistroLlamadas(desde: desde, hasta: hasta, zona: zona, nombreContactado: nombreContactado);
+  }) async {
+    if (useDemoData) {
+      return DemoDataService.getRegistroLlamadas(desde: desde, hasta: hasta);
+    }
+    if (!_useApi) {
+      return DatabaseService.getRegistroLlamadas(
+        desde: desde,
+        hasta: hasta,
+        zona: zona,
+        nombreContactado: nombreContactado,
+      );
+    }
+    List<RegistroLlamada> apiList = [];
+    List<RegistroLlamada> localList = [];
+    try {
+      apiList = await ApiService.getRegistroLlamadas(
+        desde: desde,
+        hasta: hasta,
+        zona: zona,
+        nombreContactado: nombreContactado,
+      );
+    } catch (e) {
+      DebugAlertService.warning('API llamadas falló: $e');
+    }
+    try {
+      localList = await DatabaseService.getRegistroLlamadas(
+        desde: desde,
+        hasta: hasta,
+        zona: zona,
+        nombreContactado: nombreContactado,
+      );
+    } catch (e) {
+      DebugAlertService.warning('SQLite llamadas: $e');
+    }
+    final apiIds = apiList.map((l) => l.id).toSet();
+    final soloLocales = localList.where((l) => !apiIds.contains(l.id)).toList();
+    final merged = [...apiList, ...soloLocales];
+    merged.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
+    return merged;
+  }
 
   static Future<void> insertRegistroLlamada(RegistroLlamada r) async {
     final destino = _useApi ? 'API ${ApiConfig.baseUrl}/llamadas' : 'SQLite local';
-    DebugAlertService.info('Guardando llamada en: $destino');
-    await (_useApi
-        ? ApiService.insertRegistroLlamada(r)
-        : DatabaseService.insertRegistroLlamada(r));
-    DebugAlertService.success('Llamada registrada: ${r.nombreContactado}');
+    DebugAlertService.info('Intentando guardar llamada en: $destino');
+    if (_useApi) {
+      try {
+        await ApiService.insertRegistroLlamada(r);
+        // También guardamos localmente como backup proactivo
+        await DatabaseService.insertRegistroLlamada(r);
+        DebugAlertService.success('Llamada registrada: ${r.nombreContactado}');
+      } catch (e) {
+        final errorMsg = e.toString().contains('Exception:') 
+            ? e.toString().split('Exception:').last 
+            : e.toString();
+        DebugAlertService.error('Fallo API: $errorMsg');
+        DebugAlertService.warning('Guardando en SQLite local como backup...');
+        await DatabaseService.insertRegistroLlamada(r);
+      }
+    } else {
+      await DatabaseService.insertRegistroLlamada(r);
+      DebugAlertService.success('Llamada registrada localmente');
+    }
   }
 
   /// Inserta con correlación dual (punto A + punto B). Retorna (registroId, merged).
   static Future<({String registroId, bool merged})> insertRegistroLlamadaWithCorrelation(RegistroLlamada r) async {
     if (_useApi) {
-      final result = await ApiService.insertRegistroLlamadaWithCorrelation(r);
-      if (result.merged && r.rutaGrabacion != null && r.rutaGrabacion!.isNotEmpty) {
-        try {
-          await ApiService.uploadAudioPuntoB(result.registroId, r.rutaGrabacion!);
-        } catch (e) {
-          DebugAlertService.warning('No se pudo subir audio punto B: $e');
+      try {
+        final result = await ApiService.insertRegistroLlamadaWithCorrelation(r);
+        if (result.merged && r.rutaGrabacion != null && r.rutaGrabacion!.isNotEmpty) {
+          try {
+            await ApiService.uploadAudioPuntoB(result.registroId, r.rutaGrabacion!);
+          } catch (e) {
+            DebugAlertService.warning('No se pudo subir audio punto B: $e');
+          }
         }
+        return result;
+      } catch (e) {
+        final errorMsg = e.toString().contains('Exception:') 
+            ? e.toString().split('Exception:').last 
+            : e.toString();
+        DebugAlertService.error('Error Correlación API: $errorMsg');
+        rethrow;
       }
-      return result;
     }
     await DatabaseService.insertRegistroLlamada(r);
     return (registroId: r.id, merged: false);
@@ -147,14 +260,20 @@ class DataService {
         : DatabaseService.updateRegistroLlamadaRutaGrabacion(id, rutaGrabacion));
   }
 
-  static Future<List<Ppvc>> getPpvcByFecha(DateTime fecha) =>
-      _useApi ? ApiService.getPpvcByFecha(fecha) : DatabaseService.getPpvcByFecha(fecha);
+  static Future<List<Ppvc>> getPpvcByFecha(DateTime fecha) async {
+    if (useDemoData) return DemoDataService.getPpvcByFecha(fecha);
+    return _useApi ? ApiService.getPpvcByFecha(fecha) : DatabaseService.getPpvcByFecha(fecha);
+  }
 
-  static Future<List<Rvc>> getRvcByFecha(DateTime fecha) =>
-      _useApi ? ApiService.getRvcByFecha(fecha) : DatabaseService.getRvcByFecha(fecha);
+  static Future<List<Rvc>> getRvcByFecha(DateTime fecha) async {
+    if (useDemoData) return DemoDataService.getRvcByFecha(fecha);
+    return _useApi ? ApiService.getRvcByFecha(fecha) : DatabaseService.getRvcByFecha(fecha);
+  }
 
-  static Future<List<Alerta>> getAlertasPendientes() =>
-      _useApi ? ApiService.getAlertasPendientes() : DatabaseService.getAlertasPendientes();
+  static Future<List<Alerta>> getAlertasPendientes() async {
+    if (useDemoData) return DemoDataService.getAlertasPendientes();
+    return _useApi ? ApiService.getAlertasPendientes() : DatabaseService.getAlertasPendientes();
+  }
 
   static Future<void> insertAlerta(Alerta a) =>
       _useApi ? ApiService.insertAlerta(a) : DatabaseService.insertAlerta(a);
@@ -164,10 +283,14 @@ class DataService {
     required double lat,
     required double lng,
   }) async {
-    final destino = _useApi ? 'API ${ApiConfig.baseUrl}/ubicaciones' : 'SQLite local';
-    DebugAlertService.info('Guardando ubicación en: $destino');
     await (_useApi
         ? ApiService.guardarUbicacion(vendedorId: vendedorId, lat: lat, lng: lng)
         : DatabaseService.guardarUbicacion(vendedorId: vendedorId, lat: lat, lng: lng));
+  }
+
+  static Future<void> uploadAudioPuntoB(String registroId, String rutaAudio) async {
+    if (_useApi) {
+      await ApiService.uploadAudioPuntoB(registroId, rutaAudio);
+    }
   }
 }

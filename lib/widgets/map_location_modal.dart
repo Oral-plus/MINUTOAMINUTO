@@ -53,6 +53,7 @@ class MapLocationModal extends StatefulWidget {
         '?center=$lat,$lng'
         '&zoom=15'
         '&size=${w}x$h'
+        '&maptype=roadmap'
         '&markers=color:red%7C$lat,$lng'
         '&key=$_staticMapsKey';
 
@@ -92,11 +93,18 @@ class _MapLocationModalState extends State<MapLocationModal> {
 
   String _address = 'Obteniendo dirección...';
   bool _loadingAddress = true;
+  bool _mapReady = false;
 
   @override
   void initState() {
     super.initState();
     _fetchAddress();
+    // Retrasar GoogleMap hasta que el modal tenga dimensiones; mostrar estático mientras tanto
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) setState(() => _mapReady = true);
+      });
+    });
   }
 
   Future<void> _fetchAddress() async {
@@ -226,27 +234,83 @@ class _MapLocationModalState extends State<MapLocationModal> {
               borderRadius: const BorderRadius.vertical(
                 bottom: Radius.circular(0),
               ),
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: pos,
-                  zoom: 16,
-                ),
-                markers: {
-                  Marker(
-                    markerId: const MarkerId('call_location'),
-                    position: pos,
-                    infoWindow: InfoWindow(
-                      title: widget.contactName ?? 'Llamada',
-                      snippet: _loadingAddress ? 'Cargando...' : _address,
+              child:                     _mapReady
+                  ? GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: pos,
+                        zoom: 16,
+                      ),
+                      mapType: MapType.normal,
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('call_location'),
+                          position: pos,
+                          infoWindow: InfoWindow(
+                            title: widget.contactName ?? 'Llamada',
+                            snippet: _loadingAddress ? 'Cargando...' : _address,
+                          ),
+                        ),
+                      },
+                      myLocationEnabled: false,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: true,
+                      mapToolbarEnabled: true,
+                      liteModeEnabled: true,
+                    )
+                  : LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        final w = constraints.maxWidth.isFinite && constraints.maxWidth > 0
+                            ? constraints.maxWidth.toInt()
+                            : 600;
+                        final h = constraints.maxHeight.isFinite && constraints.maxHeight > 0
+                            ? constraints.maxHeight.toInt()
+                            : 400;
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            MapLocationModal.miniMap(
+                              latitude: widget.latitude,
+                              longitude: widget.longitude,
+                              width: w.toDouble(),
+                              height: h.toDouble(),
+                            ),
+                            Positioned(
+                              right: 12,
+                              bottom: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Cargando mapa interactivo...',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                  ),
-                },
-                myLocationEnabled: false,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: true,
-                mapToolbarEnabled: true,
-                liteModeEnabled: false,
-              ),
             ),
           ),
           Container(

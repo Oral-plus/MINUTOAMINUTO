@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File;
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../utils/phone_utils.dart';
@@ -11,6 +12,13 @@ import '../models/ppvc.dart';
 import '../models/rvc.dart';
 import '../models/alerta.dart';
 import 'debug_alert_service.dart';
+
+// Helper para parsear JSON en isolados (compute)
+List<T> _parseListSync<T>(Map<String, dynamic> params) {
+  final List<dynamic> list = params['list'] as List<dynamic>;
+  final T Function(Map<String, dynamic>) factory = params['factory'] as T Function(Map<String, dynamic>);
+  return list.map((item) => factory(Map<String, dynamic>.from(item as Map))).toList();
+}
 
 class ApiService {
   static const Duration _readRequestTimeout = Duration(seconds: 12);
@@ -60,57 +68,110 @@ class ApiService {
   ) async {
     Object? lastError;
     StackTrace? lastStack;
+    const bases = [ApiConfig.baseUrl, ApiConfig.fallbackBaseUrl];
 
     for (var attempt = 0; attempt <= _transientRetries; attempt++) {
-      try {
-        return await requestBuilder(_base).timeout(timeout);
-      } on TimeoutException catch (e, st) {
-        lastError = e;
-        lastStack = st;
-      } on http.ClientException catch (e, st) {
-        lastError = e;
-        lastStack = st;
+      for (final base in bases) {
+        if (base.isEmpty) continue;
+        try {
+          return await requestBuilder(base).timeout(timeout);
+        } on TimeoutException catch (e, st) {
+          lastError = e;
+          lastStack = st;
+        } on http.ClientException catch (e, st) {
+          lastError = e;
+          lastStack = st;
+        } on Exception catch (e, st) {
+          // Si es un error de formato o algo interno, no reintentamos
+          if (e.toString().contains('uri') || e.toString().contains('Argument')) {
+             rethrow;
+          }
+          lastError = e;
+          lastStack = st;
+        }
       }
-
       if (attempt < _transientRetries) {
-        await Future.delayed(Duration(milliseconds: 350 * (attempt + 1)));
+        await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
       }
     }
 
-    if (lastError != null && lastStack != null) {
-      Error.throwWithStackTrace(lastError, lastStack);
+    if (lastError != null) {
+      String userMessage = 'Error de conexión. Verifique su internet.';
+      if (lastError is TimeoutException) {
+        userMessage = 'El servidor tarda demasiado en responder. Reintentando...';
+      } else if (lastError.toString().contains('SocketException')) {
+        userMessage = 'No hay conexión con el servidor. ¿Está conectado a internet?';
+      }
+      
+      if (lastStack != null) {
+        debugPrint('API Error Detail: $lastError\n$lastStack');
+        // Lanzamos un error que contenga el mensaje amigable pero preserve el tipo si es posible
+        throw Exception(userMessage);
+      }
+      throw Exception(userMessage);
     }
-    throw Exception('Error de conexión con API LAN');
+    throw Exception('Error de red persistente. Verifique su conexión.');
   }
 
-  static Future<bool> _existsSupervisor(String id) async {
-    for (var i = 0; i < 3; i++) {
+  static void _checkResponse(http.Response r) {
+    if (r.statusCode >= 200 && r.statusCode < 300) return;
+    
+    debugPrint('API Error Detail [${r.statusCode}]: ${r.body}');
+    
+    String err = r.body.trim();
+    final lower = err.toLowerCase();
+    if (lower.startsWith('<!doctype') || lower.startsWith('<html')) {
+      err = 'Error del servidor (${r.statusCode}). Verifique la conexión o intente más tarde.';
+    } else {
       try {
-        final r = await _requestWithRetry(
-          (base) => http.get(Uri.parse('$base/supervisores/$id')),
-          timeout: _readRequestTimeout,
-        );
-        if (r.statusCode == 200) {
-          final data = jsonDecode(r.body);
-          if (data != null) return true;
+        final j = jsonDecode(err);
+        if (j is Map && j['message'] != null) {
+          err = j['message'].toString();
+        } else if (j is Map && j['error'] != null) {
+          err = j['error'].toString();
         }
       } catch (_) {}
-      await Future.delayed(Duration(milliseconds: 300 * (i + 1)));
     }
-    return false;
+    
+    // Si el error es un 400 o 500, adjuntar el código para diagnóstico rápido
+    final finalMsg = 'API Error ${r.statusCode}: $err';
+    throw Exception(finalMsg.length > 250 ? '${finalMsg.substring(0, 250)}...' : finalMsg);
   }
 
-  static Future<bool> _existsVendedor(String id) async {
+  /// Extrae una lista de la respuesta — soporta `[...]` y `{"data":[...]}` / `{"rows":[...]}`.
+  static List<dynamic> _extractList(http.Response r) {
+    final decoded = jsonDecode(r.body);
+    if (decoded is List) return decoded;
+    if (decoded is Map) {
+      for (final key in ['data', 'rows', 'items', 'results', 'records']) {
+        if (decoded[key] is List) return decoded[key] as List<dynamic>;
+      }
+    }
+    return [];
+  }
+
+  /// Extrae un mapa de la respuesta — soporta `{...}` y `{"data":{...}}`.
+  static Map<String, dynamic>? _extractMap(http.Response r) {
+    final decoded = jsonDecode(r.body);
+    if (decoded == null) return null;
+    if (decoded is Map) {
+      if (decoded.containsKey('data') && decoded['data'] is Map) {
+        return Map<String, dynamic>.from(decoded['data'] as Map);
+      }
+      return Map<String, dynamic>.from(decoded);
+    }
+    return null;
+  }
+
+  static Future<bool> _existsResource(String path) async {
     for (var i = 0; i < 3; i++) {
       try {
         final r = await _requestWithRetry(
-          (base) => http.get(Uri.parse('$base/vendedores/$id')),
+          (base) => http.get(Uri.parse('$base$path')),
           timeout: _readRequestTimeout,
         );
-        if (r.statusCode == 200) {
-          final data = jsonDecode(r.body);
-          if (data != null) return true;
-        }
+        if (r.statusCode == 200) return true;
+        if (r.statusCode == 404) return false;
       } catch (_) {}
       await Future.delayed(Duration(milliseconds: 300 * (i + 1)));
     }
@@ -119,43 +180,47 @@ class ApiService {
 
   static Future<List<Vendedor>> getVendedores() async {
     final r = await _get('/vendedores');
-    if (r.statusCode != 200) throw Exception(r.body);
-    final list = jsonDecode(r.body) as List;
-    return list.map((m) => Vendedor.fromMap(Map<String, dynamic>.from(m as Map))).toList();
+    _checkResponse(r);
+    final list = _extractList(r);
+    return compute(_parseListSync<Vendedor>, {
+      'list': list,
+      'factory': (Map<String, dynamic> m) => Vendedor.fromMap(m),
+    });
   }
 
   static Future<Vendedor?> getVendedor(String id) async {
     final r = await _get('/vendedores/$id');
-    if (r.statusCode != 200) throw Exception(r.body);
-    final data = jsonDecode(r.body);
-    return data == null ? null : Vendedor.fromMap(Map<String, dynamic>.from(data as Map));
+    _checkResponse(r);
+    final data = _extractMap(r);
+    return data == null ? null : Vendedor.fromMap(data);
   }
 
   static Future<List<Supervisor>> getSupervisores() async {
     final r = await _get('/supervisores');
-    if (r.statusCode != 200) throw Exception(r.body);
-    final list = jsonDecode(r.body) as List;
-    return list.map((m) => Supervisor.fromMap(Map<String, dynamic>.from(m as Map))).toList();
+    _checkResponse(r);
+    final list = _extractList(r);
+    return compute(_parseListSync<Supervisor>, {
+      'list': list,
+      'factory': (Map<String, dynamic> m) => Supervisor.fromMap(m),
+    });
   }
 
   static Future<Supervisor?> getSupervisor(String id) async {
     final r = await _get('/supervisores/$id');
-    if (r.statusCode != 200) throw Exception(r.body);
-    final data = jsonDecode(r.body);
-    return data == null ? null : Supervisor.fromMap(Map<String, dynamic>.from(data as Map));
+    _checkResponse(r);
+    final data = _extractMap(r);
+    return data == null ? null : Supervisor.fromMap(data);
   }
 
   static Future<void> insertSupervisor(Supervisor s) async {
     final body = s.toMap();
     try {
       final r = await _post('/supervisores', body);
-      if (r.statusCode != 200) throw Exception(r.body);
+      _checkResponse(r);
     } on TimeoutException {
-      final exists = await _existsSupervisor(s.id);
-      if (!exists) rethrow;
+      if (!await _existsResource('/supervisores/${s.id}')) rethrow;
     } on http.ClientException {
-      final exists = await _existsSupervisor(s.id);
-      if (!exists) rethrow;
+      if (!await _existsResource('/supervisores/${s.id}')) rethrow;
     }
   }
 
@@ -163,24 +228,22 @@ class ApiService {
     final body = v.toMap();
     try {
       final r = await _post('/vendedores', body);
-      if (r.statusCode != 200) throw Exception(r.body);
+      _checkResponse(r);
     } on TimeoutException {
-      final exists = await _existsVendedor(v.id);
-      if (!exists) rethrow;
+      if (!await _existsResource('/vendedores/${v.id}')) rethrow;
     } on http.ClientException {
-      final exists = await _existsVendedor(v.id);
-      if (!exists) rethrow;
+      if (!await _existsResource('/vendedores/${v.id}')) rethrow;
     }
   }
 
   static Future<void> deleteSupervisor(String id) async {
     final r = await _delete('/supervisores/$id');
-    if (r.statusCode != 200 && r.statusCode != 204) throw Exception('Error ${r.statusCode}: ${r.body}');
+    _checkResponse(r);
   }
 
   static Future<void> deleteVendedor(String id) async {
     final r = await _delete('/vendedores/$id');
-    if (r.statusCode != 200 && r.statusCode != 204) throw Exception('Error ${r.statusCode}: ${r.body}');
+    _checkResponse(r);
   }
 
   static Future<RegistroLlamada?> getRegistroLlamada(String id) async {
@@ -195,17 +258,60 @@ class ApiService {
 
   static Future<void> updateRegistroLlamadaObservaciones(String id, String observaciones) async {
     final r = await _patch('/llamadas/$id', {'observaciones': observaciones});
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
   }
 
   static Future<void> updateRegistroLlamadaTranscripcion(String id, String transcripcionTexto) async {
     final r = await _patch('/llamadas/$id', {'transcripcionTexto': transcripcionTexto});
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
+  }
+
+  /// Transcribe audio usando el endpoint /transcribe del servidor (Gemini).
+  /// Reintenta una vez en errores 5xx o timeout (fallos transitorios de la API).
+  static Future<String?> transcribeAudio(String audioBase64, String mimeType) async {
+    http.Response? lastResponse;
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final r = await _requestWithRetry(
+          (base) => http.post(
+            Uri.parse('$base/transcribe'),
+            body: jsonEncode({'audioBase64': audioBase64, 'mimeType': mimeType}),
+            headers: {'Content-Type': 'application/json'},
+          ).timeout(const Duration(seconds: 120)),
+          timeout: const Duration(seconds: 125),
+        );
+        lastResponse = r;
+        if (r.statusCode == 200) break;
+        if (r.statusCode >= 500 && r.statusCode < 600 && attempt == 0) {
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        }
+        break;
+      } catch (e) {
+        lastError = e;
+        if (attempt == 0) {
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        }
+        debugPrint('ApiService transcribe exception: $e');
+        return null;
+      }
+    }
+    final r = lastResponse;
+    if (r == null || r.statusCode != 200) {
+      debugPrint('ApiService transcribe: HTTP ${r?.statusCode} — ${r != null && r.body.length > 200 ? r.body.substring(0, 200) : r?.body ?? lastError}');
+      return null;
+    }
+    final data = jsonDecode(r.body) as Map<String, dynamic>?;
+    if (data == null || (data['success'] != true)) return null;
+    final text = data['text'] as String?;
+    return (text != null && text.trim().isNotEmpty) ? text.trim() : null;
   }
 
   static Future<void> updateRegistroLlamadaRutaGrabacion(String id, String rutaGrabacion) async {
     final r = await _patch('/llamadas/$id', {'rutaGrabacion': rutaGrabacion});
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
   }
 
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
@@ -234,10 +340,14 @@ class ApiService {
       },
       timeout: _readRequestTimeout,
     );
-    if (r.statusCode != 200) throw Exception(r.body);
-    final list = jsonDecode(r.body) as List;
+    _checkResponse(r);
+    // Server returns {value: [...], Count: N} — use _extractList to handle both List and Map formats
+    final list = _extractList(r);
     DebugAlertService.success('API OK /llamadas (${list.length} registros)');
-    return list.map((m) => _registroFromJson(m as Map)).toList();
+    return compute(_parseListSync<RegistroLlamada>, {
+      'list': list,
+      'factory': (Map<String, dynamic> m) => _registroFromJson(m),
+    });
   }
 
   static RegistroLlamada _registroFromJson(Map m) {
@@ -271,8 +381,6 @@ class ApiService {
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
       'rutaGrabacion': r.rutaGrabacion,
-      'numeroContacto': r.numeroContacto,
-      'numeroPropietario': r.numeroPropietario,
       'transcripcionTexto': r.transcripcionTexto,
     };
     final uri = Uri.parse('$_base/llamadas');
@@ -285,7 +393,7 @@ class ApiService {
       ),
       timeout: _writeRequestTimeout,
     );
-    if (res.statusCode != 200) throw Exception(res.body);
+    _checkResponse(res);
     final parsed = jsonDecode(res.body);
     if (parsed is! Map || parsed['success'] != true) {
       throw Exception('Respuesta invalida al guardar llamada: ${res.body}');
@@ -320,6 +428,8 @@ class ApiService {
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
       'rutaGrabacion': r.rutaGrabacion,
       'transcripcionTexto': r.transcripcionTexto,
+      if (r.latitud != null && r.longitud != null) 'latitud': r.latitud,
+      if (r.latitud != null && r.longitud != null) 'longitud': r.longitud,
     };
     final res = await _requestWithRetry(
       (base) => http.post(
@@ -329,7 +439,7 @@ class ApiService {
       ),
       timeout: _writeRequestTimeout,
     );
-    if (res.statusCode != 200) throw Exception(res.body);
+    _checkResponse(res);
     final parsed = jsonDecode(res.body) as Map<String, dynamic>;
     if (parsed['success'] != true) {
       throw Exception('Respuesta invalida al guardar llamada: ${res.body}');
@@ -362,7 +472,7 @@ class ApiService {
       ),
       timeout: _writeRequestTimeout,
     );
-    if (res.statusCode != 200) throw Exception(res.body);
+    _checkResponse(res);
     DebugAlertService.success('Audio punto B subido correctamente');
   }
 
@@ -375,7 +485,7 @@ class ApiService {
   static Future<Ppvc?> getPpvcHoy(String vendedorId) async {
     final hoy = DateTime.now().toIso8601String().split('T')[0];
     final r = await _get('/ppvc?vendedorId=$vendedorId&fecha=$hoy');
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
     final data = jsonDecode(r.body);
     return data == null ? null : Ppvc.fromMap(Map<String, dynamic>.from(data as Map));
   }
@@ -383,7 +493,7 @@ class ApiService {
   static Future<List<Ppvc>> getPpvcByFecha(DateTime fecha) async {
     final f = fecha.toIso8601String().split('T')[0];
     final r = await _get('/ppvc?fecha=$f');
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
     final list = jsonDecode(r.body) as List;
     return list.map((m) => Ppvc.fromMap(Map<String, dynamic>.from(m as Map))).toList();
   }
@@ -391,7 +501,7 @@ class ApiService {
   static Future<Rvc?> getRvcHoy(String vendedorId) async {
     final hoy = DateTime.now().toIso8601String().split('T')[0];
     final r = await _get('/rvc?vendedorId=$vendedorId&fecha=$hoy');
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
     final data = jsonDecode(r.body);
     return data == null ? null : Rvc.fromMap(Map<String, dynamic>.from(data as Map));
   }
@@ -399,7 +509,7 @@ class ApiService {
   static Future<List<Rvc>> getRvcByFecha(DateTime fecha) async {
     final f = fecha.toIso8601String().split('T')[0];
     final r = await _get('/rvc?fecha=$f');
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
     final list = jsonDecode(r.body) as List;
     return list.map((m) => Rvc.fromMap(Map<String, dynamic>.from(m as Map))).toList();
   }
@@ -416,12 +526,12 @@ class ApiService {
       'resuelta': a.resuelta ? 1 : 0,
     };
     final r = await _post('/alertas', body);
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
   }
 
   static Future<List<Alerta>> getAlertasPendientes() async {
     final r = await _get('/alertas?resuelta=0');
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
     final list = jsonDecode(r.body) as List;
     return list.map((m) {
       final map = Map<String, dynamic>.from(m as Map);
@@ -447,7 +557,7 @@ class ApiService {
       'timestamp': DateTime.now().toIso8601String(),
     };
     final r = await _post('/ubicaciones', body);
-    if (r.statusCode != 200) throw Exception(r.body);
+    _checkResponse(r);
   }
 
   static Future<bool> testConnection() async {

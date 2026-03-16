@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
-import '../utils/constants.dart';
 
 class BloqueAlertas extends StatelessWidget {
   const BloqueAlertas({super.key});
@@ -10,7 +9,7 @@ class BloqueAlertas extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      color: AppConstants.rojoCritico.withOpacity(0.05),
+      color: const Color(0xFFF5F5F5),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -20,12 +19,12 @@ class BloqueAlertas extends StatelessWidget {
               children: [
                 Icon(
                   Icons.warning_amber_rounded,
-                  color: AppConstants.rojoCritico,
+                  color: Colors.black87,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'BLOQUE 5 – ALERTAS CRÍTICAS',
+                  'Alertas críticas',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -50,17 +49,17 @@ class BloqueAlertas extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppConstants.verdeMeta.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppConstants.verdeMeta.withOpacity(0.5),
+                        color: Colors.black26,
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           Icons.check_circle,
-                          color: AppConstants.verdeMeta,
+                          color: Colors.black87,
                           size: 40,
                         ),
                         const SizedBox(width: 16),
@@ -87,7 +86,7 @@ class BloqueAlertas extends StatelessWidget {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: AppConstants.rojoCritico.withOpacity(0.3),
+                          color: Colors.black26,
                         ),
                       ),
                       child: Row(
@@ -95,7 +94,7 @@ class BloqueAlertas extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.error_outline,
-                            color: AppConstants.rojoCritico,
+                            color: Colors.black87,
                             size: 24,
                           ),
                           const SizedBox(width: 12),

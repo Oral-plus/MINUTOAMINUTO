@@ -46,19 +46,62 @@ class CallRecordAccessibilityService : AccessibilityService() {
         }
     }
 
+    private val guardianHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var lastRestartTime: Long = 0L
+    private var restartCount: Int = 0
+
+    private val guardianRunnable = object : Runnable {
+        override fun run() {
+            if (isRunning) {
+                checkAndRestartMonitor()
+            }
+            guardianHandler.postDelayed(this, 10_000) // Revisar cada 10 segundos
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         isRunning = true
+        guardianHandler.post(guardianRunnable)
+        android.util.Log.i("AccessibilityGuardian", "Servicio Guardián Conectado")
+    }
+
+    private fun checkAndRestartMonitor() {
+        try {
+            // Verificar si el monitoreo está habilitado en preferencias
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val enabled = prefs.getBoolean("flutter.call_monitor_enabled", false)
+            
+            if (enabled && !PhoneStateMonitorService.isRunning) {
+                val now = System.currentTimeMillis()
+                if (now - lastRestartTime < 30_000) {
+                    android.util.Log.d("AccessibilityGuardian", "Monitor detenido pero en cooldown de reinicio...")
+                    return
+                }
+                
+                android.util.Log.w("AccessibilityGuardian", "Monitor detenido. REVIVIENDO...")
+                lastRestartTime = now
+                val intent = Intent(this, PhoneStateMonitorService::class.java)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AccessibilityGuardian", "Error en guardián: ${e.message}")
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // No-op: solo necesitamos el servicio activo para permisos de audio
+        // No-op: solo necesitamos el servicio activo para permisos y como guardián
     }
 
     override fun onInterrupt() {}
 
     override fun onDestroy() {
         isRunning = false
+        guardianHandler.removeCallbacks(guardianRunnable)
         super.onDestroy()
     }
 }

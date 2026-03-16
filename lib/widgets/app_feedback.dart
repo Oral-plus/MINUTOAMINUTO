@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/constants.dart';
 
 enum FeedbackType { success, error, warning, info }
 
@@ -16,26 +15,10 @@ class AppFeedback {
     messenger.hideCurrentSnackBar();
 
     final (Color bg, Color fg, IconData icon) = switch (type) {
-      FeedbackType.success => (
-          const Color(0xFF059669),
-          Colors.white,
-          Icons.check_circle_rounded,
-        ),
-      FeedbackType.error => (
-          const Color(0xFFDC2626),
-          Colors.white,
-          Icons.error_rounded,
-        ),
-      FeedbackType.warning => (
-          const Color(0xFFF59E0B),
-          const Color(0xFF1C1917),
-          Icons.warning_amber_rounded,
-        ),
-      FeedbackType.info => (
-          const Color(0xFF2563EB),
-          Colors.white,
-          Icons.info_rounded,
-        ),
+      FeedbackType.success => (Colors.black87, Colors.white, Icons.check_circle_rounded),
+      FeedbackType.error => (Colors.black, Colors.white, Icons.error_rounded),
+      FeedbackType.warning => (Colors.black54, Colors.white, Icons.warning_amber_rounded),
+      FeedbackType.info => (Colors.black87, Colors.white, Icons.info_rounded),
     };
 
     messenger.showSnackBar(
@@ -104,13 +87,13 @@ class AppFeedback {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: (confirmColor ?? AppConstants.azulCorporativo)
+                    color: (confirmColor ?? Colors.black)
                         .withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
-                    color: confirmColor ?? AppConstants.azulCorporativo,
+                    color: confirmColor ?? Colors.black,
                     size: 26,
                   ),
                 ),
@@ -145,12 +128,12 @@ class AppFeedback {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        side: const BorderSide(color: Color(0xFFE0E0E0)),
                       ),
                       child: Text(
                         cancelLabel,
                         style: const TextStyle(
-                          color: Color(0xFF6B7280),
+                          color: Colors.black54,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -162,7 +145,7 @@ class AppFeedback {
                       onPressed: () => Navigator.pop(ctx, true),
                       style: FilledButton.styleFrom(
                         backgroundColor:
-                            confirmColor ?? AppConstants.azulCorporativo,
+                            confirmColor ?? Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -211,10 +194,10 @@ class AppEmptyState extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: const Color(0xFFF5F5F5),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 30, color: const Color(0xFF9CA3AF)),
+              child: Icon(icon, size: 30, color: Colors.black38),
             ),
             const SizedBox(height: 16),
             Text(
@@ -222,7 +205,7 @@ class AppEmptyState extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
+                color: Colors.black87,
               ),
               textAlign: TextAlign.center,
             ),
@@ -232,7 +215,7 @@ class AppEmptyState extends StatelessWidget {
                 subtitle!,
                 style: const TextStyle(
                   fontSize: 13,
-                  color: Color(0xFF9CA3AF),
+                  color: Colors.black54,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -265,7 +248,7 @@ class AppInlineLoader extends StatelessWidget {
             height: 28,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
-              color: AppConstants.azulCorporativo,
+              color: Colors.black87,
             ),
           ),
           if (label != null) ...[
@@ -274,7 +257,7 @@ class AppInlineLoader extends StatelessWidget {
               label!,
               style: const TextStyle(
                 fontSize: 12,
-                color: Color(0xFF9CA3AF),
+                color: Colors.black38,
               ),
             ),
           ],
