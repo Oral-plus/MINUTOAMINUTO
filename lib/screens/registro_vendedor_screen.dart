@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:art_sweetalert_new/art_sweetalert_new.dart';
@@ -66,8 +67,8 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
     if (_coachId == null) {
       await ArtSweetAlert.show(
         context: context,
-        title: const Text('Atención'),
-        content: const Text('Seleccione un Coach'),
+        title: Text('Atención'),
+        content: Text('Seleccione un Coach'),
         type: ArtAlertType.warning,
       );
       return;
@@ -94,8 +95,8 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
       if (mounted) {
         await ArtSweetAlert.show(
           context: context,
-          title: const Text('¡Registro exitoso!'),
-          content: const Text('Vendedor registrado correctamente.'),
+          title: Text('¡Registro exitoso!'),
+          content: Text('Vendedor registrado correctamente.'),
           type: ArtAlertType.success,
         );
         if (mounted) Navigator.pop(context);
@@ -104,7 +105,7 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
       if (mounted) {
         await ArtSweetAlert.show(
           context: context,
-          title: const Text('Error'),
+          title: Text('Error'),
           content: Text(_mensajeErrorRegistro(e)),
           type: ArtAlertType.error,
         );
@@ -124,9 +125,9 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Registrar Vendedor'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        title: Text('Registrar Vendedor'),
+        backgroundColor: context.ac.fg,
+        foregroundColor: context.ac.fg,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -141,21 +142,21 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                 textCapitalization: TextCapitalization.words,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _codigoCtrl,
                 decoration: _inputDecoration('Codigo (ej: VEN001)'),
                 textCapitalization: TextCapitalization.characters,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _zonaCtrl,
                 decoration: _inputDecoration('Zona'),
                 textCapitalization: TextCapitalization.words,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _telefonoCtrl,
                 decoration: _inputDecoration(
@@ -163,7 +164,7 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                 ).copyWith(hintText: 'Ej: 300 123 4567'),
                 keyboardType: TextInputType.phone,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               FutureBuilder<List<Supervisor>>(
                 future: _supervisoresFuture,
                 builder: (context, snap) {
@@ -193,19 +194,19 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _presupuestoMensualCtrl,
                 decoration: _inputDecoration('Presupuesto mensual'),
                 keyboardType: TextInputType.number,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _presupuestoDiarioCtrl,
                 decoration: _inputDecoration('Presupuesto diario'),
                 keyboardType: TextInputType.number,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -218,12 +219,12 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.storage_rounded,
                       size: 18,
-                      color: Colors.black87,
+                      color: context.ac.fg,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Destino de registro: ${DataService.userRegistrationDestination}',
@@ -236,26 +237,26 @@ class _RegistroVendedorScreenState extends State<RegistroVendedorScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: 32),
               FilledButton(
                 onPressed: _guardando ? null : _guardar,
                 style: FilledButton.styleFrom(
-                  backgroundColor: Colors.black,
+                  backgroundColor: context.ac.fg,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: _guardando
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 24,
                         width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: context.ac.fg,
                         ),
                       )
-                    : const Text('Guardar'),
+                    : Text('Guardar'),
               ),
             ],
           ),

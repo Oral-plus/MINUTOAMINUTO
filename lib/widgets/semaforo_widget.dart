@@ -49,7 +49,7 @@ class SemaforoWidget extends StatelessWidget {
       child: Row(
         children: [
           Icon(icono, color: color, size: 40),
-          const SizedBox(width: 16),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

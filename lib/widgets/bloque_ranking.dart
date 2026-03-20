@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -12,13 +13,12 @@ class BloqueRanking extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(color: context.ac.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: context.ac.fg.withOpacity(0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -36,8 +36,8 @@ class BloqueRanking extends StatelessWidget {
                   color: AppConstants.amarilloAdvertencia,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Text(
+                SizedBox(width: 12),
+                Text(
                   'Ranking diario',
                   style: TextStyle(
                     fontSize: 18,
@@ -46,12 +46,12 @@ class BloqueRanking extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: context.read<AppProvider>().obtenerRankingVendedores(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Padding(
+                  return Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: AppLoadingIndicator(
                       logoHeight: 84,
@@ -80,14 +80,14 @@ class BloqueRanking extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Top 5 Vendedores',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     ...ranking.take(5).toList().asMap().entries.map((e) {
                       final i = e.key;
                       final r = e.value;
@@ -102,15 +102,15 @@ class BloqueRanking extends StatelessWidget {
                         esTop: true,
                       );
                     }),
-                    const SizedBox(height: 24),
-                    const Text(
+                    SizedBox(height: 24),
+                    Text(
                       'Bottom 5',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     ...(() {
                       final start = ranking.length > 5 ? ranking.length - 5 : 0;
                       final bottom = ranking.sublist(start).reversed.toList();
@@ -185,20 +185,20 @@ class _RankingItem extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               '$posicion',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.ac.fg,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   nombre,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),

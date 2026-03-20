@@ -11,10 +11,10 @@ class DebugAlertService {
   static final Map<String, DateTime> _lastByMessage = <String, DateTime>{};
   static bool _showing = false;
 
-  static void info(String message) => _enqueue(message, Colors.black87);
-  static void success(String message) => _enqueue(message, Colors.black54);
-  static void warning(String message) => _enqueue(message, Colors.black54);
-  static void error(String message) => _enqueue(message, Colors.black);
+  static void info(String message) => _enqueue(message, const Color(0xFFFFFFFF));
+  static void success(String message) => _enqueue(message, const Color(0x99FFFFFF));
+  static void warning(String message) => _enqueue(message, const Color(0x99FFFFFF));
+  static void error(String message) => _enqueue(message, const Color(0xFFFFFFFF));
 
   static void _enqueue(String message, Color color) {
     if (!enabled) return;

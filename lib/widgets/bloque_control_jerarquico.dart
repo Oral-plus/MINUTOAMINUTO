@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -9,13 +10,12 @@ class BloqueControlJerarquico extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(color: context.ac.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: context.ac.fg.withOpacity(0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -33,8 +33,8 @@ class BloqueControlJerarquico extends StatelessWidget {
                   color: AppConstants.azulCorporativo,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
+                SizedBox(width: 12),
+                Expanded(
                   child: Text(
                     'Control jerárquico',
                     style: TextStyle(
@@ -45,7 +45,7 @@ class BloqueControlJerarquico extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '¿Los líderes están liderando?',
               style: TextStyle(
@@ -53,7 +53,7 @@ class BloqueControlJerarquico extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Consumer<AppProvider>(
               builder: (context, provider, _) {
                 return Column(
@@ -63,13 +63,13 @@ class BloqueControlJerarquico extends StatelessWidget {
                       descripcion: '% llamadas realizadas | % equipo cumplimiento > 90%',
                       pct: provider.porcentajeLlamadasCoach,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     _NivelControl(
                       titulo: 'KAM',
                       descripcion: '% revisiones PPVC | % revisiones RVC | Alertas abiertas',
                       pct: provider.porcentajeLlamadasCoach,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     _NivelControl(
                       titulo: 'Jefe de Ventas',
                       descripcion: '% supervisores auditados | Consolidado disciplina',
@@ -115,7 +115,7 @@ class _NivelControl extends StatelessWidget {
       child: Row(
         children: [
           Icon(Icons.person, color: color, size: 32),
-          const SizedBox(width: 16),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,7 +128,7 @@ class _NivelControl extends StatelessWidget {
                     color: color,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   descripcion,
                   style: TextStyle(

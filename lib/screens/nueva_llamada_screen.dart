@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -56,8 +57,8 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nueva Llamada'),
-        backgroundColor: Colors.white,
+        title: Text('Nueva Llamada'),
+        backgroundColor: context.ac.bg,
         foregroundColor: const Color(0xFF1F2937),
       ),
       body: Stack(
@@ -69,11 +70,11 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
+                  Text(
                     'Tipo de llamada',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     children: TipoLlamada.values.map((t) {
@@ -84,7 +85,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   InkWell(
                     onTap: () {
                       Navigator.push(
@@ -105,7 +106,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   ValueListenableBuilder<DateTime>(
                     valueListenable: _horaInicio,
                     builder: (context, inicio, _) {
@@ -115,15 +116,15 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Inicio de llamada'),
-                              const SizedBox(height: 8),
+                              Text('Inicio de llamada'),
+                              SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     '${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -146,8 +147,8 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                                         );
                                       }
                                     },
-                                    icon: const Icon(Icons.schedule),
-                                    label: const Text('Cambiar'),
+                                    icon: Icon(Icons.schedule),
+                                    label: Text('Cambiar'),
                                   ),
                                 ],
                               ),
@@ -157,9 +158,9 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                       );
                     },
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   TextFormField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Nombre contactado *',
                       border: OutlineInputBorder(),
                     ),
@@ -167,12 +168,12 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                         (v == null || v.isEmpty) ? 'Obligatorio' : null,
                     onSaved: (v) => _nombreContactado = v ?? '',
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Clientes programados',
                             border: OutlineInputBorder(),
                           ),
@@ -182,10 +183,10 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                               int.tryParse(v ?? '0') ?? 0,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       Expanded(
                         child: TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Clientes visitados',
                             border: OutlineInputBorder(),
                           ),
@@ -197,12 +198,12 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Venta del día',
                             border: OutlineInputBorder(),
                             prefixText: '\$ ',
@@ -213,10 +214,10 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                               _ventaDia = double.tryParse(v ?? '0') ?? 0,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       Expanded(
                         child: TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Recaudo del día',
                             border: OutlineInputBorder(),
                             prefixText: '\$ ',
@@ -229,23 +230,23 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   SwitchListTile(
-                    title: const Text('¿Cumplió meta del día?'),
+                    title: Text('¿Cumplió meta del día?'),
                     value: _cumplioMeta,
                     onChanged: (v) => setState(() => _cumplioMeta = v),
                   ),
                   SwitchListTile(
-                    title: const Text('Coincidencia PPVC-RVC'),
+                    title: Text('Coincidencia PPVC-RVC'),
                     value: _coincidenciaPpvcRvc,
                     onChanged: (v) => setState(() => _coincidenciaPpvcRvc = v),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Conversión 60',
                             border: OutlineInputBorder(),
                           ),
@@ -255,10 +256,10 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                               _conversion60 = int.tryParse(v ?? '0') ?? 0,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       Expanded(
                         child: TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Recuperación perdidos',
                             border: OutlineInputBorder(),
                           ),
@@ -270,9 +271,9 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   TextFormField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Observaciones',
                       border: OutlineInputBorder(),
                       alignLabelWithHint: true,
@@ -280,13 +281,13 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                     maxLines: 3,
                     onSaved: (v) => _observaciones = v ?? '',
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   Card(
                     color: _confirmacionVeracidad
                         ? AppConstants.verdeMeta.withOpacity(0.1)
                         : null,
                     child: CheckboxListTile(
-                      title: const Text(
+                      title: Text(
                         'Confirmo que la información registrada es veraz y corresponde a la llamada realizada.',
                         style: TextStyle(fontWeight: FontWeight.w500),
                       ),
@@ -295,7 +296,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                           setState(() => _confirmacionVeracidad = v ?? false),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   FilledButton(
                     onPressed: () => _guardar(context),
                     style: FilledButton.styleFrom(
@@ -305,7 +306,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text('Registrar llamada'),
+                    child: Text('Registrar llamada'),
                   ),
                 ],
               ),
@@ -395,8 +396,8 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                   result.retrying ? Icons.cloud_upload : Icons.check_circle,
                   color: result.retrying ? Colors.orange : Colors.green,
                 ),
-                const SizedBox(width: 10),
-                const Text('Llamada registrada', style: TextStyle(fontSize: 16)),
+                SizedBox(width: 10),
+                Text('Llamada registrada', style: TextStyle(fontSize: 16)),
               ],
             ),
             content: Column(
@@ -408,16 +409,16 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                 _infoRow('GPS', result.hasGps ? '✅ Coordenadas capturadas' : '❌ Sin GPS (permiso denegado)'),
                 _infoRow('Sync', '✅ Servidor actualizado'),
                 if (result.hasGps && lat != null && lng != null) ...[
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Text('📍 ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
-                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                      style: TextStyle(fontSize: 11, color: Colors.grey)),
                 ],
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
+                child: Text('OK'),
               ),
             ],
           ),
@@ -430,7 +431,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Row(
+            title: Row(
               children: [
                 Icon(Icons.error, color: Colors.red),
                 SizedBox(width: 10),
@@ -445,7 +446,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Entendido'),
+                child: Text('Entendido'),
               ),
             ],
           ),
@@ -462,10 +463,10 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            child: Text(label, style: TextStyle(fontSize: 11, color: Colors.grey)),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            child: Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

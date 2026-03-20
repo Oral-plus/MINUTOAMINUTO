@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:art_sweetalert_new/art_sweetalert_new.dart';
@@ -44,8 +45,8 @@ class _SetupScreenState extends State<SetupScreen> {
       if (ok) {
         await ArtSweetAlert.show(
           context: context,
-          title: const Text('API conectada'),
-          content: const Text('La conexión con el servidor está funcionando correctamente.'),
+          title: Text('API conectada'),
+          content: Text('La conexión con el servidor está funcionando correctamente.'),
           type: ArtAlertType.success,
         );
       }
@@ -87,7 +88,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -110,31 +111,31 @@ class _SetupScreenState extends State<SetupScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: context.ac.fg.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.settings_applications,
                                 size: 48,
-                                color: Colors.white,
+                                color: context.ac.fg,
                               ),
                             ),
-                            const SizedBox(height: 24),
-                            const Text(
+                            SizedBox(height: 24),
+                            Text(
                               'Configuración inicial',
                               style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: context.ac.fg,
                                 letterSpacing: 0.5,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               'Registre su equipo de ventas para comenzar',
                               style: TextStyle(
                                 fontSize: 16,
-                                color: Colors.white.withOpacity(0.9),
+                                color: context.ac.fg.withOpacity(0.9),
                               ),
                             ),
                           ],
@@ -145,12 +146,11 @@ class _SetupScreenState extends State<SetupScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                          decoration: BoxDecoration(color: context.ac.surface,
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.12),
+                                color: context.ac.fg.withOpacity(0.12),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
@@ -218,23 +218,23 @@ class _SetupScreenState extends State<SetupScreen> {
                                           ),
                                         );
                                       },
-                                icon: const Icon(Icons.login),
-                                label: const Text('Ir a Inicio de sesión'),
+                                icon: Icon(Icons.login),
+                                label: Text('Ir a Inicio de sesión'),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.black,
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: context.ac.fg,
+                                  foregroundColor: context.ac.fg,
                                   padding: const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  textStyle: const TextStyle(
+                                  textStyle: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: 12),
                             TextButton(
                               onPressed: () {
                                 Navigator.push(
@@ -244,7 +244,7 @@ class _SetupScreenState extends State<SetupScreen> {
                                   ),
                                 ).then((_) => _cargar());
                               },
-                              child: const Text('Administrar todo'),
+                              child: Text('Administrar todo'),
                             ),
                           ],
                         ),
@@ -300,14 +300,14 @@ class _TarjetaRegistro extends StatelessWidget {
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.08),
+          color: context.ac.fg.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icono, color: Colors.black, size: 24),
+        child: Icon(icono, color: context.ac.fg, size: 24),
       ),
       title: Text(
         titulo,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 16,
         ),
@@ -324,8 +324,8 @@ class _TarjetaRegistro extends StatelessWidget {
       trailing: FilledButton.tonal(
         onPressed: onAgregar,
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.black.withOpacity(0.1),
-          foregroundColor: Colors.black,
+          backgroundColor: context.ac.fg.withOpacity(0.1),
+          foregroundColor: context.ac.fg,
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
         child: Text(vacio ? 'Agregar' : 'Añadir otro'),

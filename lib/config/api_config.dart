@@ -30,6 +30,6 @@ class ApiConfig {
   ///   flutter build apk --dart-define=GEMINI_API_KEY=TU_CLAVE
   static const String geminiApiKey = String.fromEnvironment(
     'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyAkQv8RTOs510d2ag3Kkk0eIYjLj2DbfPQ', // API Key proporcionada por el usuario para transcripción directa rápida
+    defaultValue: 'AIzaSyAOkxbh1vWEmE_xipowG_9JhM0nTscj5iQ', // Nueva clave generada con la cuenta principal
   );
 }

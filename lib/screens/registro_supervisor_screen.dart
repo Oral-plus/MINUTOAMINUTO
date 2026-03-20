@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:art_sweetalert_new/art_sweetalert_new.dart';
@@ -96,7 +97,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
       if (mounted) {
         await ArtSweetAlert.show(
           context: context,
-          title: const Text('¡Registro exitoso!'),
+          title: Text('¡Registro exitoso!'),
           content: Text('${_cargo.displayName} registrado correctamente.'),
           type: ArtAlertType.success,
         );
@@ -106,7 +107,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
       if (mounted) {
         await ArtSweetAlert.show(
           context: context,
-          title: const Text('Error'),
+          title: Text('Error'),
           content: Text(_mensajeErrorRegistro(e)),
           type: ArtAlertType.error,
         );
@@ -127,8 +128,8 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Registrar ${_cargo.displayName}'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: context.ac.fg,
+        foregroundColor: context.ac.fg,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -151,14 +152,14 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                     .toList(),
                 onChanged: (v) => setState(() => _cargo = v ?? _cargo),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _nombreCtrl,
                 decoration: _inputDecoration('Nombre completo'),
                 textCapitalization: TextCapitalization.words,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _codigoCtrl,
                 decoration: _inputDecoration(
@@ -167,14 +168,14 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                 textCapitalization: TextCapitalization.characters,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _zonaCtrl,
                 decoration: _inputDecoration('Zona (ej: Norte, Nacional)'),
                 textCapitalization: TextCapitalization.words,
                 validator: (v) => (v ?? '').trim().isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextFormField(
                 controller: _telefonoCtrl,
                 decoration: _inputDecoration(
@@ -183,7 +184,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                 keyboardType: TextInputType.phone,
               ),
               if (_cargo != NivelCargo.jefe) ...[
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 FutureBuilder<List<Supervisor>>(
                   future: _supervisoresFuture,
                   builder: (context, snap) {
@@ -219,7 +220,7 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                   },
                 ),
               ],
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -232,12 +233,12 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.storage_rounded,
                       size: 18,
-                      color: Colors.black87,
+                      color: context.ac.fg,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Destino de registro: ${DataService.userRegistrationDestination}',
@@ -250,26 +251,26 @@ class _RegistroSupervisorScreenState extends State<RegistroSupervisorScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: 32),
               FilledButton(
                 onPressed: _guardando ? null : _guardar,
                 style: FilledButton.styleFrom(
-                  backgroundColor: Colors.black,
+                  backgroundColor: context.ac.fg,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: _guardando
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 24,
                         width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: context.ac.fg,
                         ),
                       )
-                    : const Text('Guardar'),
+                    : Text('Guardar'),
               ),
             ],
           ),

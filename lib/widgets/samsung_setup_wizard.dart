@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -89,7 +90,7 @@ class _SamsungWizardDialogState extends State<_SamsungWizardDialog> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF141414),
+          color: context.ac.surfaceAlt,
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: cur['color'].withOpacity(0.3), width: 2),
           boxShadow: [
@@ -116,30 +117,30 @@ class _SamsungWizardDialogState extends State<_SamsungWizardDialog> {
                 color: cur['color'],
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
 
             // Text
             Text(
               cur['title'],
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.ac.fg,
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Text(
               cur['desc'],
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: context.ac.fg.withOpacity(0.7),
                 fontSize: 15,
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: 32),
 
             // Indicators
             Row(
@@ -152,13 +153,13 @@ class _SamsungWizardDialogState extends State<_SamsungWizardDialog> {
                   width: active ? 24 : 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: active ? cur['color'] : Colors.white24,
+                    color: active ? cur['color'] : context.ac.fg.withOpacity(0.24),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
               }),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: 32),
 
             // Buttons
             Row(
@@ -167,12 +168,12 @@ class _SamsungWizardDialogState extends State<_SamsungWizardDialog> {
                   Expanded(
                     child: TextButton(
                       onPressed: () => setState(() => _step--),
-                      child: const Text('Atrás', style: TextStyle(color: Colors.white54)),
+                      child: Text('Atrás', style: TextStyle(color: context.ac.fg.withOpacity(0.54))),
                     ),
                   )
                 else
                   const Spacer(),
-                const SizedBox(width: 16),
+                SizedBox(width: 16),
                 Expanded(
                   flex: 2,
                   child: FilledButton(
@@ -185,7 +186,7 @@ class _SamsungWizardDialogState extends State<_SamsungWizardDialog> {
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: cur['color'],
-                      foregroundColor: Colors.white,
+                      foregroundColor: context.ac.fg,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -193,7 +194,7 @@ class _SamsungWizardDialogState extends State<_SamsungWizardDialog> {
                     ),
                     child: Text(
                       isLast ? '¡Entendido, a configurar!' : 'Siguiente',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
                       ),

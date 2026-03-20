@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -143,8 +144,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     if (nombre.isEmpty) {
       await ArtSweetAlert.show(
         context: context,
-        title: const Text('Nombre requerido'),
-        content: const Text('Por favor selecciona tu nombre de la lista.'),
+        title: Text('Nombre requerido'),
+        content: Text('Por favor selecciona tu nombre de la lista.'),
         type: ArtAlertType.warning,
       );
       return;
@@ -176,8 +177,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           setState(() => _loading = false);
           await ArtSweetAlert.show(
             context: context,
-            title: const Text('Credenciales incorrectas'),
-            content: const Text('No se encontró ningún usuario con ese nombre y código.\nVerifique sus datos o contacte al administrador.'),
+            title: Text('Credenciales incorrectas'),
+            content: Text('No se encontró ningún usuario con ese nombre y código.\nVerifique sus datos o contacte al administrador.'),
             type: ArtAlertType.error,
           );
         }
@@ -206,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         setState(() => _loading = false);
         await ArtSweetAlert.show(
           context: context,
-          title: const Text('Error de conexión'),
+          title: Text('Error de conexión'),
           content: Text(e.toString().replaceFirst('Exception: ', '')),
           type: ArtAlertType.error,
         );
@@ -230,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 width: 350, height: 350,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [Colors.white.withOpacity(0.035), Colors.transparent]),
+                  gradient: RadialGradient(colors: [context.ac.fg.withOpacity(0.035), Colors.transparent]),
                 ),
               ),
             ),
@@ -240,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 width: 280, height: 280,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [Colors.white.withOpacity(0.025), Colors.transparent]),
+                  gradient: RadialGradient(colors: [context.ac.fg.withOpacity(0.025), Colors.transparent]),
                 ),
               ),
             ),
@@ -257,21 +258,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         height: MediaQuery.of(context).size.height * 0.12,
                         fit: BoxFit.contain,
                         filterQuality: FilterQuality.high,
-                        errorBuilder: (_, _, _) => const Icon(Icons.schedule_rounded, size: 52, color: Colors.white),
+                        errorBuilder: (_, _, _) => Icon(Icons.schedule_rounded, size: 52, color: context.ac.fg),
                       ),
-                      const SizedBox(height: 28),
-                      const Text(
+                      SizedBox(height: 28),
+                      Text(
                         'MINUTO A MINUTO',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 5),
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: context.ac.fg, letterSpacing: 5),
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       Text(
                         'SEGUIMIENTO · PPVC · RVC',
-                        style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.25), letterSpacing: 3),
+                        style: TextStyle(fontSize: 10, color: context.ac.fg.withOpacity(0.25), letterSpacing: 3),
                       ),
-                      const SizedBox(height: 18),
+                      SizedBox(height: 18),
                       _ApiStatusChip(estado: _conexion),
-                      const SizedBox(height: 40),
+                      SizedBox(height: 40),
 
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 420),
@@ -280,9 +281,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           decoration: BoxDecoration(
                             color: const Color(0xFF131313),
                             borderRadius: BorderRadius.circular(28),
-                            border: Border.all(color: Colors.white.withOpacity(0.09)),
+                            border: Border.all(color: context.ac.fg.withOpacity(0.09)),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 50, offset: const Offset(0, 16)),
+                              BoxShadow(color: context.ac.fg.withOpacity(0.6), blurRadius: 50, offset: const Offset(0, 16)),
                             ],
                           ),
                           child: Form(
@@ -296,31 +297,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     Container(
                                       width: 42, height: 42,
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.06),
+                                        color: context.ac.fg.withOpacity(0.06),
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                                        border: Border.all(color: context.ac.fg.withOpacity(0.08)),
                                       ),
-                                      child: const Icon(Icons.lock_outline_rounded, color: Colors.white70, size: 20),
+                                      child: Icon(Icons.lock_outline_rounded, color: context.ac.fg.withOpacity(0.7), size: 20),
                                     ),
-                                    const SizedBox(width: 14),
+                                    SizedBox(width: 14),
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Iniciar Sesión',
-                                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+                                        Text('Iniciar Sesión',
+                                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.ac.fg)),
                                         Text('Selecciona tu cargo y nombre',
-                                            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.35))),
+                                            style: TextStyle(fontSize: 12, color: context.ac.fg.withOpacity(0.35))),
                                       ],
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 24),
+                                SizedBox(height: 24),
 
                                 // Selector de cargo
                                 Text('TU CARGO',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10,
+                                    style: TextStyle(color: context.ac.fg.withOpacity(0.3), fontSize: 10,
                                         fontWeight: FontWeight.w700, letterSpacing: 2)),
-                                const SizedBox(height: 10),
+                                SizedBox(height: 10),
                                 Wrap(
                                   spacing: 8, runSpacing: 8,
                                   children: _CargoLogin.values.map((c) {
@@ -334,20 +335,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         duration: const Duration(milliseconds: 180),
                                         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                                         decoration: BoxDecoration(
-                                          color: sel ? Colors.white : Colors.white.withOpacity(0.05),
+                                          color: sel ? context.ac.fg : context.ac.fg.withOpacity(0.05),
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
-                                              color: sel ? Colors.white : Colors.white.withOpacity(0.12)),
+                                              color: sel ? context.ac.fg : context.ac.fg.withOpacity(0.12)),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(c.icon, size: 13,
-                                                color: sel ? Colors.black : Colors.white54),
-                                            const SizedBox(width: 6),
+                                                color: sel ? context.ac.fg : context.ac.fg.withOpacity(0.54)),
+                                            SizedBox(width: 6),
                                             Text(c.label,
                                                 style: TextStyle(
-                                                    color: sel ? Colors.black : Colors.white70,
+                                                    color: sel ? context.ac.fg : context.ac.fg.withOpacity(0.7),
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w600)),
                                           ],
@@ -356,20 +357,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     );
                                   }).toList(),
                                 ),
-                                const SizedBox(height: 20),
+                                SizedBox(height: 20),
 
                                 // Nombre
                                 Text('TU NOMBRE',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10,
+                                    style: TextStyle(color: context.ac.fg.withOpacity(0.3), fontSize: 10,
                                         fontWeight: FontWeight.w700, letterSpacing: 2)),
-                                const SizedBox(height: 10),
+                                SizedBox(height: 10),
 
                                 if (_cargo.sapKey.isNotEmpty && !_sapFallback) ...[
                                   if (_loadingSap)
-                                    const Padding(
+                                    Padding(
                                       padding: EdgeInsets.symmetric(vertical: 16),
                                       child: Center(
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white38)),
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: context.ac.fgSubtle)),
                                     )
                                   else if (_nombresSap.isNotEmpty)
                                     _SapDropdown(
@@ -403,19 +404,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       child: Row(
                                         children: [
                                           IconButton(
-                                            icon: Icon(Icons.refresh_rounded, size: 14, color: Colors.white30),
+                                            icon: Icon(Icons.refresh_rounded, size: 14, color: context.ac.fgSubtle),
                                             onPressed: _cargarNombresSap,
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
                                           ),
-                                          const SizedBox(width: 4),
+                                          SizedBox(width: 4),
                                           Text('Cargar lista desde SAP',
-                                              style: TextStyle(color: Colors.white30, fontSize: 11)),
+                                              style: TextStyle(color: context.ac.fgSubtle, fontSize: 11)),
                                         ],
                                       ),
                                     ),
                                 ],
-                                const SizedBox(height: 14),
+                                SizedBox(height: 14),
 
                                 // Campo código
                                 _DarkField(
@@ -427,13 +428,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   suffixIcon: IconButton(
                                     icon: Icon(
                                       _showCodigo ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                      color: Colors.white30, size: 20,
+                                      color: context.ac.fgSubtle, size: 20,
                                     ),
                                     onPressed: () => setState(() => _showCodigo = !_showCodigo),
                                   ),
                                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa tu código' : null,
                                 ),
-                                const SizedBox(height: 24),
+                                SizedBox(height: 24),
 
                                 _PremiumButton(
                                   label: _loading ? 'Verificando...' : 'Ingresar',
@@ -441,12 +442,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   loading: _loading,
                                   onPressed: () => _login(context),
                                 ),
-                                const SizedBox(height: 14),
+                                SizedBox(height: 14),
                                 TextButton(
                                   onPressed: () => Navigator.pushReplacement(
                                     context, MaterialPageRoute(builder: (_) => const SetupScreen())),
                                   child: Text('Configurar equipo →',
-                                      style: TextStyle(color: Colors.white.withOpacity(0.28), fontSize: 13)),
+                                      style: TextStyle(color: context.ac.fg.withOpacity(0.28), fontSize: 13)),
                                 ),
                               ],
                             ),
@@ -480,12 +481,12 @@ class _SapDropdown extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.03),
+          color: context.ac.fg.withOpacity(0.03),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: context.ac.fg.withOpacity(0.1)),
         ),
         child: Text('No se encontraron nombres en SAP',
-            style: TextStyle(color: Colors.white38, fontSize: 13)),
+            style: TextStyle(color: context.ac.fgSubtle, fontSize: 13)),
       );
     }
     return Container(
@@ -493,17 +494,17 @@ class _SapDropdown extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0D0D0D),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(selected != null ? 0.35 : 0.1)),
+        border: Border.all(color: context.ac.fg.withOpacity(selected != null ? 0.35 : 0.1)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: selected,
           isExpanded: true,
           hint: Text('Selecciona tu nombre',
-              style: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 13)),
+              style: TextStyle(color: context.ac.fg.withOpacity(0.25), fontSize: 13)),
           dropdownColor: const Color(0xFF1A1A1A),
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-          icon: Icon(Icons.expand_more_rounded, color: Colors.white.withOpacity(0.4)),
+          style: TextStyle(color: context.ac.fg, fontSize: 14),
+          icon: Icon(Icons.expand_more_rounded, color: context.ac.fg.withOpacity(0.4)),
           items: nombres.map((n) => DropdownMenuItem(
             value: n,
             child: Text(n, overflow: TextOverflow.ellipsis),
@@ -544,35 +545,35 @@ class _DarkField extends StatelessWidget {
       controller: controller,
       obscureText: obscureText,
       textCapitalization: textCapitalization,
-      style: const TextStyle(color: Colors.white, fontSize: 15),
+      style: TextStyle(color: context.ac.fg, fontSize: 15),
       validator: validator,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 13),
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.18), fontSize: 13),
-        prefixIcon: Icon(prefixIcon, color: Colors.white30, size: 20),
+        labelStyle: TextStyle(color: context.ac.fg.withOpacity(0.35), fontSize: 13),
+        hintStyle: TextStyle(color: context.ac.fg.withOpacity(0.18), fontSize: 13),
+        prefixIcon: Icon(prefixIcon, color: context.ac.fgSubtle, size: 20),
         suffixIcon: suffixIcon,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+          borderSide: BorderSide(color: context.ac.fg.withOpacity(0.1)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.35)),
+          borderSide: BorderSide(color: context.ac.fg.withOpacity(0.35)),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFEF5350)),
+          borderSide: BorderSide(color: Color(0xFFEF5350)),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFEF5350)),
+          borderSide: BorderSide(color: Color(0xFFEF5350)),
         ),
         filled: true,
         fillColor: const Color(0xFF0D0D0D),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        errorStyle: const TextStyle(color: Color(0xFFEF5350), fontSize: 11),
+        errorStyle: TextStyle(color: Color(0xFFEF5350), fontSize: 11),
       ),
     );
   }
@@ -602,7 +603,7 @@ class _ApiStatusChipState extends State<_ApiStatusChip> with SingleTickerProvide
   Widget build(BuildContext context) {
     final isChecking = widget.estado == _ConexionEstado.comprobando;
     final isOk       = widget.estado == _ConexionEstado.conectado;
-    final dotColor   = isChecking ? Colors.white38 : isOk ? const Color(0xFF4CAF50) : const Color(0xFFE53935);
+    final dotColor   = isChecking ? context.ac.fgSubtle : isOk ? const Color(0xFF4CAF50) : const Color(0xFFE53935);
     final label      = isChecking ? 'Verificando conexión...' : isOk ? 'API conectada' : 'Sin conexión al servidor';
     final icon       = isChecking ? Icons.compare_arrows_rounded : isOk ? Icons.cloud_done_outlined : Icons.cloud_off_outlined;
 
@@ -611,10 +612,10 @@ class _ApiStatusChipState extends State<_ApiStatusChip> with SingleTickerProvide
       builder: (_, _) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF151515),
+          color: context.ac.surfaceAlt,
           borderRadius: BorderRadius.circular(30),
           border: Border.all(
-            color: isChecking ? Colors.white12 : isOk
+            color: isChecking ? context.ac.border : isOk
                 ? const Color(0xFF4CAF50).withOpacity(0.3)
                 : const Color(0xFFE53935).withOpacity(0.3),
           ),
@@ -623,22 +624,22 @@ class _ApiStatusChipState extends State<_ApiStatusChip> with SingleTickerProvide
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isChecking)
-              const SizedBox(width: 10, height: 10,
-                  child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white38))
+              SizedBox(width: 10, height: 10,
+                  child: CircularProgressIndicator(strokeWidth: 1.5, color: context.ac.fgSubtle))
             else
               Opacity(
                 opacity: 0.5 + _pulse.value * 0.5,
                 child: Container(width: 8, height: 8,
                     decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
               ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Icon(icon, size: 14,
-                color: isChecking ? Colors.white38 : isOk ? const Color(0xFF66BB6A) : const Color(0xFFEF5350)),
-            const SizedBox(width: 6),
+                color: isChecking ? context.ac.fgSubtle : isOk ? const Color(0xFF66BB6A) : const Color(0xFFEF5350)),
+            SizedBox(width: 6),
             Text(label,
                 style: TextStyle(
                     fontSize: 12,
-                    color: isChecking ? Colors.white38 : isOk ? const Color(0xFF66BB6A) : const Color(0xFFEF5350),
+                    color: isChecking ? context.ac.fgSubtle : isOk ? const Color(0xFF66BB6A) : const Color(0xFFEF5350),
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.3)),
           ],
@@ -665,19 +666,19 @@ class _PremiumButton extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 17),
         decoration: BoxDecoration(
-          color: enabled ? Colors.white : Colors.white12,
+          color: enabled ? context.ac.fg : context.ac.border,
           borderRadius: BorderRadius.circular(16),
           boxShadow: enabled
-              ? [BoxShadow(color: Colors.white.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))]
+              ? [BoxShadow(color: context.ac.fg.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))]
               : [],
         ),
         child: loading
-            ? const Center(child: SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black54)))
+            ? Center(child: SizedBox(width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: context.ac.fg.withOpacity(0.54))))
             : Text(label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: enabled ? Colors.black : Colors.white30,
+                    color: enabled ? context.ac.fg : context.ac.fgSubtle,
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     letterSpacing: 0.5)),

@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -20,10 +21,10 @@ class BloqueContactosCartera extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF121212),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.07)),
+            border: Border.all(color: context.ac.fg.withOpacity(0.07)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.4),
+                color: context.ac.fg.withOpacity(0.4),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -38,24 +39,24 @@ class BloqueContactosCartera extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
+                      color: context.ac.fg.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       Icons.people_alt_rounded,
-                      color: Colors.white.withOpacity(0.7),
+                      color: context.ac.fg.withOpacity(0.7),
                       size: 18,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'A QUIÉN LLAMAR',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: context.ac.fg,
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.5,
@@ -64,7 +65,7 @@ class BloqueContactosCartera extends StatelessWidget {
                         Text(
                           'Cartera de $cargo • ${contactos.length} contactos',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.35),
+                            color: context.ac.fg.withOpacity(0.35),
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
@@ -77,7 +78,7 @@ class BloqueContactosCartera extends StatelessWidget {
                     onPressed: () => context.read<AppProvider>().recargarDashboard(),
                     icon: Icon(
                       Icons.refresh_rounded,
-                      color: Colors.white.withOpacity(0.3),
+                      color: context.ac.fg.withOpacity(0.3),
                       size: 18,
                     ),
                     padding: EdgeInsets.zero,
@@ -87,10 +88,10 @@ class BloqueContactosCartera extends StatelessWidget {
               ),
 
               if (contactos.isEmpty) ...[
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 _EmptyState(),
               ] else ...[
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 // Lista de contactos
                 ...contactos.take(50).map((c) => _ContactoTile(contacto: c)),
                 if (contactos.length > 50)
@@ -99,7 +100,7 @@ class BloqueContactosCartera extends StatelessWidget {
                     child: Text(
                       '+ ${contactos.length - 50} más en cartera',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.25),
+                        color: context.ac.fg.withOpacity(0.25),
                         fontSize: 11,
                       ),
                     ),
@@ -121,12 +122,12 @@ class _EmptyState extends StatelessWidget {
       alignment: Alignment.center,
       child: Column(
         children: [
-          Icon(Icons.people_outline_rounded, size: 40, color: Colors.white.withOpacity(0.1)),
-          const SizedBox(height: 10),
+          Icon(Icons.people_outline_rounded, size: 40, color: context.ac.fg.withOpacity(0.1)),
+          SizedBox(height: 10),
           Text(
             'Cargando contactos de SAP...',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.25),
+              color: context.ac.fg.withOpacity(0.25),
               fontSize: 12,
             ),
           ),
@@ -146,9 +147,9 @@ class _ContactoTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
+        color: context.ac.fg.withOpacity(0.03),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: context.ac.fg.withOpacity(0.05)),
       ),
       child: Row(
         children: [
@@ -157,7 +158,7 @@ class _ContactoTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.07),
+              color: context.ac.fg.withOpacity(0.07),
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
@@ -165,32 +166,32 @@ class _ContactoTile extends StatelessWidget {
               contacto.nombreMostrar.isNotEmpty
                   ? contacto.nombreMostrar[0].toUpperCase()
                   : '?',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.ac.fg,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   contacto.nombreMostrar,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.ac.fg,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   'Vendedor: ${contacto.slpName}',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.35),
+                    color: context.ac.fg.withOpacity(0.35),
                     fontSize: 10,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -225,18 +226,18 @@ class _Chip extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 3),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: context.ac.fg.withOpacity(0.05),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 9, color: Colors.white.withOpacity(0.35)),
-          const SizedBox(width: 4),
+          Icon(icon, size: 9, color: context.ac.fg.withOpacity(0.35)),
+          SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.45),
+              color: context.ac.fg.withOpacity(0.45),
               fontSize: 9,
               fontWeight: FontWeight.w600,
             ),

@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -9,7 +10,7 @@ class BloqueAlertas extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      color: const Color(0xFFF5F5F5),
+      color: context.ac.surfaceAlt,
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -19,11 +20,11 @@ class BloqueAlertas extends StatelessWidget {
               children: [
                 Icon(
                   Icons.warning_amber_rounded,
-                  color: Colors.black87,
+                  color: context.ac.fg,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Text(
+                SizedBox(width: 12),
+                Text(
                   'Alertas críticas',
                   style: TextStyle(
                     fontSize: 18,
@@ -32,7 +33,7 @@ class BloqueAlertas extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               'Lista priorizada de situaciones a atender',
               style: TextStyle(
@@ -40,7 +41,7 @@ class BloqueAlertas extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Consumer<AppProvider>(
               builder: (context, provider, _) {
                 final alertas = provider.alertas;
@@ -49,21 +50,21 @@ class BloqueAlertas extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.05),
+                      color: context.ac.fg.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.black26,
+                        color: context.ac.fg.withOpacity(0.26),
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           Icons.check_circle,
-                          color: Colors.black87,
+                          color: context.ac.fg,
                           size: 40,
                         ),
-                        const SizedBox(width: 16),
-                        const Expanded(
+                        SizedBox(width: 16),
+                        Expanded(
                           child: Text(
                             'Sin alertas críticas pendientes',
                             style: TextStyle(
@@ -82,11 +83,10 @@ class BloqueAlertas extends StatelessWidget {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(color: context.ac.surface,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.black26,
+                          color: context.ac.fg.withOpacity(0.26),
                         ),
                       ),
                       child: Row(
@@ -94,22 +94,22 @@ class BloqueAlertas extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.error_outline,
-                            color: Colors.black87,
+                            color: context.ac.fg,
                             size: 24,
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   a.titulo,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                SizedBox(height: 4),
                                 Text(
                                   a.mensaje,
                                   style: TextStyle(

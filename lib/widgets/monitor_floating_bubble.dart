@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
@@ -120,7 +121,7 @@ class _MonitorFloatingBubbleState extends State<MonitorFloatingBubble>
                             BoxShadow(
                               color: _isRecording
                                   ? const Color(0xFFE53935).withOpacity(0.5)
-                                  : Colors.black.withOpacity(0.4),
+                                  : context.ac.fg.withOpacity(0.4),
                               blurRadius: _isRecording ? 18 : 12,
                               spreadRadius: _isRecording ? 2 : 0,
                               offset: const Offset(0, 4),
@@ -129,7 +130,7 @@ class _MonitorFloatingBubbleState extends State<MonitorFloatingBubble>
                         ),
                         child: Icon(
                           _isRecording ? Icons.mic_rounded : Icons.shield_outlined,
-                          color: Colors.white,
+                          color: context.ac.fg,
                           size: 26,
                         ),
                       ),
@@ -145,7 +146,7 @@ class _MonitorFloatingBubbleState extends State<MonitorFloatingBubble>
                           decoration: BoxDecoration(
                             color: const Color(0xFFFF1744),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
+                            border: Border.all(color: context.ac.fg, width: 1.5),
                           ),
                         ),
                       ),

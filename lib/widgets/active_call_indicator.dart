@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../services/call_monitor_service.dart';
 import 'dart:math';
@@ -15,8 +16,7 @@ class ActiveCallIndicator extends StatelessWidget {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.black87,
+          decoration: BoxDecoration(color: context.ac.surface,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
@@ -30,15 +30,15 @@ class ActiveCallIndicator extends StatelessWidget {
           child: Row(
             children: [
               const _RecordingPulseIcon(),
-              const SizedBox(width: 12),
-              const Expanded(
+              SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Grabación en curso...',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.ac.fg,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -46,14 +46,14 @@ class ActiveCallIndicator extends StatelessWidget {
                     Text(
                       'Capturando audio de la llamada (Micófono y Altavoz)',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: context.ac.fg.withOpacity(0.7),
                         fontSize: 12,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               const _AudioWaveform(),
             ],
           ),

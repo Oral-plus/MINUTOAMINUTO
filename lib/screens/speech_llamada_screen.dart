@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../models/tipo_llamada.dart';
 import '../utils/constants.dart';
@@ -17,7 +18,7 @@ class SpeechLlamadaScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('Speech - ${tipoLlamada.displayName}'),
         backgroundColor: AppConstants.azulCorporativo,
-        foregroundColor: Colors.white,
+        foregroundColor: context.ac.fg,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -29,16 +30,16 @@ class SpeechLlamadaScreen extends StatelessWidget {
               contenido: tipoLlamada.objetivo,
               icono: Icons.flag,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             ..._preguntasParaTipo(tipoLlamada),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             _Seccion(
               titulo: 'Cierre',
               contenido: _cierreParaTipo(tipoLlamada),
               icono: Icons.check_circle,
               color: AppConstants.verdeMeta,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
               'Duración ideal: 3-5 minutos',
               style: TextStyle(
@@ -139,7 +140,7 @@ class _Seccion extends StatelessWidget {
             Row(
               children: [
                 Icon(icono, color: c),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Text(
                   titulo,
                   style: TextStyle(
@@ -150,10 +151,10 @@ class _Seccion extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Text(
               contenido,
-              style: const TextStyle(fontSize: 16, height: 1.5),
+              style: TextStyle(fontSize: 16, height: 1.5),
             ),
           ],
         ),
@@ -174,12 +175,12 @@ class _Pregunta extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-          const SizedBox(width: 12),
+          Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               texto,
-              style: const TextStyle(fontSize: 16),
+              style: TextStyle(fontSize: 16),
             ),
           ),
         ],

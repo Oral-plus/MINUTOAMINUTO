@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../models/supervisor.dart';
 import '../models/vendedor.dart';
@@ -109,15 +110,15 @@ class _AdminScreenState extends State<AdminScreen>
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: context.ac.bg,
       appBar: AppBar(
-        title: const Text('Administracion de Equipo'),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF111827),
+        title: Text('Administracion de Equipo'),
+        backgroundColor: context.ac.bg,
+        foregroundColor: context.ac.fg,
         actions: [
           IconButton(
             onPressed: _cargar,
-            icon: const Icon(Icons.refresh_rounded),
+            icon: Icon(Icons.refresh_rounded),
             tooltip: 'Actualizar',
           ),
         ],
@@ -134,8 +135,7 @@ class _AdminScreenState extends State<AdminScreen>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
+                    decoration: BoxDecoration(color: context.ac.surface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE0E0E0)),
                     ),
@@ -143,7 +143,7 @@ class _AdminScreenState extends State<AdminScreen>
                       controller: _tabController,
                       indicatorColor: AppConstants.azulCorporativo,
                       labelColor: AppConstants.azulCorporativo,
-                      unselectedLabelColor: Colors.black54,
+                      unselectedLabelColor: context.ac.fgSubtle,
                       tabs: const [
                         Tab(
                           text: 'Supervisores',
@@ -157,7 +157,7 @@ class _AdminScreenState extends State<AdminScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
@@ -214,8 +214,8 @@ class _ResumenAdmin extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.black87, Colors.black54],
+        gradient: LinearGradient(
+          colors: [context.ac.surface, context.ac.surfaceAlt],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -223,13 +223,13 @@ class _ResumenAdmin extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.groups_rounded, color: Colors.white, size: 28),
-          const SizedBox(width: 12),
+          Icon(Icons.groups_rounded, color: context.ac.fg, size: 28),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               '$totalSupervisores supervisores - $totalVendedores vendedores',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.ac.fg,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -264,8 +264,8 @@ class _ListaSupervisores extends StatelessWidget {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: onAgregar,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Agregar supervisor'),
+              icon: Icon(Icons.add_rounded),
+              label: Text('Agregar supervisor'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppConstants.azulCorporativo,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -322,8 +322,8 @@ class _ListaVendedores extends StatelessWidget {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: coaches.isEmpty ? null : onAgregar,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Agregar vendedor'),
+              icon: Icon(Icons.add_rounded),
+              label: Text('Agregar vendedor'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppConstants.azulCorporativo,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -332,11 +332,11 @@ class _ListaVendedores extends StatelessWidget {
           ),
         ),
         if (coaches.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Text(
               'Primero registra al menos un Coach para crear vendedores.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              style: TextStyle(fontSize: 12, color: context.ac.fgSubtle),
             ),
           ),
         Expanded(
@@ -383,10 +383,9 @@ class _SupervisorTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(color: context.ac.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: context.ac.border),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -394,7 +393,7 @@ class _SupervisorTile extends StatelessWidget {
           backgroundColor: AppConstants.azulCorporativo.withOpacity(0.12),
           child: Text(
             s.cargo.displayName[0],
-            style: const TextStyle(
+            style: TextStyle(
               color: AppConstants.azulCorporativo,
               fontWeight: FontWeight.w700,
             ),
@@ -402,18 +401,18 @@ class _SupervisorTile extends StatelessWidget {
         ),
         title: Text(
           s.nombre,
-          style: const TextStyle(
-            color: Color(0xFF111827),
+          style: TextStyle(
+            color: context.ac.fg,
             fontWeight: FontWeight.w700,
           ),
         ),
         subtitle: Text(
           '${s.codigo} Â· ${s.zona} Â· ${s.cargo.displayName}',
-          style: const TextStyle(fontSize: 12),
+          style: TextStyle(fontSize: 12),
         ),
         trailing: IconButton(
           onPressed: () => onEliminar(s),
-          icon: const Icon(
+          icon: Icon(
             Icons.delete_outline_rounded,
             color: AppConstants.rojoCritico,
           ),
@@ -438,31 +437,30 @@ class _VendedorTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(color: context.ac.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: context.ac.border),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: CircleAvatar(
           backgroundColor: AppConstants.verdeMeta.withOpacity(0.12),
-          child: const Icon(Icons.person_rounded, color: AppConstants.verdeMeta),
+          child: Icon(Icons.person_rounded, color: AppConstants.verdeMeta),
         ),
         title: Text(
           v.nombre,
-          style: const TextStyle(
-            color: Color(0xFF111827),
+          style: TextStyle(
+            color: context.ac.fg,
             fontWeight: FontWeight.w700,
           ),
         ),
         subtitle: Text(
           '${v.codigo} Â· ${v.zona}${coachNombre != null ? ' Â· Coach: $coachNombre' : ''}',
-          style: const TextStyle(fontSize: 12),
+          style: TextStyle(fontSize: 12),
         ),
         trailing: IconButton(
           onPressed: () => onEliminar(v),
-          icon: const Icon(
+          icon: Icon(
             Icons.delete_outline_rounded,
             color: AppConstants.rojoCritico,
           ),

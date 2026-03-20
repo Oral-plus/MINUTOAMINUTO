@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/call_saving_progress_service.dart';
@@ -86,7 +87,7 @@ class SavingBanner extends StatelessWidget {
         ? const Color(0xFFE53935)
         : isDone
             ? const Color(0xFF43A047)
-            : Colors.white;
+            : context.ac.fg;
 
     final IconData icon = isError
         ? Icons.error_outline_rounded
@@ -103,13 +104,13 @@ class SavingBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
+              color: context.ac.fg.withOpacity(0.4),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
           ],
           border: Border.all(
-            color: Colors.white.withOpacity(0.07),
+            color: context.ac.fg.withOpacity(0.07),
           ),
         ),
         child: Column(
@@ -126,12 +127,12 @@ class SavingBanner extends StatelessWidget {
                   ),
                   child: Icon(icon, color: accent, size: 18),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     progress.message,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.ac.fg,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                       height: 1.3,
@@ -142,7 +143,7 @@ class SavingBanner extends StatelessWidget {
                   Text(
                     '${(progress.percent * 100).toInt()}%',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                      color: context.ac.fg.withOpacity(0.5),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -150,13 +151,13 @@ class SavingBanner extends StatelessWidget {
               ],
             ),
             if (!isDone && !isError) ...[
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: progress.percent,
-                  backgroundColor: Colors.white.withOpacity(0.08),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  backgroundColor: context.ac.bg.withOpacity(0.08),
+                  valueColor: AlwaysStoppedAnimation<Color>(context.ac.fg),
                   minHeight: 4,
                 ),
               ),

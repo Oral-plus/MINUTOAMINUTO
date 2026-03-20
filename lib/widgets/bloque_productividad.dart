@@ -24,8 +24,8 @@ class BloqueProductividad extends StatelessWidget {
                   color: AppConstants.verdeMeta,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Text(
+                SizedBox(width: 12),
+                Text(
                   'BLOQUE 2 – PRODUCTIVIDAD DEL DÍA',
                   style: TextStyle(
                     fontSize: 18,
@@ -34,7 +34,7 @@ class BloqueProductividad extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '¿Estamos produciendo?',
               style: TextStyle(
@@ -42,12 +42,12 @@ class BloqueProductividad extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             FutureBuilder<Map<String, dynamic>>(
               future: context.read<AppProvider>().obtenerMetricasProductividad(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Padding(
+                  return Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: AppLoadingIndicator(
                       logoHeight: 84,
@@ -71,7 +71,7 @@ class BloqueProductividad extends StatelessWidget {
                       valor: '\$${NumberFormat('#,##0').format(ventaTotal)}',
                       color: AppConstants.verdeMeta,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _Metrica(
                       label: '% Presupuesto diario cumplido',
                       valor: '${pctPresup.toStringAsFixed(1)}%',
@@ -81,18 +81,18 @@ class BloqueProductividad extends StatelessWidget {
                               ? AppConstants.amarilloAdvertencia
                               : AppConstants.rojoCritico,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _Metrica(
                       label: 'Recaudo del día',
                       valor: '\$${NumberFormat('#,##0').format(recaudoTotal)}',
                       color: AppConstants.azulCorporativo,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _Metrica(
                       label: 'Ticket promedio',
                       valor: '\$${NumberFormat('#,##0').format(ticketPromedio)}',
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _Metrica(
                       label: 'Clientes visitados vs programados',
                       valor:
@@ -137,7 +137,7 @@ class _Metrica extends StatelessWidget {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: color ?? Colors.black87,
+            color: color ?? context.ac.fg,
           ),
         ),
       ],

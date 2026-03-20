@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// Banner premium que aparece en la parte superior cuando se graba una llamada.
@@ -44,13 +45,13 @@ class _RecordingOverlayState extends State<RecordingOverlay>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               colors: [Color(0xFF1A1A1A), Color(0xFF2D2D2D)],
             ),
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: context.ac.fg.withOpacity(0.3),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -67,25 +68,25 @@ class _RecordingOverlayState extends State<RecordingOverlay>
                   child: Container(
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Color(0xFFE53935),
                       shape: BoxShape.circle,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              const Text(
+              SizedBox(width: 10),
+              Text(
                 'GRABANDO',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: context.ac.fg,
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
                   letterSpacing: 2.5,
                 ),
               ),
-              const SizedBox(width: 10),
-              const Icon(Icons.mic_rounded, color: Color(0xFFE53935), size: 16),
+              SizedBox(width: 10),
+              Icon(Icons.mic_rounded, color: Color(0xFFE53935), size: 16),
             ],
           ),
         ),

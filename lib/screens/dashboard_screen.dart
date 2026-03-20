@@ -42,15 +42,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
               errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.schedule_rounded, color: Colors.white70),
+                  Icon(Icons.schedule_rounded, color: context.ac.fg.withOpacity(0.7)),
             ),
-            const SizedBox(width: 12),
-            const Flexible(
+            SizedBox(width: 12),
+            Flexible(
               child: Text(
                 'MINUTO A MINUTO',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: context.ac.fg,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5,
@@ -59,8 +59,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF0D0D0D),
-        foregroundColor: Colors.white,
+        backgroundColor: context.ac.bg,
+        foregroundColor: context.ac.fg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
@@ -80,13 +80,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 _DemoBanner(provider: provider),
                 const _BatteryShieldBanner(),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _DashboardHeader(
                   nombre: nombre,
                   totalLlamadas: totalLlamadas,
                   totalAlertas: totalAlertas,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -94,48 +94,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         icono: Icons.call_rounded,
                         titulo: 'Llamadas',
                         valor: '$totalLlamadas',
-                        color: Colors.black87,
+                        color: context.ac.fg,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Expanded(
                       child: _StatCard(
                         icono: Icons.warning_amber_rounded,
                         titulo: 'Alertas',
                         valor: '$totalAlertas',
                         color: totalAlertas == 0
-                            ? Colors.black54
-                            : Colors.black87,
+                            ? context.ac.fgSubtle
+                            : context.ac.fg,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Expanded(
                       child: _StatCard(
                         icono: Icons.shield_rounded,
                         titulo: 'Monitor',
                         valor: monitorActivo ? 'Activo' : 'Inactivo',
                         color: monitorActivo
-                            ? Colors.black87
-                            : Colors.black54,
+                            ? context.ac.fg
+                            : context.ac.fgSubtle,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueDisciplina(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloquePpvcRvc(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueEquipoJerarquico(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueControlJerarquico(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueAlertas(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueVendedoresSap(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueContactosCartera(),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 const BloqueRanking(),
               ],
             );
@@ -170,7 +170,7 @@ class _DemoBanner extends StatelessWidget {
             color: enDemo ? Colors.amber : Colors.blue.shade300,
             size: 20,
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               enDemo
@@ -227,7 +227,7 @@ class _DashboardHeader extends StatelessWidget {
         border: Border.all(color: ac.fg.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(context.isDark ? 0.5 : 0.1),
+            color: context.ac.fg.withOpacity(context.isDark ? 0.5 : 0.1),
             blurRadius: 40,
             offset: const Offset(0, 20),
           ),
@@ -256,7 +256,7 @@ class _DashboardHeader extends StatelessWidget {
                   letterSpacing: 3,
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Text(
                 nombre,
                 style: TextStyle(
@@ -266,14 +266,14 @@ class _DashboardHeader extends StatelessWidget {
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
               Row(
                 children: [
                   _HeaderChip(
                     icon: Icons.call_rounded,
                     label: '$totalLlamadas Llamadas',
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   _HeaderChip(
                     icon: Icons.notifications_active_rounded,
                     label: '$totalAlertas Alertas',
@@ -309,7 +309,7 @@ class _HeaderChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: color ?? fg.withOpacity(0.5)),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
@@ -348,7 +348,7 @@ class _StatCard extends StatelessWidget {
         border: Border.all(color: ac.fg.withOpacity(0.06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: context.ac.fg.withOpacity(0.15),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -365,7 +365,7 @@ class _StatCard extends StatelessWidget {
             ),
             child: Icon(icono, size: 16, color: ac.fg.withOpacity(0.6)),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Text(
             valor,
             style: TextStyle(
@@ -375,7 +375,7 @@ class _StatCard extends StatelessWidget {
               letterSpacing: -0.8,
             ),
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2),
           Text(
             titulo.toUpperCase(),
             style: TextStyle(
@@ -410,9 +410,9 @@ class _BatteryShieldBanner extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.battery_alert_rounded, color: Colors.redAccent, size: 20),
-              const SizedBox(width: 12),
-              const Expanded(
+              Icon(Icons.battery_alert_rounded, color: Colors.redAccent, size: 20),
+              SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -426,7 +426,7 @@ class _BatteryShieldBanner extends StatelessWidget {
                     ),
                     Text(
                       'Android puede cerrar el monitor. Toca "Blindar" y elige "Sin Restricción".',
-                      style: TextStyle(fontSize: 10, color: Colors.white70),
+                      style: TextStyle(fontSize: 10, color: context.ac.fg.withOpacity(0.7)),
                     ),
                   ],
                 ),
@@ -438,7 +438,7 @@ class _BatteryShieldBanner extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text(
+                child: Text(
                   'Blindar',
                   style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
                 ),

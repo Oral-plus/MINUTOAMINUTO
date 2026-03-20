@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../services/data_service.dart';
 import '../utils/constants.dart';
@@ -9,13 +10,12 @@ class BloquePpvcRvc extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(color: context.ac.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: context.ac.fg.withOpacity(0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -33,8 +33,8 @@ class BloquePpvcRvc extends StatelessWidget {
                   color: AppConstants.azulCorporativo,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
+                SizedBox(width: 12),
+                Expanded(
                   child: Text(
                     'Ejecución PPVC vs RVC',
                     style: TextStyle(
@@ -45,7 +45,7 @@ class BloquePpvcRvc extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '¿Se está ejecutando lo planeado?',
               style: TextStyle(
@@ -53,12 +53,12 @@ class BloquePpvcRvc extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             FutureBuilder(
               future: _calcularMetricas(context),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Padding(
+                  return Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: AppLoadingIndicator(
                       logoHeight: 84,
@@ -76,7 +76,7 @@ class BloquePpvcRvc extends StatelessWidget {
                       pct: m['pctEjecucion'],
                       meta: AppConstants.metaClientesProgramadosVsVisitados,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _Indicador(
                       label: 'Coincidencia PPVC-RVC',
                       valor: m['coincidencia'].toStringAsFixed(1),
@@ -151,17 +151,17 @@ class _Indicador extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(fontSize: 14),
+            style: TextStyle(fontSize: 14),
           ),
         ),
         Text(
           valor,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Text(
           '${pct.toStringAsFixed(1)}%',
           style: TextStyle(

@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -129,7 +130,7 @@ class _DiagPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: context.ac.fg.withOpacity(0.07)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -141,7 +142,7 @@ class _DiagPanel extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: context.ac.fg.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -169,25 +170,25 @@ class _DiagPanel extends StatelessWidget {
                         size: 20,
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Diagnóstico de llamada',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: context.ac.fg),
                           ),
                           Text(
                             '${data.timestamp.hour.toString().padLeft(2,'0')}:${data.timestamp.minute.toString().padLeft(2,'0')} · ${data.timestamp.day}/${data.timestamp.month}/${data.timestamp.year}',
-                            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.35)),
+                            style: TextStyle(fontSize: 12, color: context.ac.fg.withOpacity(0.35)),
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
 
                 // Donde se guardó
                 _DiagRow(
@@ -198,21 +199,21 @@ class _DiagPanel extends StatelessWidget {
                       : 'Local SQLite (sin conexión)',
                   valueColor: apiOk ? const Color(0xFF4ADE80) : const Color(0xFFFBBF24),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 _DiagRow(
                   icon: Icons.person_outline,
                   label: 'Contacto',
                   value: data.nombreContactado,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 _DiagRow(
                   icon: Icons.timer_outlined,
                   label: 'Duración',
                   value: '${data.duracionMinutos} min',
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 _DiagRow(
                   icon: Icons.tag_rounded,
@@ -222,7 +223,7 @@ class _DiagPanel extends StatelessWidget {
                 ),
 
                 if (hasAudio) ...[
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   _DiagRow(
                     icon: Icons.mic_rounded,
                     label: 'Audio guardado en',
@@ -231,17 +232,17 @@ class _DiagPanel extends StatelessWidget {
                     valueColor: const Color(0xFF4ADE80),
                   ),
                 ] else ...[
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   _DiagRow(
                     icon: Icons.mic_off_rounded,
                     label: 'Audio',
                     value: 'Sin grabación de audio',
-                    valueColor: Colors.white38,
+                    valueColor: context.ac.fg.withOpacity(0.38),
                   ),
                 ],
 
                 if (hasError) ...[
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -252,12 +253,12 @@ class _DiagPanel extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.error_outline, color: Color(0xFFEF9A9A), size: 16),
-                        const SizedBox(width: 8),
+                        Icon(Icons.error_outline, color: Color(0xFFEF9A9A), size: 16),
+                        SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             data.errorMsg!,
-                            style: const TextStyle(fontSize: 12, color: Color(0xFFEF9A9A), height: 1.4),
+                            style: TextStyle(fontSize: 12, color: Color(0xFFEF9A9A), height: 1.4),
                           ),
                         ),
                       ],
@@ -265,20 +266,20 @@ class _DiagPanel extends StatelessWidget {
                   ),
                 ],
 
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.white38,
+                      foregroundColor: context.ac.fgSubtle,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: Colors.white.withOpacity(0.08)),
+                        side: BorderSide(color: context.ac.fg.withOpacity(0.08)),
                       ),
                     ),
-                    child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w600)),
+                    child: Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -310,19 +311,19 @@ class _DiagRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.white30),
-        const SizedBox(width: 10),
+        Icon(icon, size: 16, color: context.ac.fgSubtle),
+        SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35), fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-              const SizedBox(height: 2),
+              Text(label, style: TextStyle(fontSize: 11, color: context.ac.fg.withOpacity(0.35), fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              SizedBox(height: 2),
               Text(
                 value,
                 style: TextStyle(
                   fontSize: small ? 11 : 13,
-                  color: valueColor ?? Colors.white.withOpacity(0.75),
+                  color: valueColor ?? context.ac.fg.withOpacity(0.75),
                   fontFamily: small ? 'monospace' : null,
                   height: 1.4,
                 ),

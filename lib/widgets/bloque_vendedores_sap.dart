@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -19,12 +20,12 @@ class BloqueVendedoresSap extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.groups_rounded, color: Colors.white38, size: 16),
-                  const SizedBox(width: 8),
+                  Icon(Icons.groups_rounded, color: context.ac.fgSubtle, size: 16),
+                  SizedBox(width: 8),
                   Text(
                      'MI EQUIPO (SAP)',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.3),
+                      color: context.ac.fg.withOpacity(0.3),
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 2,
@@ -35,12 +36,12 @@ class BloqueVendedoresSap extends StatelessWidget {
             ),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF151515),
+                color: context.ac.surfaceAlt,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                border: Border.all(color: context.ac.fg.withOpacity(0.08)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: context.ac.fg.withOpacity(0.2),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -51,7 +52,7 @@ class BloqueVendedoresSap extends StatelessWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: vendedores.length,
                 separatorBuilder: (_, _) => Divider(
-                  color: Colors.white.withOpacity(0.04),
+                  color: context.ac.fg.withOpacity(0.04),
                   height: 1,
                   indent: 16,
                   endIndent: 16,
@@ -64,16 +65,16 @@ class BloqueVendedoresSap extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
+                        color: context.ac.fg.withOpacity(0.05),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        border: Border.all(color: context.ac.fg.withOpacity(0.05)),
                       ),
-                      child: const Icon(Icons.person_rounded, color: Colors.white30, size: 20),
+                      child: Icon(Icons.person_rounded, color: context.ac.fgSubtle, size: 20),
                     ),
                     title: Text(
                       nombre,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.ac.fg,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -83,7 +84,7 @@ class BloqueVendedoresSap extends StatelessWidget {
                         SnackBar(
                           content: Text('Vendedor: $nombre'),
                           duration: const Duration(seconds: 1),
-                          backgroundColor: Colors.black87,
+                          backgroundColor: context.ac.fg,
                         ),
                       );
                     },

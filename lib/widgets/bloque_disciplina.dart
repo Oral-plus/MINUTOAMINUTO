@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -10,13 +11,12 @@ class BloqueDisciplina extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(color: context.ac.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: context.ac.fg.withOpacity(0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -34,8 +34,8 @@ class BloqueDisciplina extends StatelessWidget {
                   color: AppConstants.azulCorporativo,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Text(
+                SizedBox(width: 12),
+                Text(
                   'Disciplina operativa',
                   style: TextStyle(
                     fontSize: 18,
@@ -44,7 +44,7 @@ class BloqueDisciplina extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '¿El equipo está cumpliendo el procedimiento?',
               style: TextStyle(
@@ -52,7 +52,7 @@ class BloqueDisciplina extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Consumer<AppProvider>(
               builder: (context, provider, _) {
                 final pctLlamadas = provider.porcentajeLlamadasCoach;
@@ -67,19 +67,19 @@ class BloqueDisciplina extends StatelessWidget {
                       valor: pctLlamadas,
                       meta: AppConstants.metaLlamadasCoach,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _IndicadorKPI(
                       label: '% Inicio jornada antes 8:30 am',
                       valor: pctInicio,
                       meta: AppConstants.metaInicioJornada,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _IndicadorKPI(
                       label: '% Geolocalización activa',
                       valor: pctGeo,
                       meta: AppConstants.metaGeolocalizacion,
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                     SemaforoWidget(
                       estado: semaforo,
                       label: 'Semáforo general',
@@ -113,7 +113,7 @@ class _IndicadorKPI extends StatelessWidget {
       children: [
         Expanded(
           flex: 3,
-          child: Text(label, style: const TextStyle(fontSize: 14)),
+          child: Text(label, style: TextStyle(fontSize: 14)),
         ),
         Expanded(
           child: Text(
@@ -125,7 +125,7 @@ class _IndicadorKPI extends StatelessWidget {
             textAlign: TextAlign.right,
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Text(
           'Meta: ${meta.toStringAsFixed(0)}%',
           style: TextStyle(

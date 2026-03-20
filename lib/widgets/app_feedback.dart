@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 
 enum FeedbackType { success, error, warning, info }
@@ -15,10 +16,10 @@ class AppFeedback {
     messenger.hideCurrentSnackBar();
 
     final (Color bg, Color fg, IconData icon) = switch (type) {
-      FeedbackType.success => (Colors.black87, Colors.white, Icons.check_circle_rounded),
-      FeedbackType.error => (Colors.black, Colors.white, Icons.error_rounded),
-      FeedbackType.warning => (Colors.black54, Colors.white, Icons.warning_amber_rounded),
-      FeedbackType.info => (Colors.black87, Colors.white, Icons.info_rounded),
+      FeedbackType.success => (context.ac.surface, context.ac.fg, Icons.check_circle_rounded),
+      FeedbackType.error => (context.ac.surface, context.ac.fg, Icons.error_rounded),
+      FeedbackType.warning => (context.ac.surfaceAlt, context.ac.fg, Icons.warning_amber_rounded),
+      FeedbackType.info => (context.ac.surface, context.ac.fg, Icons.info_rounded),
     };
 
     messenger.showSnackBar(
@@ -26,7 +27,7 @@ class AppFeedback {
         content: Row(
           children: [
             Icon(icon, color: fg, size: 20),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: Text(
                 message,
@@ -87,37 +88,37 @@ class AppFeedback {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: (confirmColor ?? Colors.black)
+                    color: (confirmColor ?? context.ac.surfaceAlt)
                         .withOpacity(0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
-                    color: confirmColor ?? Colors.black,
+                    color: confirmColor ?? context.ac.fg,
                     size: 26,
                   ),
                 ),
-              if (icon != null) const SizedBox(height: 16),
+              if (icon != null) SizedBox(height: 16),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+                  color: context.ac.fg,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(
                 message,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13.5,
-                  color: Color(0xFF6B7280),
+                  color: context.ac.fgSubtle,
                   height: 1.45,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
@@ -128,24 +129,24 @@ class AppFeedback {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: BorderSide(color: Color(0xFFE0E0E0)),
                       ),
                       child: Text(
                         cancelLabel,
-                        style: const TextStyle(
-                          color: Colors.black54,
+                        style: TextStyle(
+                          color: context.ac.fg.withOpacity(0.54),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
                       style: FilledButton.styleFrom(
                         backgroundColor:
-                            confirmColor ?? Colors.black,
+                            confirmColor ?? context.ac.fg,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -153,7 +154,7 @@ class AppFeedback {
                       ),
                       child: Text(
                         confirmLabel,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -194,34 +195,34 @@ class AppEmptyState extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
+                color: context.ac.surfaceAlt,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 30, color: Colors.black38),
+              child: Icon(icon, size: 30, color: context.ac.fgSubtle),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: context.ac.fg,
               ),
               textAlign: TextAlign.center,
             ),
             if (subtitle != null) ...[
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
                 subtitle!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: Colors.black54,
+                  color: context.ac.fg.withOpacity(0.54),
                 ),
                 textAlign: TextAlign.center,
               ),
             ],
             if (action != null) ...[
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               action!,
             ],
           ],
@@ -248,16 +249,16 @@ class AppInlineLoader extends StatelessWidget {
             height: 28,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
-              color: Colors.black87,
+              color: context.ac.fg,
             ),
           ),
           if (label != null) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text(
               label!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: Colors.black38,
+                color: context.ac.fgSubtle,
               ),
             ),
           ],

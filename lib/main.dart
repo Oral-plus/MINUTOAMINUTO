@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart' show FlutterError, kIsWeb, defaultTargetPlatform, TargetPlatform;
@@ -6,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
 import 'utils/constants.dart';
-import 'utils/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/call_saving_progress_service.dart';
@@ -55,15 +55,15 @@ void main() {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  const Text('Error Crítico de Inicio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                  Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  SizedBox(height: 16),
+                  Text('Error Crítico de Inicio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
                   Text(error.toString(), textAlign: TextAlign.center),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () => main(),
-                    child: const Text('Reintentar'),
+                    child: Text('Reintentar'),
                   ),
                 ],
               ),
@@ -160,42 +160,42 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.cloud_off_rounded,
                             size: 80,
-                            color: Colors.black26,
+                            color: context.ac.fg.withOpacity(0.26),
                           ),
-                          const SizedBox(height: 24),
-                          const Text(
+                          SizedBox(height: 24),
+                          Text(
                             'No se pudo conectar',
                             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           Text(
                             provider.initError!,
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                           ),
-                          const SizedBox(height: 32),
+                          SizedBox(height: 32),
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
                               onPressed: () => provider.init(force: true),
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('Reintentar Conexión'),
+                              icon: Icon(Icons.refresh_rounded),
+                              label: Text('Reintentar Conexión'),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           TextButton.icon(
                             onPressed: () async {
                               final confirm = await showDialog<bool>(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
-                                  title: const Text('¿Limpiar datos locales?'),
-                                  content: const Text('Esto cerrará tu sesión y borrará el caché para solucionar problemas persistentes.'),
+                                  title: Text('¿Limpiar datos locales?'),
+                                  content: Text('Esto cerrará tu sesión y borrará el caché para solucionar problemas persistentes.'),
                                   actions: [
-                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Limpiar')),
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancelar')),
+                                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Limpiar')),
                                   ],
                                 ),
                               );
@@ -204,8 +204,8 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
                                 provider.init(force: true);
                               }
                             },
-                            icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                            label: const Text('Limpiar Caché y Reiniciar'),
+                            icon: Icon(Icons.delete_sweep_outlined, size: 18),
+                            label: Text('Limpiar Caché y Reiniciar'),
                           ),
                         ],
                       ),

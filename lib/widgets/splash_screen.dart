@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -130,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
                               borderRadius: BorderRadius.circular(80),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.white.withOpacity(_glowPulse.value * 0.12),
+                                  color: context.ac.fg.withOpacity(_glowPulse.value * 0.12),
                                   blurRadius: 80,
                                   spreadRadius: 20,
                                 ),
@@ -155,7 +156,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                SizedBox(height: 32),
 
                 // Línea separadora animada
                 AnimatedBuilder(
@@ -171,7 +172,7 @@ class _SplashScreenState extends State<SplashScreen>
                           gradient: LinearGradient(
                             colors: [
                               Colors.transparent,
-                              Colors.white.withOpacity(0.35),
+                              context.ac.fg.withOpacity(0.35),
                               Colors.transparent,
                             ],
                           ),
@@ -181,7 +182,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
 
-                const SizedBox(height: 28),
+                SizedBox(height: 28),
 
                 // Nombre + subtítulo animados
                 AnimatedBuilder(
@@ -192,22 +193,22 @@ class _SplashScreenState extends State<SplashScreen>
                       offset: Offset(0, _textSlide.value),
                       child: Column(
                         children: [
-                          const Text(
+                          Text(
                             'MINUTO A MINUTO',
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w900,
-                              color: Colors.white,
+                              color: context.ac.fg,
                               letterSpacing: 5,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Text(
                             'ORAL · PLUS',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.28),
+                              color: context.ac.fg.withOpacity(0.28),
                               letterSpacing: 4,
                             ),
                           ),
@@ -217,7 +218,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
 
-                const SizedBox(height: 56),
+                SizedBox(height: 56),
 
                 // Indicador de carga: tres puntos pulsantes
                 AnimatedBuilder(
@@ -235,7 +236,7 @@ class _SplashScreenState extends State<SplashScreen>
                             height: 5,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.15 + pulse * 0.45),
+                              color: context.ac.fg.withOpacity(0.15 + pulse * 0.45),
                             ),
                           ),
                         );
@@ -244,7 +245,7 @@ class _SplashScreenState extends State<SplashScreen>
                   },
                 ),
 
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 AnimatedBuilder(
                   animation: _textCtrl,
@@ -254,7 +255,7 @@ class _SplashScreenState extends State<SplashScreen>
                       _showTimeout ? 'Iniciando servicios...' : 'Cargando',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.white.withOpacity(0.18),
+                        color: context.ac.fg.withOpacity(0.18),
                         letterSpacing: 2,
                         fontWeight: FontWeight.w500,
                       ),

@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -61,7 +62,7 @@ class AppLoadingIndicator extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.white.withOpacity(0.04),
+                    context.ac.fg.withOpacity(0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -79,26 +80,26 @@ class AppLoadingIndicator extends StatelessWidget {
                 errorBuilder: (ctx2, err2, st2) => Icon(
                   Icons.schedule_rounded,
                   size: logoHeight * 0.45,
-                  color: Colors.white,
+                  color: context.ac.fg,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: 24),
         _AnimatedLoadingDots(
           dotSize: dotSize,
           spacing: dotSpacing,
-          color: Colors.white,
+          color: context.ac.fg,
         ),
         if (showMessage) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Text(
             message,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: Colors.white.withOpacity(0.3),
+              color: context.ac.fg.withOpacity(0.3),
             ),
           ),
         ],

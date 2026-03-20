@@ -1,3 +1,4 @@
+import '../utils/app_theme.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -51,32 +52,32 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: Text('Editar observaciones', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+        title: Text('Editar observaciones', style: TextStyle(color: context.ac.fg, fontWeight: FontWeight.w900, fontSize: 18)),
         content: TextField(
           controller: controller,
           maxLines: 4,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(color: context.ac.fg, fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Escriba aquí...',
-            hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
+            hintStyle: TextStyle(color: context.ac.fg.withOpacity(0.2)),
             filled: true,
-            fillColor: Colors.black,
+            fillColor: context.ac.fg,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white30)),
+            child: Text('Cancelar', style: TextStyle(color: context.ac.fgSubtle)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: context.ac.bg,
+              foregroundColor: context.ac.fg,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Guardar', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: Text('Guardar', style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -96,11 +97,11 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: context.ac.bg,
       appBar: AppBar(
-        title: const Text('REGISTRO DE HOY', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2.5)),
-        backgroundColor: const Color(0xFF111111),
-        foregroundColor: Colors.white,
+        title: Text('REGISTRO DE HOY', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2.5)),
+        backgroundColor: context.ac.appBarBg,
+        foregroundColor: context.ac.fg,
         centerTitle: true,
         elevation: 0,
       ),
@@ -128,12 +129,12 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
           return RefreshIndicator(
             onRefresh: () => provider.cargarDatosHoy(),
             backgroundColor: const Color(0xFF1A1A1A),
-            color: Colors.white,
+            color: context.ac.fg,
             child: ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
               itemCount: llamadas.isEmpty ? 2 : llamadas.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 14),
+              separatorBuilder: (_, _) => SizedBox(height: 14),
               itemBuilder: (context, i) {
                 if (i == 0) {
                   return Column(
@@ -158,7 +159,7 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
                 final tieneAudio = _isConAudio(l);
                 final tieneTranscripcion = _isConTranscripcion(l);
                 final contacto = provider.usuarioActual != null
-                    ? '${l.nombreContactado}'
+                    ? l.nombreContactado
                     : 'De: ${l.nombreLider}';
 
                 return _LlamadaCard(
@@ -193,13 +194,13 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
   static Color _colorTipo(dynamic tipo) {
     switch (tipo.toString()) {
       case 'TipoLlamada.manana':
-        return Colors.black54;
+        return const Color(0xFF6B7280);
       case 'TipoLlamada.tarde':
-        return Colors.black87;
+        return const Color(0xFF111827);
       case 'TipoLlamada.kam':
-        return Colors.black54;
+        return const Color(0xFF6B7280);
       case 'TipoLlamada.jefe':
-        return Colors.black87;
+        return const Color(0xFF111827);
       default:
         return AppConstants.azulCorporativo;
     }
@@ -275,7 +276,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 13, color: color),
-        const SizedBox(width: 5),
+        SizedBox(width: 5),
         Text(text,
             style: TextStyle(
                 fontSize: 11, fontWeight: FontWeight.w700, color: color)),
@@ -299,16 +300,16 @@ class _LlamadaCardState extends State<_LlamadaCard> {
         curve: Curves.easeOutCubic,
         margin: const EdgeInsets.only(bottom: 2),
         decoration: BoxDecoration(
-          color: const Color(0xFF151515),
+          color: context.ac.surfaceAlt,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: _expandido
-                ? Colors.white.withOpacity(0.15)
-                : Colors.white.withOpacity(0.06),
+                ? context.ac.fg.withOpacity(0.15)
+                : context.ac.fg.withOpacity(0.06),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(_expandido ? 0.3 : 0.1),
+              color: context.ac.fg.withOpacity(_expandido ? 0.3 : 0.1),
               blurRadius: _expandido ? 20 : 10,
               offset: Offset(0, _expandido ? 10 : 4),
             ),
@@ -327,41 +328,41 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
+                      color: context.ac.fg.withOpacity(0.04),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      border: Border.all(color: context.ac.fg.withOpacity(0.08)),
                     ),
                     child: Icon(Icons.phone_in_talk_rounded,
-                        color: Colors.white70, size: 22),
+                        color: context.ac.fg.withOpacity(0.7), size: 22),
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(widget.contacto,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: Colors.white,
+                                color: context.ac.fg,
                                 letterSpacing: -0.3)),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Text('$horaStr  ·  $agoStr',
                             style: TextStyle(
-                                fontSize: 11, color: Colors.white.withOpacity(0.3), fontWeight: FontWeight.w600)),
+                                fontSize: 11, color: context.ac.fg.withOpacity(0.3), fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
                   _chip(Icons.schedule_rounded, durStr,
-                      Colors.white38,
-                      bg: Colors.white.withOpacity(0.04)),
-                  const SizedBox(width: 10),
+                      context.ac.fg.withOpacity(0.38),
+                      bg: context.ac.fg.withOpacity(0.04)),
+                  SizedBox(width: 10),
                   // Flecha expandir
                   AnimatedRotation(
                     turns: _expandido ? 0.5 : 0,
                     duration: const Duration(milliseconds: 250),
                     child: Icon(Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white.withOpacity(0.2), size: 22),
+                        color: context.ac.fg.withOpacity(0.2), size: 22),
                   ),
                 ],
               ),
@@ -372,7 +373,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
               child: Wrap(spacing: 7, runSpacing: 7, children: [
                 _chip(Icons.label_rounded, l.tipoLlamada.displayName,
-                    Colors.white54),
+                    context.ac.fg.withOpacity(0.54)),
                 if (l.rutaGrabacionPuntoB != null &&
                     l.rutaGrabacionPuntoB!.isNotEmpty)
                   _chip(Icons.call_merge_rounded, 'Cruce A+B',
@@ -400,7 +401,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
 
             // ── Contenido expandido ───────────────────────────────────────
             if (_expandido) ...[
-              Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+              Divider(height: 1, color: context.ac.fg.withOpacity(0.06)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                 child: Column(
@@ -417,7 +418,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                                   '\$${NumberFormat('#,##0').format(l.ventaDia)}',
                               color: AppConstants.verdeMeta),
                         if (l.ventaDia > 0 && l.recaudoDia > 0)
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                         if (l.recaudoDia > 0)
                           _InfoPill(
                               icon: Icons.payments_rounded,
@@ -426,31 +427,31 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                                   '\$${NumberFormat('#,##0').format(l.recaudoDia)}',
                               color: AppConstants.azulCorporativo),
                       ]),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                     ],
 
                     // Observaciones limpias (sin la metadata técnica)
                     if (l.observaciones.isNotEmpty) ...[
                       _SectionLabel(
                           icon: Icons.notes_rounded, label: 'Observaciones'),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.04),
+                          color: context.ac.fg.withOpacity(0.04),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                          border: Border.all(color: context.ac.fg.withOpacity(0.08)),
                         ),
                         child: Text(
                           _limpiarObservaciones(l.observaciones),
                           style: TextStyle(
                               fontSize: 13,
                               height: 1.55,
-                              color: Colors.white.withOpacity(0.7)),
+                              color: context.ac.fg.withOpacity(0.7)),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                     ],
 
                     // Mapa de ubicación (siempre visible si hay coords)
@@ -458,7 +459,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                       _SectionLabel(
                           icon: Icons.location_on_rounded,
                           label: 'Ubicación de la llamada'),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: SizedBox(
@@ -485,16 +486,16 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                                     color: AppConstants.azulCorporativo,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(Icons.open_in_full_rounded,
-                                          size: 13, color: Colors.white),
+                                          size: 13, color: context.ac.fg),
                                       SizedBox(width: 4),
                                       Text('Ver mapa',
                                           style: TextStyle(
                                               fontSize: 11,
-                                              color: Colors.white,
+                                              color: context.ac.fg,
                                               fontWeight: FontWeight.w600)),
                                     ],
                                   ),
@@ -504,7 +505,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                     ],
 
                     // Audio
@@ -512,14 +513,14 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                       _SectionLabel(
                           icon: Icons.mic_rounded,
                           label: 'Grabación de llamada'),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       _AudioPlayerWidget(
                         url: l.rutaGrabacion!,
                         registroId: l.id,
                         transcripcion: l.transcripcionTexto,
                         onTranscripcionGuardada: widget.onTranscripcionGuardada,
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                     ],
 
                     // Transcripción (Eliminado de aquí, ahora está integrado en el AudioPlayer)
@@ -531,12 +532,12 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: widget.onEditarObservaciones,
-                            icon: Icon(Icons.edit_outlined, size: 16, color: Colors.white.withOpacity(0.5)),
-                            label: Text('Editar', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                            icon: Icon(Icons.edit_outlined, size: 16, color: context.ac.fg.withOpacity(0.5)),
+                            label: Text('Editar', style: TextStyle(color: context.ac.fg.withOpacity(0.5))),
                             style: OutlinedButton.styleFrom(
                               padding:
                                   const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                              side: BorderSide(color: context.ac.fg.withOpacity(0.1)),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
                           ),
@@ -588,7 +589,7 @@ class _InfoPill extends StatelessWidget {
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 15, color: color),
-        const SizedBox(width: 6),
+        SizedBox(width: 6),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label,
               style: TextStyle(
@@ -614,13 +615,13 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Icon(icon, size: 15, color: Colors.white.withOpacity(0.35)),
-      const SizedBox(width: 8),
+      Icon(icon, size: 15, color: context.ac.fg.withOpacity(0.35)),
+      SizedBox(width: 8),
       Text(label.toUpperCase(),
           style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w900,
-              color: Colors.white.withOpacity(0.35),
+              color: context.ac.fg.withOpacity(0.35),
               letterSpacing: 1.5)),
     ]);
   }
@@ -645,12 +646,12 @@ class _ResumenLlamadasCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: context.ac.surfaceAlt,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: context.ac.fg.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: context.ac.fg.withOpacity(0.4),
             blurRadius: 30,
             offset: const Offset(0, 12),
           ),
@@ -662,22 +663,22 @@ class _ResumenLlamadasCard extends StatelessWidget {
           Text(
             'RESUMEN DEL DÍA',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.3),
+              color: context.ac.fg.withOpacity(0.3),
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 2.5,
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Text(
             '$totalLlamadas registradas',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.ac.fg,
               fontSize: 20,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Row(
             children: [
               Expanded(
@@ -687,7 +688,7 @@ class _ResumenLlamadasCard extends StatelessWidget {
                   etiqueta: 'MINUTOS',
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: _ResumenMetrica(
                   icono: Icons.mic_rounded,
@@ -695,7 +696,7 @@ class _ResumenLlamadasCard extends StatelessWidget {
                   etiqueta: 'AUDIOS',
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: _ResumenMetrica(
                   icono: Icons.auto_awesome_rounded,
@@ -727,28 +728,28 @@ class _ResumenMetrica extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
+        color: context.ac.fg.withOpacity(0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: context.ac.fg.withOpacity(0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icono, size: 14, color: Colors.white.withOpacity(0.3)),
-          const SizedBox(height: 10),
+          Icon(icono, size: 14, color: context.ac.fg.withOpacity(0.3)),
+          SizedBox(height: 10),
           Text(
             valor,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.ac.fg,
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2),
           Text(
             etiqueta,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.2),
+              color: context.ac.fg.withOpacity(0.2),
               fontSize: 8,
               fontWeight: FontWeight.w900,
               letterSpacing: 1,
@@ -769,9 +770,9 @@ class _EstadoVacioLlamadasCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: context.ac.surfaceAlt,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: context.ac.fg.withOpacity(0.06)),
       ),
       child: Column(
         children: [
@@ -779,30 +780,30 @@ class _EstadoVacioLlamadasCard extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
+              color: context.ac.fg.withOpacity(0.04),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: context.ac.fg.withOpacity(0.08)),
             ),
             child: Icon(
               Icons.phone_in_talk_outlined,
-              color: Colors.white.withOpacity(0.2),
+              color: context.ac.fg.withOpacity(0.2),
               size: 28,
             ),
           ),
-          const SizedBox(height: 18),
-          const Text(
+          SizedBox(height: 18),
+          Text(
             'Sin llamadas hoy',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: context.ac.fg,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             'Las llamadas que registres durante el día\naparecerán en este módulo.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3), height: 1.5),
+            style: TextStyle(fontSize: 13, color: context.ac.fg.withOpacity(0.3), height: 1.5),
           ),
         ],
       ),
@@ -937,7 +938,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
       if (_posicionActual > Duration.zero &&
           _duracionTotal > Duration.zero &&
           _posicionActual < _duracionTotal) {
-        await _player!.play();
+        _player!.play();
         return;
       }
 
@@ -948,7 +949,8 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
 
       if (isUrl) {
         await _player!.setUrl(widget.url);
-        await _player!.play();
+        if (mounted) setState(() => _cargandoAudio = false);
+        _player!.play();
       } else {
         final resolvedPath = await _resolveAudioPath(widget.url);
         if (resolvedPath == null) {
@@ -961,7 +963,8 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
           return;
         }
         await _player!.setFilePath(resolvedPath);
-        await _player!.play();
+        if (mounted) setState(() => _cargandoAudio = false);
+        _player!.play();
       }
     } catch (e) {
       debugPrint('AudioPlayer error: $e — url: ${widget.url}');
@@ -969,7 +972,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
         AppFeedback.error(context, 'No se pudo reproducir el audio');
       }
     } finally {
-      if (mounted) setState(() => _cargandoAudio = false);
+      if (mounted && _cargandoAudio) setState(() => _cargandoAudio = false);
     }
   }
 
@@ -1029,9 +1032,9 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
+        color: context.ac.fg.withOpacity(0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: context.ac.fg.withOpacity(0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1053,12 +1056,12 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                 child: IconButton.filled(
                   onPressed: _togglePlay,
                   icon: _cargandoAudio
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: context.ac.fg,
                           ),
                         )
                       : Icon(
@@ -1070,33 +1073,33 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                   style: IconButton.styleFrom(
                     backgroundColor: _playing
                         ? const Color(0xFF4ADE80)
-                        : Colors.white.withOpacity(0.12),
-                    foregroundColor: Colors.white,
+                        : context.ac.fg.withOpacity(0.12),
+                    foregroundColor: context.ac.fg,
                     minimumSize: const Size(48, 48),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Grabación de llamada',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: context.ac.fg,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    SizedBox(height: 3),
                     Text(
                       _playing
                           ? 'Reproduciendo audio...'
                           : 'Toca para reproducir',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withOpacity(0.35),
+                        color: context.ac.fg.withOpacity(0.35),
                       ),
                     ),
                   ],
@@ -1118,7 +1121,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _transcribiendo
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 14,
                                   height: 14,
                                   child: CircularProgressIndicator(
@@ -1126,11 +1129,11 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                                     color: Color(0xFFFBBF24),
                                   ),
                                 )
-                              : const Icon(Icons.auto_awesome, size: 15, color: Color(0xFFFBBF24)),
-                          const SizedBox(width: 6),
+                              : Icon(Icons.auto_awesome, size: 15, color: Color(0xFFFBBF24)),
+                          SizedBox(width: 6),
                           Text(
                             _transcribiendo ? 'IA...' : 'Transcribir',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFBBF24)),
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFBBF24)),
                           ),
                         ],
                       ),
@@ -1139,13 +1142,13 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           // Waveform-style slider
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: _playing ? const Color(0xFF4ADE80) : Colors.white.withOpacity(0.5),
-              inactiveTrackColor: Colors.white.withOpacity(0.08),
-              thumbColor: Colors.white,
+              activeTrackColor: _playing ? const Color(0xFF4ADE80) : context.ac.fg.withOpacity(0.5),
+              inactiveTrackColor: context.ac.fg.withOpacity(0.08),
+              thumbColor: context.ac.fg,
               trackHeight: 4,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
@@ -1164,11 +1167,11 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
               children: [
                 Text(
                   _formatDuration(_posicionActual),
-                  style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35), fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 11, color: context.ac.fg.withOpacity(0.35), fontWeight: FontWeight.w600),
                 ),
                 Text(
                   _formatDuration(_duracionTotal),
-                  style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35), fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 11, color: context.ac.fg.withOpacity(0.35), fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -1176,13 +1179,13 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
           
           // Transcription integrated inside the same card
           if (tieneTranscripcion) ...[
-            const SizedBox(height: 16),
-            Divider(color: Colors.white.withOpacity(0.05), height: 1),
-            const SizedBox(height: 14),
+            SizedBox(height: 16),
+            Divider(color: context.ac.fg.withOpacity(0.05), height: 1),
+            SizedBox(height: 14),
             Row(
               children: [
                 Icon(Icons.auto_awesome, size: 14, color: const Color(0xFFFBBF24).withOpacity(0.5)),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   'TRANSCRIPCIÓN IA',
                   style: TextStyle(
@@ -1194,13 +1197,13 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               _transcripcionLocal ?? widget.transcripcion ?? '',
               style: TextStyle(
                 fontSize: 13,
                 height: 1.5,
-                color: Colors.white.withOpacity(0.65),
+                color: context.ac.fg.withOpacity(0.65),
                 fontStyle: FontStyle.italic,
               ),
             ),
