@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
 import 'utils/constants.dart';
+import 'utils/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/call_saving_progress_service.dart';
@@ -109,11 +110,15 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
           });
           return provider;
         },
-        child: MaterialApp(
+        child: Consumer<AppProvider>(
+          builder: (ctx, provider, child) => MaterialApp(
           navigatorKey: AppKeys.navigatorKey,
           scaffoldMessengerKey: AppKeys.scaffoldMessengerKey,
           title: 'Minuto a Minuto',
           debugShowCheckedModeBanner: false,
+          themeMode: provider.themeMode,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
           // El overlay de guardado va aquí: dentro de MaterialApp, con Directionality garantizada
           builder: (context, child) {
             // Interceptar el botón de atrás para minimizar en lugar de cerrar
@@ -142,67 +147,6 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
             ),
             );
           },
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppConstants.azulCorporativo,
-              primary: AppConstants.azulCorporativo,
-              secondary: AppConstants.verdeMeta,
-              error: AppConstants.rojoCritico,
-              surface: Colors.white,
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-            fontFamily: 'Roboto',
-            scaffoldBackgroundColor: Colors.white,
-            appBarTheme: const AppBarTheme(
-              centerTitle: true,
-              elevation: 0,
-              scrolledUnderElevation: 4,
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-            ),
-            cardTheme: CardThemeData(
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-            ),
-            filledButtonTheme: FilledButtonThemeData(
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 1,
-              ),
-            ),
-            textTheme: TextTheme(
-              headlineSmall: const TextStyle(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.25,
-              ),
-              titleMedium: const TextStyle(fontWeight: FontWeight.w600),
-              bodyLarge: TextStyle(color: Colors.grey.shade800),
-            ),
-          ),
           home: Consumer<AppProvider>(
             builder: (context, provider, _) {
               if (!provider.isInitialized) {
@@ -276,6 +220,7 @@ class _MinutoAMinutoAppState extends State<MinutoAMinutoApp> {
               return const LoginScreen();
             },
           ),
+        ),
         ),
     );
     return child;

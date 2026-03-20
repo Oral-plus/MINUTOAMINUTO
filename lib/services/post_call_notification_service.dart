@@ -7,8 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 import '../screens/mis_llamadas_screen.dart';
 
-/// Muestra notificación "Datos guardados" al terminar una llamada.
-/// Al tocar, abre la app para editar observaciones.
+/// Muestra notificaciones profesionales al terminar una llamada,
+/// al detectar errores de sincronización o alertas de gestión.
 class PostCallNotificationService {
   static const _keyPendingEditId = 'pending_edit_registro_id';
   static const _logoAsset = 'assets/images/LLAMADA.png';
@@ -73,9 +73,37 @@ class PostCallNotificationService {
     }
   }
 
-  /// Notificación única: llamada grabada y registrada en Mis Llamadas (con duración).
-  /// [correlacionada] = true cuando el audio se unió a un registro existente (punto A + punto B).
-  /// [guardadoEn] = 'API' o 'local' para indicar dónde se insertó.
+  // ─── helper: crea AndroidNotificationDetails profesional (B&W) ─────────────
+  static AndroidNotificationDetails _androidDetails({
+    required String channelId,
+    required String channelName,
+    required String channelDescription,
+    required String bigText,
+    Importance importance = Importance.defaultImportance,
+    Priority priority = Priority.defaultPriority,
+    ByteArrayAndroidBitmap? largeIcon,
+  }) {
+    return AndroidNotificationDetails(
+      channelId,
+      channelName,
+      channelDescription: channelDescription,
+      importance: importance,
+      priority: priority,
+      styleInformation: BigTextStyleInformation(
+        bigText,
+        htmlFormatBigText: false,
+        contentTitle: channelName, // Agregado para robustez
+        summaryText: 'Minuto a Minuto',
+      ),
+      largeIcon: largeIcon,
+      playSound: true,
+      enableVibration: true,
+    );
+  }
+
+  // ─── 1. Llamada grabada y registrada ───────────────────────────────────────
+  /// [correlacionada] = true cuando se unió punto A + punto B.
+  /// [guardadoEn] = 'API' | 'local'.
   static Future<void> showLlamadaGrabadaYRegistrada(
     String registroId,
     String contacto,
@@ -86,31 +114,29 @@ class PostCallNotificationService {
     if (!_isAndroid || !_initialized) return;
     try {
       final logo = await _loadLogoBytes();
-      final duracionTexto =
-          duracionMinutos == 1 ? '1 min' : '$duracionMinutos min';
-      final destino = guardadoEn == 'local'
-          ? ' (guardada en dispositivo local)'
-          : guardadoEn == 'API'
-              ? ' (subida a servidor)'
-              : '';
+      final durTexto = duracionMinutos == 1 ? '1 minuto' : '$duracionMinutos minutos';
+      final destino = guardadoEn == 'API' ? 'Registro disponible en el servidor.' : '';
+
       final titulo = correlacionada
-          ? 'Llamada correlacionada (punto A + punto B)'
-          : 'Llamada grabada y registrada';
-      final body = correlacionada
-          ? 'Tu audio se unió al registro con $contacto. Duración: $duracionTexto. Ambos lados grabados.$destino'
-          : 'Con $contacto. Duración: $duracionTexto.$destino Toca para ver en Mis Llamadas.';
-      final android = AndroidNotificationDetails(
-        'llamada_registrada',
-        'Llamadas grabadas',
-        channelDescription:
-            'Notificación cuando una llamada se graba y registra en Mis Llamadas',
-        importance: Importance.defaultImportance,
+          ? 'Llamada completa registrada'
+          : 'Llamada registrada correctamente';
+
+      final cuerpo = correlacionada
+          ? 'La llamada con $contacto fue registrada completa (ambos lados). Duración: $durTexto. $destino'
+          : 'La llamada con $contacto fue guardada. Duración: $durTexto. $destino Toca para revisar el registro.';
+
+      final android = _androidDetails(
+        channelId: 'llamada_registrada',
+        channelName: 'Llamadas registradas',
+        channelDescription: 'Confirmación al guardar una llamada en Mis Llamadas',
+        bigText: cuerpo,
         largeIcon: logo != null ? ByteArrayAndroidBitmap(logo) : null,
       );
+
       await _instance.show(
         registroId.hashCode.abs() % 100000,
         titulo,
-        body,
+        cuerpo,
         NotificationDetails(android: android),
         payload: registroId,
       );
@@ -119,26 +145,29 @@ class PostCallNotificationService {
     }
   }
 
-  /// Notificación al coach: vendedor sin llamada antes de las 8:20.
-  /// Se muestra en el celular del coach cuando abre/refresca el dashboard.
+  // ─── 2. Alerta 8:20 AM — vendedor sin llamada ──────────────────────────────
   static Future<void> showAlertaVendedorSinLlamada8am(String vendedorNombre) async {
     if (!_isAndroid || !_initialized) return;
     try {
       final logo = await _loadLogoBytes();
-      final android = AndroidNotificationDetails(
-        'alerta_8am',
-        'Alerta 8:20',
-        channelDescription:
-            'Vendedores que no han hecho llamada antes de las 8:20',
+      final cuerpo =
+          '$vendedorNombre no ha registrado ninguna llamada antes de las 8:20 a.m. Verifica el estado de su gestión.';
+
+      final android = _androidDetails(
+        channelId: 'alerta_8am',
+        channelName: 'Alertas de gestión',
+        channelDescription: 'Vendedores sin llamadas registradas antes de las 8:20 a.m.',
+        bigText: cuerpo,
         importance: Importance.high,
         priority: Priority.high,
         largeIcon: logo != null ? ByteArrayAndroidBitmap(logo) : null,
       );
+
       final id = '8am_${vendedorNombre}_${DateTime.now().day}'.hashCode.abs() % 100000;
       await _instance.show(
         id,
-        'Alerta 8:20',
-        '$vendedorNombre no ha hecho ninguna llamada antes de las 8:20',
+        'Sin llamadas registradas — 8:20 a.m.',
+        cuerpo,
         NotificationDetails(android: android),
       );
     } catch (e) {
@@ -146,30 +175,64 @@ class PostCallNotificationService {
     }
   }
 
-  /// Notificación cuando se guardó el registro completo en BD/API (legacy).
-  static Future<void> showDatosGuardados(
-    String registroId,
-    String contacto,
-  ) async {
+  // ─── 3. Error de sincronización ────────────────────────────────────────────
+  static Future<void> showSyncError(String registroId, String contacto, String motivo) async {
     if (!_isAndroid || !_initialized) return;
     try {
       final logo = await _loadLogoBytes();
-      final android = AndroidNotificationDetails(
-        'datos_guardados',
-        'Datos guardados',
-        channelDescription: 'Notificación cuando se guarda una llamada',
-        importance: Importance.defaultImportance,
+      final cuerpo =
+          'La llamada con $contacto no pudo sincronizarse con el servidor. '
+          'Motivo: $motivo. El registro permanece guardado localmente y se reintentará de forma automática.';
+
+      final android = _androidDetails(
+        channelId: 'sync_error',
+        channelName: 'Errores de sincronización',
+        channelDescription: 'Alertas cuando una llamada no se pudo enviar al servidor',
+        bigText: cuerpo,
+        importance: Importance.high,
+        priority: Priority.high,
+        // Sin color rojo — solo blanco/negro
         largeIcon: logo != null ? ByteArrayAndroidBitmap(logo) : null,
       );
+
       await _instance.show(
-        registroId.hashCode.abs() % 100000,
-        'Datos guardados',
-        'Llamada con $contacto registrada. Toca para editar observaciones.',
+        ('err_$registroId').hashCode.abs() % 100000,
+        'No se pudo sincronizar la llamada',
+        cuerpo,
         NotificationDetails(android: android),
         payload: registroId,
       );
     } catch (e) {
-      debugPrint('PostCallNotification error: $e');
+      debugPrint('showSyncError: $e');
+    }
+  }
+
+  // ─── 4. Sincronización exitosa (reintento en background) ───────────────────
+  static Future<void> showSyncOk(String registroId, String contacto, int attempt) async {
+    if (!_isAndroid || !_initialized) return;
+    try {
+      final logo = await _loadLogoBytes();
+      final cuerpo =
+          'La llamada con $contacto se sincronizó correctamente con el servidor'
+          '${attempt > 1 ? ' (intento $attempt)' : ''}. El registro ya está disponible en el panel.';
+
+      final android = _androidDetails(
+        channelId: 'sync_ok',
+        channelName: 'Sincronización exitosa',
+        channelDescription: 'Confirmación cuando una llamada pendiente se envía al servidor',
+        bigText: cuerpo,
+        largeIcon: logo != null ? ByteArrayAndroidBitmap(logo) : null,
+      );
+
+      await _instance.show(
+        ('ok_$registroId').hashCode.abs() % 100000,
+        'Llamada sincronizada con el servidor',
+        cuerpo,
+        NotificationDetails(android: android),
+        payload: registroId,
+      );
+    } catch (e) {
+      debugPrint('showSyncOk: $e');
     }
   }
 }

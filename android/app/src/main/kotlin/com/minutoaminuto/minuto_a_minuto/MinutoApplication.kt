@@ -52,26 +52,11 @@ class MinutoApplication : Application() {
         Log.e("MinutoApp", "CRASH DETECTADO en hilo ${thread.name}: ${throwable.message}")
         throwable.printStackTrace()
 
-        try {
-            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val enabled = prefs.getBoolean("flutter.call_monitor_enabled", false)
-            
-            if (enabled) {
-                Log.w("MinutoApp", "Intentando revivir monitor tras crash...")
-                val intent = Intent(this, PhoneStateMonitorService::class.java)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    startForegroundService(intent)
-                } else {
-                    startService(intent)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("MinutoApp", "No se pudo procesar lógica de crash: ${e.message}")
-        }
+        // NO llamar startForegroundService() aquí: si el crash es ForegroundServiceDidNotStartInTimeException,
+        // llamar de nuevo a startForegroundService() crea un bucle infinito de crashes.
+        // El AlarmManager y WorkManager se encargan de reiniciar el monitor cuando sea seguro.
 
-        // Delegar al handler original del sistema (NO llamar exitProcess)
-        // Esto permite que Android muestre el diálogo de crash o reinicie la app
-        // en vez de simplemente matarla sin aviso
+        // Delegar al handler original del sistema
         defaultHandler?.uncaughtException(thread, throwable)
     }
 }

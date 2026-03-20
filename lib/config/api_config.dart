@@ -24,10 +24,12 @@ class ApiConfig {
   /// true = API remota (inserta en servidor).
   static const bool useRemoteApi = true;
 
-  /// Clave de Gemini para transcripción directa (solo si useRemoteApi=false o fallback).
-  /// Usa la API remota /transcribe cuando useRemoteApi=true — la clave va en el servidor.
+  /// Clave de Gemini para transcripción directa (solo si useRemoteApi=false).
+  /// Con useRemoteApi=true la transcripción va por /transcribe en el servidor.
+  /// Nunca pongas la clave aquí — pásala en tiempo de compilación:
+  ///   flutter build apk --dart-define=GEMINI_API_KEY=TU_CLAVE
   static const String geminiApiKey = String.fromEnvironment(
     'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyBv6nHU_BtM9KpfjAzLtPLt96Z8V14AWe0',
+    defaultValue: 'AIzaSyAkQv8RTOs510d2ag3Kkk0eIYjLj2DbfPQ', // API Key proporcionada por el usuario para transcripción directa rápida
   );
 }

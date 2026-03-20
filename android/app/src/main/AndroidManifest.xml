@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
@@ -15,17 +17,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
         tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <application
         android:usesCleartextTraffic="true"
         android:label="Minuto a Minuto"
         android:name=".MinutoApplication"
         android:icon="@mipmap/ic_launcher"
-        android:installLocation="auto"
         android:allowBackup="true">
         <activity
             android:name=".MainActivity"
@@ -57,7 +58,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="${GOOGLE_MAPS_API_KEY}" />
+            android:value="AIzaSyAkQv8RTOs510d2ag3Kkk0eIYjLj2DbfPQ" />
         <meta-data
             android:name="com.minutoaminuto.minuto_a_minuto.NOTIFICATION_ICON"
             android:resource="@drawable/ic_notification_logo" />
@@ -81,7 +82,7 @@
         <!-- Servicio nativo de grabación -->
         <service
             android:name=".CallRecorderService"
-            android:foregroundServiceType="specialUse|microphone"
+            android:foregroundServiceType="specialUse|microphone|dataSync"
             android:exported="false"
             android:stopWithTask="false">
             <property
@@ -92,7 +93,7 @@
         <!-- Monitor de estado de llamadas (TelephonyCallback) -->
         <service
             android:name=".PhoneStateMonitorService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|phoneCall|dataSync"
             android:exported="false"
             android:stopWithTask="false">
             <property

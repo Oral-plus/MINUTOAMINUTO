@@ -20,7 +20,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.minutoaminuto.minuto_a_minuto"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -37,8 +37,8 @@ android {
         applicationId = "com.minutoaminuto.minuto_a_minuto"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = 101
+        versionName = "2.1.101"
 
         val gmapsKey = project.findProperty("GOOGLE_MAPS_API_KEY")?.toString()
             ?: System.getenv("GOOGLE_MAPS_API_KEY")

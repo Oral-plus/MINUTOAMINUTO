@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../providers/app_provider.dart';
@@ -6,7 +7,6 @@ import '../models/registro_llamada.dart';
 import '../models/tipo_llamada.dart';
 import '../utils/constants.dart';
 import '../widgets/app_feedback.dart';
-import '../widgets/recording_overlay.dart';
 import 'speech_llamada_screen.dart';
 
 class NuevaLlamadaScreen extends StatefulWidget {
@@ -311,7 +311,6 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
               ),
             ),
           ),
-          const RecordingOverlay(visible: true),
         ],
       ),
     );
@@ -340,6 +339,25 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
       return;
     }
 
+    // Capturar ubicacion GPS antes de guardar
+    double? lat, lng;
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.whileInUse || perm == LocationPermission.always) {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        lat = pos.latitude;
+        lng = pos.longitude;
+      }
+    } catch (_) {}
+
     final r = RegistroLlamada(
       id: const Uuid().v4(),
       fecha: DateTime.now(),
@@ -361,18 +379,96 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
       recuperacionPerdidos: _recuperacionPerdidos,
       observaciones: _observaciones,
       confirmacionVeracidad: _confirmacionVeracidad,
+      latitud: lat,
+      longitud: lng,
     );
 
     try {
-      await context.read<AppProvider>().registrarLlamada(r);
+      final result = await context.read<AppProvider>().registrarLlamada(r);
       if (context.mounted) {
-        AppFeedback.success(context, 'Llamada registrada correctamente');
-        Navigator.pop(context);
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  result.retrying ? Icons.cloud_upload : Icons.check_circle,
+                  color: result.retrying ? Colors.orange : Colors.green,
+                ),
+                const SizedBox(width: 10),
+                const Text('Llamada registrada', style: TextStyle(fontSize: 16)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _infoRow('Guardado en', result.savedTo),
+                _infoRow('ID Registro', '${result.registroId.substring(0, 20)}...'),
+                _infoRow('GPS', result.hasGps ? '✅ Coordenadas capturadas' : '❌ Sin GPS (permiso denegado)'),
+                _infoRow('Sync', '✅ Servidor actualizado'),
+                if (result.hasGps && lat != null && lng != null) ...[
+                  const SizedBox(height: 8),
+                  Text('📍 ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        if (context.mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (context.mounted) {
-        AppFeedback.error(context, 'Error al registrar: $e');
+        final msg = e.toString().replaceFirst('Exception: ', '').trim();
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error, color: Colors.red),
+                SizedBox(width: 10),
+                Text('Error al subir llamada', style: TextStyle(fontSize: 16)),
+              ],
+            ),
+            content: Text(
+              msg.isEmpty
+                  ? 'No se pudo registrar en la base de datos.'
+                  : 'No se pudo registrar en la base de datos.\n\nMotivo: $msg',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
       }
     }
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
   }
 }

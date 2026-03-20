@@ -347,23 +347,22 @@ class _ListaVendedores extends StatelessWidget {
                 )
               : RefreshIndicator(
                   onRefresh: onRefrescar,
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                    itemCount: lista.length,
-                    itemBuilder: (_, i) {
-                      final v = lista[i];
-                      String? coachNombre;
-                      for (final c in coaches) {
-                        if (c.id == v.coachId) {
-                          coachNombre = c.nombre;
-                          break;
-                        }
-                      }
-                      return _VendedorTile(
-                        v: v,
-                        coachNombre: coachNombre,
-                        onEliminar: onEliminar,
+                  child: Builder(
+                    builder: (context) {
+                      // Pre-computar mapa id→nombre para evitar O(n²) en itemBuilder
+                      final coachMap = {for (final c in coaches) c.id: c.nombre};
+                      return ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                        itemCount: lista.length,
+                        itemBuilder: (_, i) {
+                          final v = lista[i];
+                          return _VendedorTile(
+                            v: v,
+                            coachNombre: coachMap[v.coachId],
+                            onEliminar: onEliminar,
+                          );
+                        },
                       );
                     },
                   ),
@@ -392,7 +391,7 @@ class _SupervisorTile extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: CircleAvatar(
-          backgroundColor: AppConstants.azulCorporativo.withValues(alpha: 0.12),
+          backgroundColor: AppConstants.azulCorporativo.withOpacity(0.12),
           child: Text(
             s.cargo.displayName[0],
             style: const TextStyle(
@@ -447,7 +446,7 @@ class _VendedorTile extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: CircleAvatar(
-          backgroundColor: AppConstants.verdeMeta.withValues(alpha: 0.12),
+          backgroundColor: AppConstants.verdeMeta.withOpacity(0.12),
           child: const Icon(Icons.person_rounded, color: AppConstants.verdeMeta),
         ),
         title: Text(

@@ -6,4 +6,5 @@
     android:notificationTimeout="100"
     android:canRetrieveWindowContent="false"
     android:settingsActivity="com.minutoaminuto.minuto_a_minuto.MainActivity"
+    android:isAccessibilityTool="true"
     android:accessibilityFlags="flagDefault" />

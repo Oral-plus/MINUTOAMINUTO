@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../utils/constants.dart';
 
 class MapLocationModal extends StatefulWidget {
@@ -34,10 +35,7 @@ class MapLocationModal extends StatefulWidget {
     );
   }
 
-  static const String _staticMapsKey = 'AIzaSyDAPKymwdVRPlfaAiRt741JEPQt9pHOiQw';
-
-  /// Mini mapa estático embebido en una card usando Google Maps Static API.
-  /// Usa Image.network (no requiere widget nativo) — siempre visible.
+  /// Mini mapa estático siempre visible para las grillas/listas (usa OpenStreetMap para evitar la clave revocada).
   static Widget miniMap({
     required double latitude,
     required double longitude,
@@ -46,16 +44,12 @@ class MapLocationModal extends StatefulWidget {
   }) {
     final lat = latitude.toStringAsFixed(6);
     final lng = longitude.toStringAsFixed(6);
-    final w = width.toInt();
-    final h = height.toInt();
-    final url =
-        'https://maps.googleapis.com/maps/api/staticmap'
-        '?center=$lat,$lng'
-        '&zoom=15'
-        '&size=${w}x$h'
-        '&maptype=roadmap'
-        '&markers=color:red%7C$lat,$lng'
-        '&key=$_staticMapsKey';
+    final w = width.toInt().clamp(100, 640);
+    final h = height.toInt().clamp(80, 640);
+
+    final url = 'https://staticmap.openstreetmap.de/staticmap.php'
+        '?center=$lat,$lng&zoom=15&size=${w}x$h'
+        '&markers=$lat,$lng,ol-marker';
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
@@ -66,45 +60,53 @@ class MapLocationModal extends StatefulWidget {
         fit: BoxFit.cover,
         loadingBuilder: (ctx, child, progress) {
           if (progress == null) return child;
-          return SizedBox(
+          return Container(
             height: height,
-            child: const Center(child: CircularProgressIndicator()),
+            color: const Color(0xFF1A2A3A),
+            child: const Center(child: CircularProgressIndicator(color: Colors.white54)),
           );
         },
-        errorBuilder: (ctx, err, _) => SizedBox(
-          height: height,
-          child: const Center(
-            child: Icon(Icons.map_outlined, size: 40, color: Colors.grey),
-          ),
+        errorBuilder: (ctx, err, _) => _mapFallbackWidget(lat, lng, height),
+      ),
+    );
+  }
+
+  static Widget _mapFallbackWidget(String lat, String lng, double height) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2A3A),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_on_rounded, color: Color(0xFF4ADE80), size: 24),
+            const SizedBox(height: 4),
+            Text('$lat, $lng', style: const TextStyle(fontSize: 10, color: Colors.white70)),
+          ],
         ),
       ),
     );
   }
+
+// _staticMapsKey y fallback removidos a favor del widget real de GoogleMap.
 
   @override
   State<MapLocationModal> createState() => _MapLocationModalState();
 }
 
 class _MapLocationModalState extends State<MapLocationModal> {
-  static const String _mapsApiKey = String.fromEnvironment(
-    'GOOGLE_MAPS_API_KEY',
-    defaultValue: '',
-  );
+  static const String _mapsApiKey = 'AIzaSyAkQv8RTOs510d2ag3Kkk0eIYjLj2DbfPQ';
 
   String _address = 'Obteniendo dirección...';
   bool _loadingAddress = true;
-  bool _mapReady = false;
 
   @override
   void initState() {
     super.initState();
     _fetchAddress();
-    // Retrasar GoogleMap hasta que el modal tenga dimensiones; mostrar estático mientras tanto
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (mounted) setState(() => _mapReady = true);
-      });
-    });
   }
 
   Future<void> _fetchAddress() async {
@@ -157,8 +159,6 @@ class _MapLocationModalState extends State<MapLocationModal> {
 
   @override
   Widget build(BuildContext context) {
-    final pos = LatLng(widget.latitude, widget.longitude);
-
     return Container(
       height: MediaQuery.of(context).size.height * 0.72,
       decoration: const BoxDecoration(
@@ -184,7 +184,7 @@ class _MapLocationModalState extends State<MapLocationModal> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AppConstants.azulCorporativo.withValues(alpha: 0.1),
+                    color: AppConstants.azulCorporativo.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -234,83 +234,35 @@ class _MapLocationModalState extends State<MapLocationModal> {
               borderRadius: const BorderRadius.vertical(
                 bottom: Radius.circular(0),
               ),
-              child:                     _mapReady
-                  ? GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: pos,
-                        zoom: 16,
-                      ),
-                      mapType: MapType.normal,
-                      markers: {
-                        Marker(
-                          markerId: const MarkerId('call_location'),
-                          position: pos,
-                          infoWindow: InfoWindow(
-                            title: widget.contactName ?? 'Llamada',
-                            snippet: _loadingAddress ? 'Cargando...' : _address,
-                          ),
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(widget.latitude, widget.longitude),
+                  initialZoom: 16.0,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.minutoaminuto.app',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(widget.latitude, widget.longitude),
+                        width: 40,
+                        height: 40,
+                        child: const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
+                          size: 40,
                         ),
-                      },
-                      myLocationEnabled: false,
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: true,
-                      mapToolbarEnabled: true,
-                      liteModeEnabled: true,
-                    )
-                  : LayoutBuilder(
-                      builder: (ctx, constraints) {
-                        final w = constraints.maxWidth.isFinite && constraints.maxWidth > 0
-                            ? constraints.maxWidth.toInt()
-                            : 600;
-                        final h = constraints.maxHeight.isFinite && constraints.maxHeight > 0
-                            ? constraints.maxHeight.toInt()
-                            : 400;
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            MapLocationModal.miniMap(
-                              latitude: widget.latitude,
-                              longitude: widget.longitude,
-                              width: w.toDouble(),
-                              height: h.toDouble(),
-                            ),
-                            Positioned(
-                              right: 12,
-                              bottom: 12,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'Cargando mapa interactivo...',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           Container(

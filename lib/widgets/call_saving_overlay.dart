@@ -103,13 +103,13 @@ class SavingBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
+              color: Colors.black.withOpacity(0.4),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
           ],
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.07),
+            color: Colors.white.withOpacity(0.07),
           ),
         ),
         child: Column(
@@ -121,7 +121,7 @@ class SavingBanner extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
+                    color: accent.withOpacity(0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: accent, size: 18),
@@ -142,7 +142,7 @@ class SavingBanner extends StatelessWidget {
                   Text(
                     '${(progress.percent * 100).toInt()}%',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: Colors.white.withOpacity(0.5),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -155,7 +155,7 @@ class SavingBanner extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: progress.percent,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  backgroundColor: Colors.white.withOpacity(0.08),
                   valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                   minHeight: 4,
                 ),

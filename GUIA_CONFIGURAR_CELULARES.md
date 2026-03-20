@@ -1,55 +1,71 @@
-# Guía: Configurar Celulares de Empleados
+# 📖 Manual Definitivo de IT: Habilitar Grabación de Llamadas Nativa en Samsung (Método Legal)
 
-## Paso 1: Activar Opciones de Desarrollador en el celular
+Este documento es una guía paso a paso para el departamento de Sistemas/IT. Su propósito es vulnerar el bloqueo regional de grabación de llamadas que Google impone en equipos Samsung (Android 10 - 14) para lograr que la aplicación "Minuto a Minuto" pueda extraer el archivo de audio perfecto de la comunicación bidireccional entre el empleado y el cliente de forma inadvertida e ininterrumpida.
 
-1. Ir a **Ajustes** > **Acerca del teléfono**
-2. Buscar **"Número de compilación"** (en Samsung está en Ajustes > Acerca > Info del software)
-3. **Tocar 7 veces seguidas** en "Número de compilación"
-4. Aparecerá un mensaje: *"Ya eres desarrollador"*
+---
 
-## Paso 2: Activar Depuración USB
+## 🛑 El Problema Tecnológico (Restricciones de Android)
 
-1. Ir a **Ajustes** > **Opciones de desarrollador**
-2. Activar **"Depuración USB"**
-3. Aceptar el aviso de seguridad
+A partir de Android 10, Google **bloqueó a nivel de núcleo (Kernel) el acceso al canal digital cerrado (Downlink/Uplink)** de las llamadas celulares para cualquier aplicación descargada (incluida la nuestra). 
 
-## Paso 3: Conectar el celular al computador
+**Consecuencia:** Si una aplicación intenta grabar la llamada por código, Android envía deliberadamente **cero bytes** de audio (silencio absoluto) de la voz de la otra persona. La única excepción a esta regla impuesta por Google es la propia **Aplicación de Teléfono Nativa del Fabricante** porque está firmada criptográficamente por Samsung.
 
-1. Conectar el celular por **cable USB**
-2. En el celular aparecerá: **"¿Permitir depuración USB?"**
-3. Marcar **"Siempre permitir desde este equipo"** y aceptar
+**La Solución Estructural:** Modificar el código de región del software del celular de empresa (CSC) a un país donde las leyes locales exigen que la funcionalidad de grabar llamadas esté activa por defecto de fábrica.
 
-## Paso 4: Desbloquear "Configuración restringida" (Android 13 o superior)
+---
 
-Si al intentar activar Accesibilidad te dice que la configuración es **restringida**:
-1. Ve a **Ajustes** > **Aplicaciones** > **Minuto a Minuto**
-2. Toca los **3 puntos** arriba a la derecha (o el botón "Más")
-3. Selecciona **"Permitir configuración restringida"**
-4. Confirma con tu huella o PIN
-5. Ahora vuelve a Accesibilidad y ya te dejará activarlo.
+## 🔧 El Método Eficaz: Cambio de CSC (Region) mediante SamFw Tool
 
-## Paso 5: Ejecutar el configurador
+Samsung no elimina el código fuente de su excelente grabadora nativa; simplemente lo oculta o bloquea en países específicos de América Latina. 
 
-1. En el computador, ir a la carpeta del proyecto
-2. Hacer **doble clic** en **`CONFIGURAR_CELULAR.bat`**
-3. Seguir las instrucciones en pantalla
-4. El script instalará la app y otorgará TODOS los permisos automáticamente
+Este método cambiará el "pasaporte" de software del sistema a la región de **India (INS)** o **Vietnam (XXV)**.
+> **Importante:** Este proceso **NO** elimina los datos del vendedor del teléfono, **NO** anula la garantía oficial (Knox se mantiene en 0x0) y **NO** requiere permisos Root. 
 
-## ¿Qué hace el script?
+### Requisitos Previos:
+1. Una computadora con **Windows**.
+2. El celular de empresa Samsung encendido, desbloqueado, y con su PIN.
+3. Un **cable USB** original o que soporte transferencia de datos.
 
-| Acción | Efecto |
-|--------|--------|
-| Instala la APK | No necesitas enviar el archivo al celular |
-| Otorga permisos | Micrófono, ubicación, teléfono, notificaciones |
-| Fuerza permisos de audio | Habilita captura de audio durante llamadas |
-| Activa Accesibilidad | Habilita el servicio de monitoreo |
-| Activa Superposición | Habilita el icono flotante de grabación |
-| Desactiva ahorro de batería | La app nunca se cierra en segundo plano |
+### 🛠️ Paso 1: Descargar el Sofware en la PC
 
-## Resultado
+1. Ve a cualquier navegador en la computadora de sistemas.
+2. Busca en Google **"SamFw FRP Tool"** y descarga la versión gratuita más reciente (generalmente un archivo .zip).
+3. Descomprime la carpeta y abre el archivo ejecutable `SamFwTool.exe`.
 
-Después de ejecutar el script, el empleado:
-- **NO verá** ventanas pidiendo permisos
-- La app **grabará automáticamente** todas las llamadas
-- El **icono flotante** aparecerá durante las llamadas
-- La app **nunca se cerrará** por ahorro de batería
+### 🛠️ Paso 2: Preparar el Celular Samsung
+
+1. Entra a los `Ajustes` normales del celular del vendedor y ve al final, a **Acerca del Teléfono** > **Información de Software**.
+2. Toca 7 veces muy rápido sobre **"Número de compilación"** para activar las Opciones de Desarrollador.
+3. Vuelve a la pantalla principal de Ajustes, entra al nuevo menú oculto **Opciones de desarrollador** que apareció hasta abajo.
+4. Enciende el interruptor que dice **"Depuración por USB"**.
+5. Conecta el celular a la computadora. Te saltará una ventana de alerta en la pantallita del celular preguntando "Permitir depuración USB", márcale "Permitir siempre desde esta computadora".
+
+### 🛠️ Paso 3: Ejecutar el Salto de Región (CSC)
+
+1. En el programa de la computadora (`SamFw Tool`), asegúrate de estar en la pestaña de arriba que diga **ADB**.
+2. En la lista de botones de colores, busca y haz clic en el botón mágico **`Change CSC`**.
+3. Te aparecerá un pequeño recuadro pop-up vacío pidiéndote un código.
+4. Escribe exactamente **INS** (significa India) y dale en Change.
+ *(Alternativamente, si el dispositivo protesta, puedes intentar **XXV** para Vietnam o **ILP** para Israel).*
+5. ¡Magia! El celular recibirá la orden en fracciones de segundo y vas a ver cómo **se reinicia solo**.
+
+### 🛠️ Paso 4: Encender la Grabación Silenciosa
+
+1. Cuando el celular Samsung del vendedor vuelva a prender, **entra a la función de Marcar/Teléfono normal de Samsung** (el icono verde que traen de fábrica todos).
+2. Toca los **tres puntitos (⋮)** en la esquina de arriba a la derecha y presiona **`Ajustes`**.
+3. **¡FELICIDADES!** Vas a notar que acaba de aparecer una función dorada y escondida que antes no existía llamada **"Grabar Llamadas"**.
+4. Entra a esa opción y simplemente toca en **`Grabar llamadas automáticamente`**.
+
+---
+
+## 🚀 Integración final con "Minuto a Minuto"
+
+A partir de este momento, **el celular está hackeado legalmente.** Cada vez que el vendedor cuelgue una llamada de su rutina diaria, Samsung grabará la conversación de los dos de forma perfecta directamente desde la baseband, y depositará un brillante archivo de audio con ambas voces dentro del disco duro.
+
+Ahí es donde entra nuestro Autómata de **Minuto a Minuto**:
+* Nuestro Monitor Silencioso **detecta inmediatamente que la llamada del vendedor finalizó.**
+* En vez de intentar grabar con micrófonos banales y enfrentarse al bloqueo de seguridad de Google, **la aplicación utiliza permisos avanzados para colarse en la memoria interna de Samsung, encontrar la carpeta nativa `/Call/`, y enviar ese archivo inmaculado y oficial directamente al servidor de la empresa.**
+* Luego, nuestra integración con IA (Gemini) escucha un audio cristalino sin fallas de volumen y lo transcribe en su totalidad, alimentando las estadísticas de efectividad automáticamente.
+
+### Entregar el Celular
+Ya puedes instalar la App `Minuto a Minuto`, aceptar la nueva alerta roja del "Setup" si te lo pide,  y entregar el equipo operativo al Asesor Comercial de calle. Estará rindiendo al 100%.

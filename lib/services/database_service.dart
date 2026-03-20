@@ -10,7 +10,7 @@ import '../models/alerta.dart';
 class DatabaseService {
   static Database? _database;
   static const String _dbName = 'minuto_a_minuto.db';
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -85,7 +85,9 @@ class DatabaseService {
         numeroPropietario TEXT,
         transcripcionTexto TEXT,
         latitud REAL,
-        longitud REAL
+        longitud REAL,
+        sincronizado INTEGER DEFAULT 0,
+        audioSincronizado INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -186,6 +188,15 @@ class DatabaseService {
         print('DB Upgrade v5 (vendedores) ERROR: $e');
       }
     }
+    if (oldVersion < 6) {
+      try {
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN sincronizado INTEGER DEFAULT 0');
+        await db.execute('ALTER TABLE registro_llamadas ADD COLUMN audioSincronizado INTEGER DEFAULT 0');
+        print('DB Upgrade v6 (sync): OK');
+      } catch (e) {
+        print('DB Upgrade v6 (sync) ERROR: $e');
+      }
+    }
   }
 
   // Vendedores
@@ -249,9 +260,32 @@ class DatabaseService {
   }
 
   // Registro Llamadas
-  static Future<void> insertRegistroLlamada(RegistroLlamada r) async {
+  static Future<void> insertRegistroLlamada(RegistroLlamada r, {int sincronizado = 0, int audioSincronizado = 0}) async {
     final db = await database;
-    await db.insert('registro_llamadas', r.toMap());
+    final map = r.toMap();
+    map['sincronizado'] = sincronizado;
+    map['audioSincronizado'] = audioSincronizado;
+    await db.insert('registro_llamadas', map);
+  }
+
+  static Future<void> markAsSincronizado(String id) async {
+    final db = await database;
+    await db.update('registro_llamadas', {'sincronizado': 1}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> markAudioAsSincronizado(String id) async {
+    final db = await database;
+    await db.update('registro_llamadas', {'audioSincronizado': 1}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<List<Map<String, dynamic>>> getPendingLlamadas() async {
+    final db = await database;
+    return await db.query('registro_llamadas', where: 'sincronizado = 0');
+  }
+
+  static Future<List<Map<String, dynamic>>> getPendingAudios() async {
+    final db = await database;
+    return await db.query('registro_llamadas', where: 'audioSincronizado = 0 AND rutaGrabacion IS NOT NULL');
   }
 
   static Future<RegistroLlamada?> getRegistroLlamada(String id) async {

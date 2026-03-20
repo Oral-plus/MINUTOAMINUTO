@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 /// Etapas del proceso de guardado post-llamada.
@@ -36,7 +35,7 @@ class CallSavingProgress {
 /// Servicio singleton que emite el progreso de guardado de la llamada.
 /// CallMonitorService lo actualiza; la UI lo escucha.
 class CallSavingProgressService {
-  static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  static bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   static final _controller =
       StreamController<CallSavingProgress>.broadcast();

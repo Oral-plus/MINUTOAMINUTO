@@ -3,12 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
-import '../services/call_diagnostic_service.dart';
-
+import '../utils/constants.dart';
 import 'admin_screen.dart';
 import 'dashboard_screen.dart';
 import 'login_screen.dart';
 import 'mis_llamadas_screen.dart';
+import '../widgets/active_call_indicator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,17 +18,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+  }
 
-
-
-
-  Future<void> _mostrarDialogoMiNumero(
-    BuildContext context,
-    AppProvider provider,
-  ) async {
+  Future<void> _mostrarDialogoMiNumero(BuildContext context, AppProvider provider) async {
     final prefs = await SharedPreferences.getInstance();
-    final actual =
-        prefs.getString('numero_telefono_propietario') ??
+    final actual = prefs.getString('numero_telefono_propietario') ??
         provider.usuarioActual?.telefono ??
         provider.vendedorActual?.telefono ??
         '';
@@ -39,31 +36,29 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         title: const Text('Mi número para correlación dual'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Si ambos tienen la app, cuando llamen entre sí cada uno graba solo su propio audio. '
-              'El sistema une ambos audios en un solo registro.',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                height: 1.4,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Si ambos tienen la app, cuando llamen entre sí cada uno graba solo su propio audio. '
+                'El sistema une ambos audios en un solo registro.',
+                style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctrl,
-              decoration: const InputDecoration(
-                labelText: 'Mi número de teléfono',
-                hintText: 'Ej: 300 123 4567',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(
+                  labelText: 'Mi número de teléfono',
+                  hintText: 'Ej: 300 123 4567',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.phone,
+                autofocus: true,
               ),
-              keyboardType: TextInputType.phone,
-              autofocus: true,
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -80,6 +75,10 @@ class _HomeScreenState extends State<HomeScreen> {
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppConstants.azulCorporativo,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Guardar'),
           ),
         ],
@@ -96,9 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final nombre =
-            provider.usuarioActual?.nombre ??
-            provider.vendedorActual?.nombre ??
-            'Usuario';
+            provider.usuarioActual?.nombre ?? provider.vendedorActual?.nombre ?? 'Usuario';
         final cargo = provider.usuarioActual?.cargo.displayName ?? 'Vendedor';
         final isSupervisor = provider.usuarioActual != null;
         final acciones = <_AccionHome>[
@@ -147,32 +144,25 @@ class _HomeScreenState extends State<HomeScreen> {
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Oral-Plus logo directo
                 Image.asset(
-                  'assets/images/LOGO 2 1 (2).png',
-                  height: 30,
+                  'assets/images/logo.png',
+                  height: 38,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.schedule_rounded, color: Colors.white70),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'MINUTO A MINUTO',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                    color: Colors.white,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.schedule_rounded,
+                    color: Colors.black,
                   ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Minuto a Minuto',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFF111111),
-            foregroundColor: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            shadowColor: Colors.black,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
             actions: [
               IconButton(
                 icon: const Icon(Icons.phone_android_rounded),
@@ -191,11 +181,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               IconButton(
-                icon: const Icon(Icons.analytics_outlined),
-                tooltip: 'Diagnóstico de llamadas',
-                onPressed: () => CallDiagnosticService.showPanel(context),
-              ),
-              IconButton(
                 icon: const Icon(Icons.logout_rounded),
                 tooltip: 'Cerrar sesión',
                 onPressed: () async {
@@ -209,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          backgroundColor: const Color(0xFF0D0D0D),
+          backgroundColor: const Color(0xFFF5F5F5),
           body: RefreshIndicator(
             onRefresh: () async {
               await provider.cargarDatosHoy();
@@ -225,17 +210,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   isSupervisor: isSupervisor,
                 ),
                 const SizedBox(height: 16),
-
+                const ActiveCallIndicator(),
                 _MonitorStatusBadge(activo: provider.monitorLlamadasActivo),
                 const SizedBox(height: 10),
                 const SizedBox(height: 6),
-                Text(
+                const Text(
                   'Accesos rápidos',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white38,
-                    letterSpacing: 2,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -274,66 +258,65 @@ class _HomeHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        gradient: const LinearGradient(
+          colors: [Colors.black87, Colors.black54],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               isSupervisor ? Icons.badge_rounded : Icons.person_rounded,
-              color: Colors.white70,
-              size: 28,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'SESIÓN ACTIVA',
+                const Text(
+                  'Sesión activa',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.2),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.5,
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   nombre,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
-                  cargo.toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                  cargo,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -353,34 +336,24 @@ class _MonitorStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: activo
-            ? const Color(0xFF1A2A1A)
-            : const Color(0xFF181818),
-        borderRadius: BorderRadius.circular(14),
+            ? AppConstants.verdeMeta.withValues(alpha: 0.08)
+            : const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: activo
-              ? Colors.white.withOpacity(0.12)
-              : Colors.white.withOpacity(0.06),
+              ? Colors.black54
+              : const Color(0xFFE0E0E0),
         ),
       ),
       child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: activo
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.white.withOpacity(0.05),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              activo ? Icons.shield_rounded : Icons.shield_outlined,
-              color: activo ? Colors.white70 : Colors.white24,
-              size: 18,
-            ),
+          Icon(
+            activo ? Icons.shield_rounded : Icons.shield_outlined,
+            color: activo ? Colors.black87 : Colors.black54,
+            size: 20,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -389,9 +362,11 @@ class _MonitorStatusBadge extends StatelessWidget {
                   ? 'Monitor activo: grabando y registrando llamadas automáticamente.'
                   : 'Monitor iniciando... las llamadas se grabarán en breve.',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w500,
-                color: activo ? Colors.white70 : Colors.white30,
+                color: activo
+                    ? Colors.black87
+                    : Colors.black54,
               ),
             ),
           ),
@@ -417,8 +392,6 @@ class _AccionHome {
   });
 }
 
-
-
 class _AccionTile extends StatelessWidget {
   final _AccionHome item;
 
@@ -430,53 +403,41 @@ class _AccionTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: BorderRadius.circular(20),
-        splashColor: Colors.white10,
-        highlightColor: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
         child: Ink(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF181818),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.07)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  color: item.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(item.icono, color: Colors.white70, size: 22),
+                child: Icon(item.icono, color: item.color, size: 20),
               ),
               const Spacer(),
               Text(
-                item.titulo.toUpperCase(),
+                item.titulo,
                 style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 item.subtitulo,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withOpacity(0.25),
-                  fontWeight: FontWeight.w500,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
                 ),
               ),
             ],

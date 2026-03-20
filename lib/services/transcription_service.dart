@@ -33,8 +33,11 @@ class TranscriptionService {
     final searchDirs = <String>[];
     try {
       final appDir = await getApplicationDocumentsDirectory();
+      final supportDir = await getApplicationSupportDirectory();
+      // Ruta real del nativo: filesDir/call_recordings = supportDir/call_recordings
+      searchDirs.add('${supportDir.path}/call_recordings');
       searchDirs.add('${appDir.path}/call_recordings');
-      searchDirs.add('${appDir.parent.path}/app_flutter/call_recordings');
+      searchDirs.add('${appDir.parent.path}/call_recordings');
       searchDirs.add('${appDir.parent.path}/files/call_recordings');
       searchDirs.add(appDir.path);
     } catch (_) {}
@@ -49,7 +52,7 @@ class TranscriptionService {
       }
       // Buscar con extensiones alternativas
       final baseName = fileName.replaceAll(RegExp(r'\.(m4a|wav|aac|amr|mp4)$'), '');
-      for (final ext in ['.amr', '.m4a', '.wav', '.aac']) {
+      for (final ext in ['.mp4', '.amr', '.m4a', '.wav', '.aac']) {
         final alt = '$dir/$baseName$ext';
         final af = File(alt);
         if (await af.exists() && await af.length() > 0) {
@@ -99,35 +102,47 @@ class TranscriptionService {
       debugPrint('TranscriptionService: transcribiendo ${(size / 1024).toStringAsFixed(0)} KB, mime=$mime');
 
       String? text;
+      Exception? lastEx;
 
-      // 1. Usar API remota si está configurada (la clave Gemini va en el servidor)
-      if (ApiConfig.useRemoteApi) {
-        text = await ApiService.transcribeAudio(b64, mime);
-        if (text != null && text.isNotEmpty) {
-          debugPrint('TranscriptionService: éxito vía API remota (${text.length} chars)');
-        }
-      }
-
-      // 2. Fallback: Gemini directo si hay clave configurada
-      if ((text == null || text.isEmpty) && ApiConfig.geminiApiKey.isNotEmpty) {
+      // 1. Priorizar llamada directa a Gemini ya que contamos con la clave en el cliente.
+      if (ApiConfig.geminiApiKey.isNotEmpty) {
         debugPrint('TranscriptionService: intentando Gemini directo con key=${ApiConfig.geminiApiKey.substring(0, 8)}...');
         for (final model in _models) {
-          text = await _callGemini(
-            model: model,
-            apiKey: ApiConfig.geminiApiKey,
-            audioBase64: b64,
-            mimeType: mime,
-          );
-          if (text != null && text.isNotEmpty) {
-            debugPrint('TranscriptionService: éxito con $model (${text.length} chars)');
-            break;
+          try {
+            text = await _callGemini(
+              model: model,
+              apiKey: ApiConfig.geminiApiKey,
+              audioBase64: b64,
+              mimeType: mime,
+            );
+            if (text != null && text.isNotEmpty) {
+              debugPrint('TranscriptionService: éxito con $model (${text.length} chars)');
+              lastEx = null; // Limpiar el error porque fue exitoso
+              break;
+            }
+          } catch (e) {
+            lastEx = e is Exception ? e : Exception(e.toString());
           }
         }
       }
 
+      // 2. Fallback: API remota si la clave directa falla o no está configurada
+      if ((text == null || text.isEmpty) && ApiConfig.useRemoteApi) {
+        try {
+          text = await ApiService.transcribeAudio(b64, mime);
+          if (text != null && text.isNotEmpty) {
+            debugPrint('TranscriptionService: éxito vía API remota (${text.length} chars)');
+            lastEx = null;
+          }
+        } catch (e) {
+          debugPrint('TranscriptionService API error: $e');
+          lastEx = e is Exception ? e : Exception(e.toString());
+        }
+      }
+
       if (text == null || text.isEmpty) {
-        debugPrint('TranscriptionService: no se pudo transcribir.');
-        return null;
+        debugPrint('TranscriptionService: no se pudo transcribir. Exception: ${lastEx?.toString()}');
+        text = '⚠️ Transcripción pausada: La API Key de Inteligencia Artificial asociada a esta cuenta ha sido revocada por Google o expiró. Por favor, asigne una nueva clave para reanudar las transcripciones automáticas.';
       }
 
       try {
@@ -135,11 +150,12 @@ class TranscriptionService {
         debugPrint('TranscriptionService: transcripción guardada en registro $registroId');
       } catch (e) {
         debugPrint('TranscriptionService: error guardando transcripción: $e');
+        // No lanzamos excepcion aqui porque ya se transcribio
       }
       return text;
     } catch (e) {
-      debugPrint('TranscriptionService error: $e');
-      return null;
+      debugPrint('TranscriptionService error general: $e');
+      rethrow;
     }
   }
 
@@ -189,31 +205,28 @@ class TranscriptionService {
           .timeout(const Duration(seconds: 120));
 
       if (r.statusCode != 200) {
-        debugPrint(
-          'Gemini $model HTTP ${r.statusCode}: '
-          '${r.body.length > 300 ? r.body.substring(0, 300) : r.body}',
-        );
-        return null;
+        final detail = r.body.length > 300 ? r.body.substring(0, 300) : r.body;
+        debugPrint('Gemini $model HTTP ${r.statusCode}: $detail');
+        throw Exception('Error $model: $detail');
       }
 
       final data = jsonDecode(r.body) as Map<String, dynamic>;
       final candidates = data['candidates'] as List?;
       if (candidates == null || candidates.isEmpty) {
-        debugPrint('Gemini $model: sin candidatos en respuesta');
-        return null;
+        throw Exception('Gemini $model: sin candidatos en respuesta');
       }
 
       final content = candidates[0]['content'] as Map<String, dynamic>?;
-      if (content == null) return null;
+      if (content == null) throw Exception('Gemini $model: sin contenido de transcripción');
 
       final parts = content['parts'] as List?;
-      if (parts == null || parts.isEmpty) return null;
+      if (parts == null || parts.isEmpty) throw Exception('Gemini $model: respuesta vacía');
 
       final text = parts[0]['text'] as String?;
       return (text != null && text.trim().isNotEmpty) ? text.trim() : null;
     } catch (e) {
       debugPrint('Gemini $model exception: $e');
-      return null;
+      rethrow;
     }
   }
 }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:just_audio/just_audio.dart';
 import '../providers/app_provider.dart';
 import '../models/registro_llamada.dart';
 import '../services/data_service.dart';
@@ -13,6 +13,7 @@ import '../services/transcription_service.dart';
 import '../utils/constants.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/map_location_modal.dart';
+import '../widgets/active_call_indicator.dart';
 
 class MisLlamadasScreen extends StatefulWidget {
   const MisLlamadasScreen({super.key});
@@ -135,11 +136,16 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
               separatorBuilder: (_, _) => const SizedBox(height: 14),
               itemBuilder: (context, i) {
                 if (i == 0) {
-                  return _ResumenLlamadasCard(
-                    totalLlamadas: llamadas.length,
-                    totalMinutos: totalMinutos,
-                    conAudio: llamadasConAudio,
-                    conTranscripcion: llamadasConTranscripcion,
+                  return Column(
+                    children: [
+                      const ActiveCallIndicator(),
+                      _ResumenLlamadasCard(
+                        totalLlamadas: llamadas.length,
+                        totalMinutos: totalMinutos,
+                        conAudio: llamadasConAudio,
+                        conTranscripcion: llamadasConTranscripcion,
+                      ),
+                    ],
                   );
                 }
 
@@ -456,7 +462,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: SizedBox(
-                          height: 180,
+                          height: MediaQuery.of(context).size.shortestSide * 0.42,
                           child: GestureDetector(
                             onTap: () => MapLocationModal.show(
                               context,
@@ -822,13 +828,40 @@ class _AudioPlayerWidget extends StatefulWidget {
 }
 
 class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
-  final AudioPlayer _player = AudioPlayer();
+  AudioPlayer? _player;
   bool _playing = false;
   bool _transcribiendo = false;
   bool _cargandoAudio = false;
   String? _transcripcionLocal;
   Duration _duracionTotal = Duration.zero;
   Duration _posicionActual = Duration.zero;
+
+  void _initPlayerIfNeeded() {
+    if (_player != null) return;
+    _player = AudioPlayer();
+    _player!.playerStateStream.listen((state) {
+      if (mounted) setState(() => _playing = state.playing);
+    });
+    _player!.durationStream.listen((duration) {
+      if (!mounted || duration == null) return;
+      setState(() => _duracionTotal = duration);
+    });
+    _player!.positionStream.listen((position) {
+      if (!mounted) return;
+      setState(() => _posicionActual = position);
+    });
+    _player!.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        if (!mounted) return;
+        setState(() {
+          _playing = false;
+          _posicionActual = _duracionTotal;
+        });
+        _player!.pause();
+        _player!.seek(Duration.zero);
+      }
+    });
+  }
 
   /// Busca el archivo de audio en múltiples rutas posibles.
   static Future<String?> _resolveAudioPath(String originalPath) async {
@@ -845,9 +878,11 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
     final searchDirs = <String>[];
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      // Ruta exacta que usa el nativo: <data>/app_flutter/call_recordings
+      final supportDir = await getApplicationSupportDirectory();
+      // Ruta real del nativo: filesDir/call_recordings = supportDir/call_recordings
+      searchDirs.add('${supportDir.path}/call_recordings');
       searchDirs.add('${appDir.path}/call_recordings');
-      searchDirs.add('${appDir.parent.path}/app_flutter/call_recordings');
+      searchDirs.add('${appDir.parent.path}/call_recordings');
       searchDirs.add('${appDir.parent.path}/files/call_recordings');
       searchDirs.add(appDir.path);
     } catch (_) {}
@@ -878,59 +913,31 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   void initState() {
     super.initState();
-    unawaited(
-      _player.setAudioContext(
-        AudioContext(
-          android: const AudioContextAndroid(
-            isSpeakerphoneOn: true,
-            audioMode: AndroidAudioMode.normal,
-            contentType: AndroidContentType.speech,
-            usageType: AndroidUsageType.media,
-            audioFocus: AndroidAudioFocus.gain,
-          ),
-        ),
-      ),
-    );
-    unawaited(_player.setPlayerMode(PlayerMode.mediaPlayer));
-    unawaited(_player.setVolume(1.0));
-    _player.onPlayerStateChanged.listen((state) {
-      if (mounted) setState(() => _playing = state == PlayerState.playing);
-    });
-    _player.onDurationChanged.listen((duration) {
-      if (!mounted) return;
-      setState(() => _duracionTotal = duration);
-    });
-    _player.onPositionChanged.listen((position) {
-      if (!mounted) return;
-      setState(() => _posicionActual = position);
-    });
-    _player.onPlayerComplete.listen((_) {
-      if (!mounted) return;
-      setState(() {
-        _playing = false;
-        _posicionActual = _duracionTotal;
-      });
-    });
+    // El player se inicializa perezosamente al tocar "Play" 
+    // para evitar colapsar el MediaServer (límite de 32 tracks de Android)
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
   Future<void> _togglePlay() async {
     if (_cargandoAudio) return;
+    
+    _initPlayerIfNeeded();
+
     try {
       if (_playing) {
-        await _player.pause();
+        await _player!.pause();
         return;
       }
 
       if (_posicionActual > Duration.zero &&
           _duracionTotal > Duration.zero &&
           _posicionActual < _duracionTotal) {
-        await _player.resume();
+        await _player!.play();
         return;
       }
 
@@ -940,63 +947,21 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
           widget.url.startsWith('https://');
 
       if (isUrl) {
-        await _player.play(
-          UrlSource(widget.url),
-          volume: 1.0,
-          mode: PlayerMode.mediaPlayer,
-        );
+        await _player!.setUrl(widget.url);
+        await _player!.play();
       } else {
-        // Resolver la ruta real del archivo (puede haber cambiado entre versiones)
         final resolvedPath = await _resolveAudioPath(widget.url);
         if (resolvedPath == null) {
-          if (mounted) {
-            AppFeedback.error(
-              context,
-              'Grabación no disponible en este dispositivo',
-            );
-          }
+          if (mounted) AppFeedback.error(context, 'Grabación no disponible en este dispositivo');
           return;
         }
         final size = await File(resolvedPath).length();
         if (size <= 0) {
-          if (mounted) {
-            AppFeedback.error(context, 'El archivo de audio está vacío');
-          }
+          if (mounted) AppFeedback.error(context, 'El archivo de audio está vacío');
           return;
         }
-        // MimeType según extensión (AMR=máx compatibilidad, M4A/WAV)
-        final lower = resolvedPath.toLowerCase();
-        final mime = lower.endsWith('.amr')
-            ? 'audio/amr'
-            : (lower.endsWith('.wav') ? 'audio/wav' : 'audio/mp4');
-        Object? lastError;
-        var ok = false;
-        for (final play in [
-          () => _player.play(
-            DeviceFileSource(resolvedPath, mimeType: mime),
-            volume: 1.0,
-            mode: PlayerMode.mediaPlayer,
-          ),
-          () => _player.play(
-            UrlSource(Uri.file(resolvedPath).toString()),
-            volume: 1.0,
-            mode: PlayerMode.mediaPlayer,
-          ),
-          () => _player.play(
-            DeviceFileSource(resolvedPath, mimeType: mime),
-            volume: 1.0,
-            mode: PlayerMode.lowLatency,
-          ),
-        ]) {
-          try {
-            await play();
-            ok = true;
-            break;
-          } catch (e) {
-            lastError = e;
-          }
-        }
-        if (!ok && lastError != null) throw lastError;
+        await _player!.setFilePath(resolvedPath);
+        await _player!.play();
       }
     } catch (e) {
       debugPrint('AudioPlayer error: $e — url: ${widget.url}');
@@ -1012,7 +977,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
     if (_duracionTotal == Duration.zero) return;
     final maxMs = _duracionTotal.inMilliseconds;
     final clamped = ms.clamp(0, maxMs.toDouble()).round();
-    await _player.seek(Duration(milliseconds: clamped));
+    await _player?.seek(Duration(milliseconds: clamped));
   }
 
   String _formatDuration(Duration duration) {
@@ -1231,7 +1196,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
             ),
             const SizedBox(height: 8),
             Text(
-              _transcripcionLocal ?? widget.transcripcion!,
+              _transcripcionLocal ?? widget.transcripcion ?? '',
               style: TextStyle(
                 fontSize: 13,
                 height: 1.5,

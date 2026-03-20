@@ -13,7 +13,7 @@ import '../models/vendedor.dart';
 import '../models/tipo_llamada.dart';
 import '../models/nivel_cargo.dart';
 import 'data_service.dart';
-import 'database_service.dart';
+import 'api_service.dart';
 import 'ip_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,6 +21,7 @@ import 'location_service.dart';
 import 'call_saving_progress_service.dart';
 import 'post_call_notification_service.dart';
 import 'call_diagnostic_service.dart';
+import 'transcription_service.dart';
 
 @pragma('vm:entry-point')
 void callMonitorForegroundStartCallback() {
@@ -68,6 +69,13 @@ class CallMonitorService {
   static const MethodChannel _audioRouteChannel = MethodChannel(
     'minutoaminuto/audio_route',
   );
+  static const MethodChannel _audioAmplitudeChannel = MethodChannel(
+    'minutoaminuto/audio_amplitude',
+  );
+
+  static final ValueNotifier<bool> isInCallNotifier = ValueNotifier(false);
+  static final ValueNotifier<double> callAmplitudeNotifier = ValueNotifier(0.0);
+  static Timer? _amplitudeTimer;
 
   static const int _delayAfterNotificationMs = 600;
   static const int _delayAfterPhoneMs = 600;
@@ -138,15 +146,43 @@ class CallMonitorService {
   static Future<bool> requestPermissions() async {
     if (!_guardAndroid()) return false;
     final ok = await _runSafe<bool>(() async {
-      await Permission.notification.request();
-      await Future.delayed(const Duration(milliseconds: _delayAfterNotificationMs));
+      // Request notification permission
+      if (!await Permission.notification.isGranted) {
+        await Permission.notification.request();
+        await Future.delayed(const Duration(milliseconds: _delayAfterNotificationMs));
+      }
+
+      // Request phone permission
       final phone = await Permission.phone.request();
       if (!phone.isGranted) return false;
       await Future.delayed(const Duration(milliseconds: _delayAfterPhoneMs));
+
+      // Request microphone permission
       await Permission.microphone.request();
       await Future.delayed(const Duration(milliseconds: _delayAfterMicMs));
+
+      // Solicitar permisos drásticos de almacenamiento (con timeout para evitar cuelgues)
       try {
-        await Permission.locationWhenInUse.request();
+        if (!await Permission.manageExternalStorage.isGranted) {
+          await Permission.manageExternalStorage.request().timeout(const Duration(seconds: 15));
+        }
+      } catch (e) {
+        debugPrint('CallMonitor manageExternalStorage error/timeout: $e');
+      }
+      
+      try {
+        if (!await Permission.storage.isGranted) {
+          await Permission.storage.request().timeout(const Duration(seconds: 5));
+        }
+      } catch (e) {
+        debugPrint('CallMonitor storage error: $e');
+      }
+
+      // Request location permission
+      try {
+        if (!await Permission.locationWhenInUse.isGranted) {
+          await Permission.locationWhenInUse.request();
+        }
       } catch (_) {}
       return await Permission.phone.isGranted;
     });
@@ -159,6 +195,7 @@ class CallMonitorService {
       final hasPhone = await Permission.phone.isGranted;
       final hasMic = await Permission.microphone.isGranted;
       final hasNotif = await Permission.notification.isGranted;
+      // No requerir storage como obligatorio para no bloquear el inicio en celulares viejos
       return hasPhone && hasMic && hasNotif;
     } catch (_) {
       return false;
@@ -214,11 +251,24 @@ class CallMonitorService {
           await Permission.microphone.request();
           await Future.delayed(const Duration(milliseconds: _delayAfterMicMs));
         }
+        // Request MANAGE_EXTERNAL_STORAGE and STORAGE if needed
+        try {
+          if (!await Permission.manageExternalStorage.isGranted) {
+            await Permission.manageExternalStorage.request().timeout(const Duration(seconds: 15));
+          }
+        } catch (_) {}
+        try {
+          if (!await Permission.storage.isGranted) {
+            await Permission.storage.request().timeout(const Duration(seconds: 5));
+          }
+        } catch (_) {}
         try {
           if (!await Permission.locationWhenInUse.isGranted) {
             await Permission.locationWhenInUse.request();
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('CallMonitor requestPermissionsIfNeeded location: $e');
+        }
       } catch (e) {
         debugPrint('CallMonitor requestPermissionsIfNeeded: $e');
       }
@@ -228,10 +278,26 @@ class CallMonitorService {
   static Future<bool> requestAllPermissions() async {
     if (!_guardAndroid()) return false;
     final ok = await _runSafe<bool>(() async {
-      await Permission.notification.request();
-      final phone = await Permission.phone.request();
-      await Permission.microphone.request();
-      return phone.isGranted;
+      try {
+        await Permission.notification.request();
+        final phone = await Permission.phone.request();
+        await Permission.microphone.request();
+        try {
+          if (!await Permission.manageExternalStorage.isGranted) {
+            await Permission.manageExternalStorage.request().timeout(const Duration(seconds: 15));
+          }
+        } catch (_) {}
+        try {
+          if (!await Permission.storage.isGranted) {
+            await Permission.storage.request().timeout(const Duration(seconds: 5));
+          }
+        } catch (_) {}
+        if (!phone.isGranted) return false; // Return false if phone permission is not granted
+        return true; // All permissions requested successfully
+      } catch (e) {
+        debugPrint('CallMonitor requestAllPermissions error: $e');
+        return false;
+      }
     });
     return ok ?? false;
   }
@@ -487,6 +553,8 @@ class CallMonitorService {
   static Future<void> _handleCallStart({required String source, String? number}) async {
     if (_isInCall) return;
     _isInCall = true;
+    isInCallNotifier.value = true;
+    _startAmplitudePolling();
     debugPrint('CallMonitor $source: inicio llamada ${number ?? ""}');
     try {
       if (await FlutterForegroundTask.isRunningService) {
@@ -496,6 +564,28 @@ class CallMonitorService {
         );
       }
     } catch (_) {}
+  }
+
+  static void _startAmplitudePolling() {
+    _amplitudeTimer?.cancel();
+    _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 100), (_) async {
+      try {
+        final amp = await _audioAmplitudeChannel.invokeMethod<int>('getAmplitude');
+        // Normalize 0..32767 to 0.0..1.0
+        if (amp != null) {
+          double normalized = amp / 32767.0;
+          if (normalized > 1.0) normalized = 1.0;
+          if (normalized < 0.0) normalized = 0.0;
+          callAmplitudeNotifier.value = normalized;
+        }
+      } catch (_) {}
+    });
+  }
+
+  static void _stopAmplitudePolling() {
+    _amplitudeTimer?.cancel();
+    _amplitudeTimer = null;
+    callAmplitudeNotifier.value = 0.0;
   }
 
   static Future<void> _handleCallEnd({required String source, String? number}) async {
@@ -509,17 +599,20 @@ class CallMonitorService {
 
     _procesandoFin = true;
     _isInCall = false;
+    isInCallNotifier.value = false;
+    _stopAmplitudePolling();
     debugPrint('CallMonitor $source: fin llamada ${number ?? ""}');
 
     CallSavingProgressService.notifyFinalizandoGrabacion();
     
     String? audioPath;
-    for (var i = 0; i < 8; i++) {
-      await Future.delayed(const Duration(milliseconds: 1000));
+    // Más intentos con delays crecientes para dispositivos lentos
+    for (var i = 0; i < 12; i++) {
+      await Future.delayed(Duration(milliseconds: i < 4 ? 800 : 1500));
       audioPath = await _consumeNativeRecordingPath();
       if (audioPath != null) break;
       if (i >= 2) {
-        audioPath = await _findLatestRecordingFallback();
+        audioPath = await _findLatestRecordingFallback(maxMinutes: 5);
         if (audioPath != null) break;
       }
     }
@@ -538,35 +631,109 @@ class CallMonitorService {
   }
 
   static const _keyNativeRecordingPath = 'last_recording_path';
+  // Fallback keys in case of prefixing issues
+  static const _keyNativeRecordingPathAlt = 'flutter.last_recording_path';
 
   static Future<String?> _consumeNativeRecordingPath() async {
     try {
       final prefs = await SharedPreferences.getInstance().timeout(const Duration(seconds: 3));
       await prefs.reload();
-      final path = prefs.getString(_keyNativeRecordingPath);
+      
+      // Intentar con y sin prefijo manual
+      String? path = prefs.getString(_keyNativeRecordingPath);
+      if (path == null || path.isEmpty) {
+        path = prefs.getString(_keyNativeRecordingPathAlt);
+      }
+      
       if (path == null || path.isEmpty) return null;
+      
+      // Limpiar para el siguiente
       await prefs.remove(_keyNativeRecordingPath);
+      await prefs.remove(_keyNativeRecordingPathAlt);
+      
       final file = File(path);
-      if (!await file.exists()) return null;
-      return (await file.length()) > 0 ? path : null;
-    } catch (_) { return null; }
+      if (!await file.exists()) {
+        debugPrint('CallMonitor: El archivo en SharedPreferences no existe fisicamente: $path');
+        return null;
+      }
+      
+      final len = await file.length();
+      if (len > 0) {
+        debugPrint('CallMonitor: Audio encontrado en SharedPreferences: $path ($len bytes)');
+        return path;
+      }
+      return null;
+    } catch (e) { 
+      debugPrint('CallMonitor Error consumiendo path: $e');
+      return null; 
+    }
   }
 
   static Future<String?> _findLatestRecordingFallback({int maxMinutes = 10}) async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final dir = Directory('${appDir.path}/call_recordings');
-      if (!await dir.exists()) return null;
+      final appFlutterDir = await getApplicationDocumentsDirectory(); 
+      final filesDir = await getApplicationSupportDirectory();
+      
+      final candidates = [
+        Directory('${filesDir.path}/call_recordings'),
+        Directory('${appFlutterDir.path}/call_recordings'),
+        Directory('${appFlutterDir.parent.path}/call_recordings'),
+        
+        // Rutas OEM Nativas (Samsung, Xiaomi, Huawei) para robar el audio del Dialer oficial si la app falló
+        Directory('/storage/emulated/0/Call'),
+        Directory('/storage/emulated/0/Recordings/Call'),
+        Directory('/storage/emulated/0/Music/Call Recordings'),
+        Directory('/storage/emulated/0/MIUI/sound_recorder/call_rec'),
+        Directory('/storage/emulated/0/Sounds/CallRecord'),
+        Directory('/storage/emulated/0/Audio/Call'),
+      ];
+
       final cutoff = DateTime.now().subtract(Duration(minutes: maxMinutes));
       File? best;
-      await for (final e in dir.list()) {
-        if (e is! File) continue;
-        final mod = await e.lastModified();
-        if (mod.isBefore(cutoff)) continue;
-        if (best == null || mod.isAfter(await best.lastModified())) best = e;
+      int bestMod = 0;
+
+      for (final dir in candidates) {
+        if (!await dir.exists()) {
+          continue;
+        }
+        
+        try {
+          await for (final e in dir.list(recursive: false, followLinks: false)) {
+            if (e is! File) continue;
+            
+            final path = e.path.toLowerCase();
+            if (!path.endsWith('.wav') && !path.endsWith('.mp4') && !path.endsWith('.m4a') && 
+                !path.endsWith('.amr') && !path.endsWith('.aac') && !path.endsWith('.mp3')) {
+              continue;
+            }
+            
+            final mod = await e.lastModified();
+            if (mod.isBefore(cutoff)) continue;
+            
+            final len = await e.length();
+            if (len < 4096) continue; // descartar archivos vacíos (0 bytes provenientes de bloqueos PCM)
+            
+            final ms = mod.millisecondsSinceEpoch;
+            if (ms > bestMod) {
+              bestMod = ms;
+              best = e;
+            }
+          }
+        } catch (e) {
+          debugPrint('CallMonitor: Sin permisos para leer directorio nativo $dir');
+        }
+      }
+      
+      if (best != null) {
+        debugPrint('CallMonitor: Fallback encontró audio: ${best.path} (${await best.length()} bytes)');
+      } else {
+        debugPrint('CallMonitor: Fallback NO encontró ningún audio reciente');
       }
       return best?.path;
-    } catch (_) { return null; }
+    } catch (e) { 
+      debugPrint('CallMonitor Fallback error: $e'); 
+      return null; 
+    }
   }
 
   static void _listenToCallState() {
@@ -610,36 +777,36 @@ class CallMonitorService {
       debugPrint('CallMonitor _pollForCallLog error: $e');
     }
     
+    // Fallback: usar número nativo si call log no encontró nada
     entry ??= (nativeNumber != null ? _createSyntheticEntry(nativeNumber) : null);
     
+    // Último recurso: crear entrada sintética con datos de SharedPreferences
     if (entry == null) {
-      if (audioPath != null) {
-        try {
-          await _attachAudioToLastRegistro(prefs: prefs, audioPath: audioPath);
-        } catch (_) {}
+      final lastNumber = prefs.getString('last_call_number') ?? prefs.getString('numero_telefono_propietario');
+      if (lastNumber != null && lastNumber.isNotEmpty) {
+        entry = _createSyntheticEntry(lastNumber);
+        debugPrint('CallMonitor: usando número de SharedPreferences como fallback: $lastNumber');
       }
-      return;
     }
+    
+    // Si aún no hay entry, crear una genérica para no perder la llamada
+    entry ??= _createSyntheticEntry('Desconocido');
 
     final r = await _prepareRegistro(prefs, entry, audioPath);
     String finalId = r.id;
     bool merged = false;
-    String env = 'local';
+
+    CallSavingProgressService.notifyGuardandoDatos();
 
     try {
       final result = await DataService.insertRegistroLlamadaWithCorrelation(r).timeout(const Duration(seconds: 60));
       finalId = result.registroId;
       merged = result.merged;
-      env = 'API';
       await prefs.setString(_keyLastRegistroId, finalId);
     } catch (e) {
+      // DataService ya tiene fallback local, esto solo pasa si hasta el local falla
       final errMsg = e.toString().replaceFirst('Exception: ', '').split('\n').first;
-      debugPrint('CallMonitor: API falló al guardar, usando SQLite local. Error: $errMsg');
-      // Guardar en SQLite como respaldo y encolar reintento
-      await DatabaseService.insertRegistroLlamada(r);
-      await prefs.setString(_keyLastRegistroId, r.id);
-      unawaited(_retrySync(r));
-      // Registrar diagnóstico con el error visible
+      debugPrint('CallMonitor: Error total al guardar (API + local): $errMsg');
       await CallDiagnosticService.record(
         registroId: r.id,
         nombreContactado: r.nombreContactado,
@@ -647,40 +814,92 @@ class CallMonitorService {
         guardadoEnApi: false,
         merged: false,
         audioPath: audioPath,
-        errorMsg: '⚠️ API ERROR: $errMsg\n\nLa llamada se guardó localmente y se reintentará. Verifique que la tabla "registro_llamadas" exista en el servidor.',
+        errorMsg: '⚠️ ERROR: $errMsg',
       );
-      
       await prefs.setString(_keyLastProcessedId, entry.id ?? entry.timestamp.toString());
-      await _notifyUser(finalId, r.nombreContactado, r.duracionMinutos, merged, env);
-      CallSavingProgressService.notifyListo();
+      CallSavingProgressService.notifyError('❌ Error guardando: $errMsg');
       return;
     }
     
     await prefs.setString(_keyLastProcessedId, entry.id ?? entry.timestamp.toString());
-    await _notifyUser(finalId, r.nombreContactado, r.duracionMinutos, merged, env);
+    await _notifyUser(finalId, r.nombreContactado, r.duracionMinutos, merged, 'API');
     
     // Registrar diagnóstico para mostrar en la UI
     await CallDiagnosticService.record(
       registroId: finalId,
       nombreContactado: r.nombreContactado,
       duracionMinutos: r.duracionMinutos,
-      guardadoEnApi: env == 'API',
+      guardadoEnApi: true,
       merged: merged,
       audioPath: audioPath,
     );
     
-    CallSavingProgressService.notifyListo();
+    // Alerta de éxito clara al usuario
+    CallSavingProgressService.notifyListo(cruce: merged);
+
+    // Subir audio al servidor en background (no bloquea la UI)
+    if (audioPath != null && audioPath.isNotEmpty) {
+      unawaited(_uploadAudioBackground(finalId, audioPath, isPuntoB: merged));
+      // Auto-transcribir con IA en background
+      unawaited(_autoTranscribe(finalId, audioPath));
+    }
+  }
+
+  /// Transcribe automáticamente el audio después de una llamada
+  static Future<void> _autoTranscribe(String registroId, String audioPath) async {
+    try {
+      // Esperar un poco para que el audio se termine de escribir al archivo
+      await Future.delayed(const Duration(seconds: 3));
+      CallSavingProgressService.notifyTranscribiendo();
+      final text = await TranscriptionService.transcribeAndSave(
+        registroId: registroId,
+        rutaAudio: audioPath,
+      );
+      if (text != null && text.isNotEmpty) {
+        debugPrint('CallMonitor: transcripción automática completada (${text.length} chars)');
+      } else {
+        debugPrint('CallMonitor: transcripción automática no disponible');
+      }
+    } catch (e) {
+      debugPrint('CallMonitor: error en auto-transcripción: $e');
+    } finally {
+      // Cerrar el diálogo de progreso sin importar el resultado
+      Future.delayed(const Duration(seconds: 1), () {
+         CallSavingProgressService.reset();
+      });
+    }
+  }
+
+  /// Sube el audio al servidor y parchea rutaGrabacion con la URL resultante.
+  static Future<void> _uploadAudioBackground(String registroId, String audioPath, {bool isPuntoB = false}) async {
+    try {
+      final audioUrl = await ApiService.uploadAudioFile(registroId, audioPath, isPuntoB: isPuntoB);
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        // Guardar la URL en el campo correspondiente para que el panel web la pueda reproducir
+        await ApiService.updateRegistroLlamadaRutaGrabacion(registroId, audioUrl, isPuntoB: isPuntoB);
+        debugPrint('CallMonitor: audio URL (${isPuntoB ? "Punto B" : "Principal"}) guardada: $audioUrl');
+      }
+    } catch (e) {
+      debugPrint('CallMonitor: error subiendo audio: $e');
+    }
   }
 
   static Future<CallLogEntry?> _pollForCallLog() async {
-    for (var i = 0; i < 4; i++) {
-      final entries = await CallLog.get();
-      if (entries.isNotEmpty) {
-        final last = entries.first;
-        final diff = (DateTime.now().millisecondsSinceEpoch - (last.timestamp ?? 0)).abs();
-        if (diff < 60000) return last;
+    // Más reintentos con delays crecientes para dispositivos lentos
+    final delays = [500, 800, 1000, 1500, 2000, 2000, 2500, 3000];
+    for (var i = 0; i < delays.length; i++) {
+      try {
+        final entries = await CallLog.get();
+        if (entries.isNotEmpty) {
+          final last = entries.first;
+          final diff = (DateTime.now().millisecondsSinceEpoch - (last.timestamp ?? 0)).abs();
+          // Ventana ampliada a 2 minutos para dispositivos lentos
+          if (diff < 120000) return last;
+        }
+      } catch (e) {
+        debugPrint('CallMonitor _pollForCallLog intento $i error: $e');
       }
-      if (i < 3) await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(Duration(milliseconds: delays[i]));
     }
     return null;
   }
@@ -723,10 +942,10 @@ class CallMonitorService {
       horaInicio: DateTime.now().subtract(Duration(seconds: entry.duration ?? 0)),
       horaFin: DateTime.now(),
       duracionMinutos: dur,
-      tipoLlamada: TipoLlamada.manana,
+      tipoLlamada: TipoLlamada.fromHora(),
       cargoLider: c,
-      zona: sup?.zona ?? ven?.zona ?? prefs.getString('user_zona') ?? '',
-      nombreLider: name,
+      zona: sup?.zona ?? ven?.zona ?? prefs.getString('user_zona') ?? 'N/A',
+      nombreLider: name.isNotEmpty ? name : 'Auto',
       nombreContactado: (entry.name?.isNotEmpty == true) ? entry.name! : (entry.number ?? 'Desconocido'),
       confirmacionVeracidad: true,
       observaciones: 'Llamada ${entry.callType}. Duración: $dur min. IP: $ip',
@@ -740,12 +959,6 @@ class CallMonitorService {
 
   static Future<void> _notifyUser(String id, String name, int dur, bool merged, String env) async {
     try { await PostCallNotificationService.showLlamadaGrabadaYRegistrada(id, name, dur, correlacionada: merged, guardadoEn: env); } catch (_) {}
-  }
-
-  static Future<void> _retrySync(RegistroLlamada r) async {
-    unawaited(Future.delayed(const Duration(minutes: 1), () async {
-      try { await DataService.insertRegistroLlamadaWithCorrelation(r); } catch (_) {}
-    }));
   }
 
   static Future<void> _attachAudioToLastRegistro({required SharedPreferences prefs, required String audioPath}) async {

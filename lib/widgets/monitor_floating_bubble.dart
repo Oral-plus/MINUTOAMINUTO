@@ -119,8 +119,8 @@ class _MonitorFloatingBubbleState extends State<MonitorFloatingBubble>
                           boxShadow: [
                             BoxShadow(
                               color: _isRecording
-                                  ? const Color(0xFFE53935).withValues(alpha: 0.5)
-                                  : Colors.black.withValues(alpha: 0.4),
+                                  ? const Color(0xFFE53935).withOpacity(0.5)
+                                  : Colors.black.withOpacity(0.4),
                               blurRadius: _isRecording ? 18 : 12,
                               spreadRadius: _isRecording ? 2 : 0,
                               offset: const Offset(0, 4),

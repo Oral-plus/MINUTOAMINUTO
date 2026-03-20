@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../utils/app_theme.dart';
 
 import '../widgets/bloque_alertas.dart';
+import '../widgets/bloque_contactos_cartera.dart';
 import '../widgets/bloque_control_jerarquico.dart';
 import '../widgets/bloque_disciplina.dart';
 import '../widgets/bloque_ppvc_rvc.dart';
 import '../widgets/bloque_ranking.dart';
+import '../widgets/bloque_vendedores_sap.dart';
+import '../widgets/bloque_equipo_jerarquico.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,10 +31,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: context.ac.bg,
       appBar: AppBar(
-        title: const Text('Dashboard'),
-        backgroundColor: const Color(0xFF111111),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/images/LOGO 2 1 (2).png',
+              height: 42,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.schedule_rounded, color: Colors.white70),
+            ),
+            const SizedBox(width: 12),
+            const Flexible(
+              child: Text(
+                'MINUTO A MINUTO',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF0D0D0D),
         foregroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -97,9 +126,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 16),
                 const BloquePpvcRvc(),
                 const SizedBox(height: 16),
+                const BloqueEquipoJerarquico(),
+                const SizedBox(height: 16),
                 const BloqueControlJerarquico(),
                 const SizedBox(height: 16),
                 const BloqueAlertas(),
+                const SizedBox(height: 16),
+                const BloqueVendedoresSap(),
+                const SizedBox(height: 16),
+                const BloqueContactosCartera(),
                 const SizedBox(height: 16),
                 const BloqueRanking(),
               ],
@@ -183,15 +218,16 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ac = context.ac;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: ac.surfaceAlt,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: ac.fg.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withOpacity(context.isDark ? 0.5 : 0.1),
             blurRadius: 40,
             offset: const Offset(0, 20),
           ),
@@ -205,7 +241,7 @@ class _DashboardHeader extends StatelessWidget {
             child: Icon(
               Icons.analytics_outlined,
               size: 100,
-              color: Colors.white.withOpacity(0.03),
+              color: ac.fg.withOpacity(0.03),
             ),
           ),
           Column(
@@ -214,7 +250,7 @@ class _DashboardHeader extends StatelessWidget {
               Text(
                 'PANEL DE CONTROL',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.3),
+                  color: ac.fg.withOpacity(0.3),
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 3,
@@ -223,8 +259,8 @@ class _DashboardHeader extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 nombre,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: ac.fg,
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
@@ -261,22 +297,23 @@ class _HeaderChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fg = context.ac.fg;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: (color ?? Colors.white).withOpacity(0.08),
+        color: (color ?? fg).withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: (color ?? Colors.white).withOpacity(0.1)),
+        border: Border.all(color: (color ?? fg).withOpacity(0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color ?? Colors.white.withOpacity(0.5)),
+          Icon(icon, size: 14, color: color ?? fg.withOpacity(0.5)),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: color ?? Colors.white.withOpacity(0.8),
+              color: color ?? fg.withOpacity(0.8),
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -302,15 +339,16 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ac = context.ac;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: ac.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: ac.fg.withOpacity(0.06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withOpacity(0.15),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -322,18 +360,18 @@ class _StatCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
+              color: ac.fg.withOpacity(0.04),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icono, size: 16, color: Colors.white.withOpacity(0.6)),
+            child: Icon(icono, size: 16, color: ac.fg.withOpacity(0.6)),
           ),
           const SizedBox(height: 16),
           Text(
             valor,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w900,
-              color: Colors.white,
+              color: ac.fg,
               letterSpacing: -0.8,
             ),
           ),
@@ -342,7 +380,7 @@ class _StatCard extends StatelessWidget {
             titulo.toUpperCase(),
             style: TextStyle(
               fontSize: 9,
-              color: Colors.white.withOpacity(0.25),
+              color: ac.fg.withOpacity(0.25),
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
             ),

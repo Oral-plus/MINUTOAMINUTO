@@ -75,6 +75,13 @@ class SpeechLlamadaScreen extends StatelessWidget {
           const _Pregunta('¿Cumpliste presupuesto diario?'),
           const _Pregunta('¿Qué aprendiste hoy?'),
         ];
+      case TipoLlamada.noche:
+        return [
+          const _Pregunta('¿Cómo cerró el día?'),
+          const _Pregunta('¿Cumpliste la meta del día?'),
+          const _Pregunta('¿Clientes pendientes para mañana?'),
+          const _Pregunta('¿Alguna novedad importante?'),
+        ];
       case TipoLlamada.kam:
         return [
           const _Pregunta('% cumplimiento equipo'),
@@ -98,6 +105,8 @@ class SpeechLlamadaScreen extends StatelessWidget {
         return '"Hoy no vamos a cumplir, hoy vamos a superar."';
       case TipoLlamada.tarde:
         return '"Mañana corregimos y escalamos."';
+      case TipoLlamada.noche:
+        return '"Descansa bien, mañana a ganar."';
       case TipoLlamada.kam:
       case TipoLlamada.jefe:
         return 'Cierre estratégico según contexto.';

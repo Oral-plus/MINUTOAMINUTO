@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb -s R5CY90FYVJH shell \"logcat -d -t 50 2>/dev/null\")",
+      "Bash(adb devices:*)",
+      "Read(//c/Users/skyen/Desktop/MINUTOAMINUTO_NUEVO/$LOCALAPPDATA/Android/Sdk/platform-tools/**)",
+      "Read(//c/Users/skyen/Desktop/MINUTOAMINUTO_NUEVO/$HOME/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Read(//c/Users/**)"
+    ]
+  }
+}

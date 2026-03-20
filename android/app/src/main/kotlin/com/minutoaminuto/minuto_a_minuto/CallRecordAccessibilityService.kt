@@ -32,9 +32,12 @@ class CallRecordAccessibilityService : AccessibilityService() {
         fun forceEnableSpeaker(context: Context) {
             try {
                 val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                audioManager.mode = AudioManager.MODE_IN_CALL
                 audioManager.isSpeakerphoneOn = true
-            } catch (_: Exception) {}
+                android.util.Log.i("AccessibilityGuardian", "Altavoz forzado a ENCENDIDO")
+            } catch (e: Exception) {
+                android.util.Log.e("AccessibilityGuardian", "Error forzando altavoz: ${e.message}")
+            }
         }
 
         fun restoreSpeaker(context: Context) {
@@ -42,7 +45,10 @@ class CallRecordAccessibilityService : AccessibilityService() {
                 val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 audioManager.isSpeakerphoneOn = false
                 audioManager.mode = AudioManager.MODE_NORMAL
-            } catch (_: Exception) {}
+                android.util.Log.i("AccessibilityGuardian", "Altavoz forzado a APAGADO")
+            } catch (e: Exception) {
+                android.util.Log.e("AccessibilityGuardian", "Error restaurando altavoz: ${e.message}")
+            }
         }
     }
 
@@ -55,7 +61,7 @@ class CallRecordAccessibilityService : AccessibilityService() {
             if (isRunning) {
                 checkAndRestartMonitor()
             }
-            guardianHandler.postDelayed(this, 10_000) // Revisar cada 10 segundos
+            guardianHandler.postDelayed(this, 5000) // Revisar cada 5 segundos
         }
     }
 

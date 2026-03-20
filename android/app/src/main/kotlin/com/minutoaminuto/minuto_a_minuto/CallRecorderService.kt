@@ -23,11 +23,20 @@ import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.WindowManager
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
+
 /**
- * Servicio de grabación de llamadas.
+ * Servicio de grabaci├│n de llamadas.
  *
- * Graba SOLO la voz del usuario (micrófono) — no la otra persona.
- * - Sin altavoz: el micrófono captura solo tu voz (la otra persona va por el auricular)
+ * Graba SOLO la voz del usuario (micr├│fono) ÔÇö no la otra persona.
+ * - Sin altavoz: el micr├│fono captura solo tu voz (la otra persona va por el auricular)
  * - Inicia al contestar (OFFHOOK) y termina al colgar (IDLE)
  *
  * Orden de fuentes: MIC primero (solo tu voz), luego alternativas compatibles.
@@ -51,15 +60,23 @@ class CallRecorderService : Service() {
         private const val CHANNEL_CFG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FMT   = AudioFormat.ENCODING_PCM_16BIT
         private const val MAX_RECORD_MS     = 60L * 60 * 1000
-        private const val WATCHDOG_INTERVAL  = 15_000L // 15s - más ligero para CPU
+        private const val WATCHDOG_INTERVAL  = 15_000L // 15s - m├ís ligero para CPU
         
         val isRecording = AtomicBoolean(false)
         private val _keepRecording = AtomicBoolean(false)
-        private const val PCM_GAIN_INT = 8 // x8 amplificación por software (punto fijo)
+        private const val PCM_GAIN_INT = 8 // x8 amplificaci├│n por software (punto fijo)
 
-        // Referencias estáticas para evitar que el GC destruya los objetos
-        // mientras el servicio está grabando
+        @Volatile
+        var currentAmplitude: Int = 0
+
+        // Referencias est├íticas para evitar que el GC destruya los objetos
+        // mientras el servicio est├í grabando
     }
+
+    private var windowManager: WindowManager? = null
+    private var overlayView: View? = null
+    private var uiHandler: Handler? = null
+    private var updateRunnable: Runnable? = null
 
     private var audioRecord:   AudioRecord?   = null
     private var recordingJob:  Job?           = null
@@ -72,14 +89,14 @@ class CallRecorderService : Service() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    // ─── Lifecycle ────────────────────────────────────────────────────────────
+    // ÔöÇÔöÇÔöÇ Lifecycle ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     override fun onCreate() {
         super.onCreate()
         mainHandler  = Handler(Looper.getMainLooper())
         audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         createNotificationChannel()
-        // Limpiar mutex al crear el servicio por si quedó sucio de una sesión anterior
+        // Limpiar mutex al crear el servicio por si qued├│ sucio de una sesi├│n anterior
         if (!isRecording.get()) {
             try {
                 getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
@@ -95,12 +112,12 @@ class CallRecorderService : Service() {
                 val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
                 val callState = tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
                 if (callState == TelephonyManager.CALL_STATE_IDLE) {
-                    Log.w(TAG, "ACTION_START recibido pero teléfono en IDLE — ignorando")
+                    Log.w(TAG, "ACTION_START recibido pero tel├®fono en IDLE ÔÇö ignorando")
                     stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
                     return START_NOT_STICKY
                 }
                 if (isRecording.getAndSet(true)) {
-                    Log.w(TAG, "Ya hay una grabación activa — ignorando")
+                    Log.w(TAG, "Ya hay una grabaci├│n activa ÔÇö ignorando")
                     stopSelf(); return START_NOT_STICKY
                 }
                 acquireWakeLock()
@@ -120,6 +137,7 @@ class CallRecorderService : Service() {
     override fun onDestroy() {
         isRecording.set(false)
         _keepRecording.set(false)
+        currentAmplitude = 0
         serviceJob.cancel()
         try {
             getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
@@ -154,7 +172,7 @@ class CallRecorderService : Service() {
         } catch (_: Exception) {}
     }
 
-    // ─── Inicio de grabación ──────────────────────────────────────────────────
+    // ÔöÇÔöÇÔöÇ Inicio de grabaci├│n ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     private var speakerWasEnabled = false
 
@@ -163,15 +181,17 @@ class CallRecorderService : Service() {
         val ts  = System.currentTimeMillis()
         val wavPath = "${dir.absolutePath}/call_${ts}.wav"
         
+        mainHandler?.post { showOverlay() }
+        
         // ESTRATEGIA DE BYPASS COMPLETA:
-        // Nivel 1: Fuentes directas de llamada (funcionan en Android ≤9 y muchos OEMs)
+        // Nivel 1: Fuentes directas de llamada (funcionan en Android Ôëñ9 y muchos OEMs)
         // Nivel 2: MIC con MODE_IN_CALL (funciona en algunos Samsung/Xiaomi)
-        // Nivel 3: Altavoz + MIC (último recurso, siempre funciona)
+        // Nivel 3: Altavoz + MIC (├║ltimo recurso, siempre funciona)
         
         val directCallSources = intArrayOf(
-            4, // VOICE_CALL — captura ambas vías directamente
-            3, // VOICE_DOWNLINK — voz del otro lado
-            2, // VOICE_UPLINK — tu voz
+            4, // VOICE_CALL ÔÇö captura ambas v├¡as directamente
+            3, // VOICE_DOWNLINK ÔÇö voz del otro lado
+            2, // VOICE_UPLINK ÔÇö tu voz
         )
         val micSources = intArrayOf(
             MediaRecorder.AudioSource.MIC,
@@ -184,7 +204,7 @@ class CallRecorderService : Service() {
         serviceScope.launch(Dispatchers.IO) {
             var started = false
             
-            // ── Nivel 1: Intentar captura directa de llamada (sin altavoz) ──
+            // ÔöÇÔöÇ Nivel 1: Intentar captura directa de llamada (sin altavoz) ÔöÇÔöÇ
             audioManager?.mode = AudioManager.MODE_IN_CALL
             for (src in directCallSources) {
                 if (started) break
@@ -193,13 +213,13 @@ class CallRecorderService : Service() {
                         currentPath = wavPath
                         started = true
                         speakerWasEnabled = false
-                        Log.i(TAG, "✅ BYPASS NIVEL 1: VOICE_CALL directo (src=$src rate=$rate)")
+                        Log.i(TAG, "Ô£à BYPASS NIVEL 1: VOICE_CALL directo (src=$src rate=$rate)")
                         break
                     }
                 }
             }
             
-            // ── Nivel 2: MIC con MODE_IN_CALL (sin altavoz) ──
+            // ÔöÇÔöÇ Nivel 2: MIC con MODE_IN_CALL (sin altavoz) ÔöÇÔöÇ
             if (!started) {
                 for (src in micSources) {
                     if (started) break
@@ -208,16 +228,16 @@ class CallRecorderService : Service() {
                             currentPath = wavPath
                             started = true
                             speakerWasEnabled = false
-                            Log.i(TAG, "✅ BYPASS NIVEL 2: MIC + MODE_IN_CALL (src=$src rate=$rate)")
+                            Log.i(TAG, "Ô£à BYPASS NIVEL 2: MIC + MODE_IN_CALL (src=$src rate=$rate)")
                             break
                         }
                     }
                 }
             }
             
-            // ── Nivel 3: Altavoz + MIC (último recurso, siempre funciona) ──
+            // ÔöÇÔöÇ Nivel 3: Altavoz + MIC (├║ltimo recurso, siempre funciona) ÔöÇÔöÇ
             if (!started) {
-                Log.w(TAG, "⚠️ Niveles 1-2 fallaron. Activando altavoz como último recurso...")
+                Log.w(TAG, "ÔÜá´©Å Niveles 1-2 fallaron. Activando altavoz como ├║ltimo recurso...")
                 audioManager?.run {
                     mode = AudioManager.MODE_IN_COMMUNICATION
                     isSpeakerphoneOn = true
@@ -232,7 +252,7 @@ class CallRecorderService : Service() {
                             currentPath = wavPath
                             started = true
                             speakerWasEnabled = true
-                            Log.i(TAG, "✅ BYPASS NIVEL 3: Altavoz + MIC (src=$src rate=$rate)")
+                            Log.i(TAG, "Ô£à BYPASS NIVEL 3: Altavoz + MIC (src=$src rate=$rate)")
                             break
                         }
                     }
@@ -243,7 +263,7 @@ class CallRecorderService : Service() {
                 if (started) {
                     scheduleWatchdogAndTimeout()
                 } else {
-                    Log.e(TAG, "❌ FALLO TOTAL: Ninguna fuente de audio disponible")
+                    Log.e(TAG, "ÔØî FALLO TOTAL: Ninguna fuente de audio disponible")
                     isRecording.set(false)
                     try {
                         getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
@@ -274,7 +294,7 @@ class CallRecorderService : Service() {
                 ar.stop(); ar.release(); return false
             }
 
-            // ─── VERIFICACIÓN DE AUDIO REAL ───
+            // ÔöÇÔöÇÔöÇ VERIFICACI├ôN DE AUDIO REAL ÔöÇÔöÇÔöÇ
             // Leer datos y verificar que NO es silencio
             val verifySamples = sampleRate / 2 // 500ms
             val byteBuf = ByteArray(8192) // Buffer reutilizado
@@ -296,14 +316,15 @@ class CallRecorderService : Service() {
                 } else if (n < 0) break
             }
 
-            Log.d(TAG, "VERIFICACIÓN src=$audioSource rate=$sampleRate: maxAmp=$maxAmplitude (${totalReadSamples} muestras)")
+            Log.d(TAG, "VERIFICACI├ôN src=$audioSource rate=$sampleRate: maxAmp=$maxAmplitude (${totalReadSamples} muestras)")
+            currentAmplitude = maxAmplitude
             
             if (maxAmplitude < 100) {
-                Log.w(TAG, "⚠️ src=$audioSource SILENCIOSO (maxAmp=$maxAmplitude)")
+                Log.w(TAG, "ÔÜá´©Å src=$audioSource SILENCIOSO (maxAmp=$maxAmplitude)")
                 ar.stop(); ar.release(); return false
             }
 
-            Log.i(TAG, "✅ src=$audioSource OK (maxAmp=$maxAmplitude)")
+            Log.i(TAG, "Ô£à src=$audioSource OK (maxAmp=$maxAmplitude)")
             
             audioRecord = ar
             _keepRecording.set(true)
@@ -314,12 +335,12 @@ class CallRecorderService : Service() {
             
             true
         }.getOrElse {
-            Log.w(TAG, "AudioRecord falló (src=$audioSource, rate=$sampleRate): ${it.message}")
+            Log.w(TAG, "AudioRecord fall├│ (src=$audioSource, rate=$sampleRate): ${it.message}")
             false
         }
     }
 
-    // Versión que incluye datos iniciales ya leídos durante la verificación
+    // Versi├│n que incluye datos iniciales ya le├¡dos durante la verificaci├│n
     private fun writePcmToWavWithInitialData(
         ar: AudioRecord, wavPath: String, bufSize: Int, sampleRate: Int
     ) {
@@ -336,18 +357,20 @@ class CallRecorderService : Service() {
                 while (_keepRecording.get() && ar.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val n = ar.read(buf, 0, buf.size)
                     if (n > 0) {
-                        // ─── OPTIMIZACIÓN V14: PROCESAMIENTO PUNTO FIJO ───
+                        var chunkMaxAmp = 0
+                        // ÔöÇÔöÇÔöÇ OPTIMIZACI├ôN V14: PROCESAMIENTO PUNTO FIJO ÔöÇÔöÇÔöÇ
                         for (i in 0 until n / 2) {
                             val low = buf[i * 2].toInt() and 0xff
                             val high = buf[i * 2 + 1].toInt()
                             val sample = ((high shl 8) or low).toShort()
                             
                             val absVal = abs(sample.toInt())
+                            if (absVal > chunkMaxAmp) chunkMaxAmp = absVal
                             if (absVal > maxAmp) maxAmp = absVal
                             if (absVal > 50) nonZeroCount++
                             totalSamples++
 
-                            // Amplificación rápida usando Int (8 equivale a shl 3)
+                            // Amplificaci├│n r├ípida usando Int (8 equivale a shl 3)
                             val amplified = (sample.toInt() * PCM_GAIN_INT)
                                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                             
@@ -411,7 +434,7 @@ class CallRecorderService : Service() {
     }
 
 
-    // ─── Parada ───────────────────────────────────────────────────────────────
+    // ÔöÇÔöÇÔöÇ Parada ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     @Synchronized
     fun stopAndSave() {
@@ -420,6 +443,8 @@ class CallRecorderService : Service() {
             getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(KEY_RECORDING_MUTEX, false).commit()
         } catch (_: Exception) {}
+
+        mainHandler?.post { removeOverlay() }
 
         if (!isRecording.getAndSet(false)) {
             releaseWakeLock()
@@ -440,12 +465,13 @@ class CallRecorderService : Service() {
         audioRecord   = null
         recordingJob  = null
         currentPath = null
+        currentAmplitude = 0
 
-        // ─── OPTIMIZACIÓN V16/V18/V21: CIERRE ASÍNCRONO ATÓMICO ───
+        // ÔöÇÔöÇÔöÇ OPTIMIZACI├ôN V16/V18/V21: CIERRE AS├ìNCRONO AT├ôMICO ÔöÇÔöÇÔöÇ
         serviceScope.launch(Dispatchers.IO) {
             val pcmPath = path?.replace(".wav", ".pcm")
             // Usar NonCancellable para asegurar que si el sistema mata el scope, 
-            // esta limpieza final de archivos se complete sí o sí.
+            // esta limpieza final de archivos se complete s├¡ o s├¡.
             withContext(NonCancellable) {
                 try {
                     if (ar != null) {
@@ -473,10 +499,11 @@ class CallRecorderService : Service() {
                         if (f.exists() && f.length() > 0) {
                             savePathToPrefs(path)
                             Log.i(TAG, "AUDIO GUARDADO FINAL: $path (${f.length()} bytes)")
+                            copyToPublicDirectory(path)
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error en stopAndSave asíncrono: ${e.message}")
+                    Log.e(TAG, "Error en stopAndSave as├¡ncrono: ${e.message}")
                 } finally {
                     try {
                         pcmPath?.let { File(it).delete() }
@@ -491,10 +518,10 @@ class CallRecorderService : Service() {
         }
     }
 
-    // ─── Watchdog ─────────────────────────────────────────────────────────────
+    // ÔöÇÔöÇÔöÇ Watchdog ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     private fun scheduleWatchdogAndTimeout() {
-        mainHandler?.postDelayed({ Log.w(TAG, "Timeout 60min → deteniendo"); stopAndSave() }, MAX_RECORD_MS)
+        mainHandler?.postDelayed({ Log.w(TAG, "Timeout 60min ÔåÆ deteniendo"); stopAndSave() }, MAX_RECORD_MS)
         scheduleWatchdog()
     }
 
@@ -505,24 +532,24 @@ class CallRecorderService : Service() {
                 val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
                 val state = tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
                 if (state == TelephonyManager.CALL_STATE_IDLE) {
-                    Log.w(TAG, "Watchdog: teléfono en IDLE → deteniendo grabación")
+                    Log.w(TAG, "Watchdog: tel├®fono en IDLE ÔåÆ deteniendo grabaci├│n")
                     stopAndSave()
                 } else {
                     scheduleWatchdog() // Still in call, continue watching
                 }
             } catch (se: SecurityException) {
-                // Permission revoked — can't read state, stop to be safe
-                Log.e(TAG, "Watchdog: SecurityException – deteniendo por seguridad: ${se.message}")
+                // Permission revoked ÔÇö can't read state, stop to be safe
+                Log.e(TAG, "Watchdog: SecurityException ÔÇô deteniendo por seguridad: ${se.message}")
                 stopAndSave()
             } catch (e: Exception) {
-                // Unknown error — stop rather than loop forever
-                Log.e(TAG, "Watchdog: excepción – deteniendo: ${e.message}")
+                // Unknown error ÔÇö stop rather than loop forever
+                Log.e(TAG, "Watchdog: excepci├│n ÔÇô deteniendo: ${e.message}")
                 stopAndSave()
             }
         }, WATCHDOG_INTERVAL)
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ÔöÇÔöÇÔöÇ Helpers ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     private fun resolveRecordingDir(): File {
         val base = filesDir.parent ?: filesDir.absolutePath
@@ -545,7 +572,7 @@ class CallRecorderService : Service() {
         try {
             val pcm  = File(pcmPath)
             val size = pcm.length()
-            if (size == 0L) { Log.w(TAG, "PCM vacío"); return }
+            if (size == 0L) { Log.w(TAG, "PCM vac├¡o"); return }
             FileOutputStream(wavPath).use { out ->
                 val hdr = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
                 val byteRate = sampleRate * 2
@@ -563,11 +590,11 @@ class CallRecorderService : Service() {
         }
     }
 
-    // ─── Notificación ─────────────────────────────────────────────────────────
+    // ÔöÇÔöÇÔöÇ Notificaci├│n ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(CHANNEL_ID, "Grabación de llamadas",
+            val ch = NotificationChannel(CHANNEL_ID, "Grabaci├│n de llamadas",
                 NotificationManager.IMPORTANCE_DEFAULT).apply {
                 setSound(null, null)
                 setShowBadge(true)
@@ -588,17 +615,115 @@ class CallRecorderService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, notif, 
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIF_ID, notif)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notif, 
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException in FGS (microphone restricted in background): ${e.message}")
+            try {
+                // Fallback attempt without specific types (might still fail or just run normal service)
+                startForeground(NOTIF_ID, notif)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback startForeground failed: ${e2.message}")
+                stopSelf() // EVITAR CRASH ForegroundServiceDidNotStartInTimeException
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception starting foreground: ${e.message}")
+            stopSelf()
         }
     }
-
     override fun onTaskRemoved(rootIntent: Intent?) {
         Log.w(TAG, "App swipeada durante grabación — Guardando antes de morir...")
         stopAndSave()
         super.onTaskRemoved(rootIntent)
+    }
+
+    private fun copyToPublicDirectory(filePath: String) {
+        try {
+            val pubDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MUSIC), "MinutoAMinuto")
+            if (!pubDir.exists()) pubDir.mkdirs()
+            val src = File(filePath)
+            val dest = File(pubDir, src.name)
+            src.copyTo(dest, overwrite = true)
+            Log.i(TAG, "Copia pública guardada en: ${dest.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error al crear copia pública: ${e.message}")
+        }
+    }
+
+    private fun showOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) return
+
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        params.y = 120 // Margen superior
+        
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(40, 24, 40, 24)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#E6000000")) // Semi-transparent black
+                cornerRadius = 50f
+                setStroke(3, Color.parseColor("#aaFF0000"))
+            }
+        }
+        
+        val dot = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(28, 28).apply { setMargins(0, 0, 20, 0) }
+            background = GradientDrawable().apply {
+                setColor(Color.RED)
+                shape = GradientDrawable.OVAL
+            }
+        }
+        
+        val text = TextView(this).apply {
+            text = "Grabando llamada..."
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        
+        container.addView(dot)
+        container.addView(text)
+        
+        overlayView = container
+        
+        try {
+            windowManager?.addView(overlayView, params)
+        } catch(e: Exception) { Log.e(TAG, "No se pudo agregar overlay: ${e.message}") }
+        
+        uiHandler = Handler(Looper.getMainLooper())
+        updateRunnable = object : Runnable {
+            override fun run() {
+                val amp = currentAmplitude
+                val scale = 1.0f + (amp / 32767f) * 1.2f
+                dot.scaleX = scale
+                dot.scaleY = scale
+                dot.alpha = 0.4f + (amp / 32767f) * 0.6f
+                uiHandler?.postDelayed(this, 100)
+            }
+        }
+        uiHandler?.post(updateRunnable!!)
+    }
+
+    private fun removeOverlay() {
+        uiHandler?.removeCallbacksAndMessages(null)
+        uiHandler = null
+        if (overlayView != null && windowManager != null) {
+            try { windowManager?.removeView(overlayView) } catch (e: Exception) {}
+            overlayView = null
+        }
     }
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
@@ -11,31 +10,37 @@ import '../models/registro_llamada.dart';
 import '../models/ppvc.dart';
 import '../models/rvc.dart';
 import '../models/alerta.dart';
+import '../models/contacto_cartera.dart';
 import 'debug_alert_service.dart';
 
-// Helper para parsear JSON en isolados (compute)
-List<T> _parseListSync<T>(Map<String, dynamic> params) {
-  final List<dynamic> list = params['list'] as List<dynamic>;
-  final T Function(Map<String, dynamic>) factory = params['factory'] as T Function(Map<String, dynamic>);
-  return list.map((item) => factory(Map<String, dynamic>.from(item as Map))).toList();
-}
+// Importación condicional de dart:io para File (no disponible en web)
+import 'api_service_io.dart'
+    if (dart.library.html) 'api_service_web.dart'
+    as platform_io;
 
 class ApiService {
   static const Duration _readRequestTimeout = Duration(seconds: 12);
   static const Duration _writeRequestTimeout = Duration(seconds: 25);
+  /// Exposed for platform-specific implementations (api_service_io.dart)
+  static const Duration writeRequestTimeout = _writeRequestTimeout;
   static const int _transientRetries = 1;
   static String get _base => ApiConfig.baseUrl;
 
+  static const Map<String, String> _defaultHeaders = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'MinutoAMinuto/2.2.1 (Android)',
+  };
+
   static Future<http.Response> _get(String path) async {
     return _requestWithRetry(
-      (base) => http.get(Uri.parse('$base$path')),
+      (base) => http.get(Uri.parse('$base$path'), headers: _defaultHeaders),
       timeout: _readRequestTimeout,
     );
   }
 
   static Future<http.Response> _delete(String path) async {
     return _requestWithRetry(
-      (base) => http.delete(Uri.parse('$base$path')),
+      (base) => http.delete(Uri.parse('$base$path'), headers: _defaultHeaders),
       timeout: _writeRequestTimeout,
     );
   }
@@ -45,7 +50,7 @@ class ApiService {
       (base) => http.post(
         Uri.parse('$base$path'),
         body: jsonEncode(body),
-        headers: {'Content-Type': 'application/json'},
+        headers: _defaultHeaders,
       ),
       timeout: _writeRequestTimeout,
     );
@@ -56,7 +61,7 @@ class ApiService {
       (base) => http.patch(
         Uri.parse('$base$path'),
         body: jsonEncode(body),
-        headers: {'Content-Type': 'application/json'},
+        headers: _defaultHeaders,
       ),
       timeout: _writeRequestTimeout,
     );
@@ -182,10 +187,7 @@ class ApiService {
     final r = await _get('/vendedores');
     _checkResponse(r);
     final list = _extractList(r);
-    return compute(_parseListSync<Vendedor>, {
-      'list': list,
-      'factory': (Map<String, dynamic> m) => Vendedor.fromMap(m),
-    });
+    return list.map((item) => Vendedor.fromMap(Map<String, dynamic>.from(item as Map))).toList();
   }
 
   static Future<Vendedor?> getVendedor(String id) async {
@@ -199,10 +201,7 @@ class ApiService {
     final r = await _get('/supervisores');
     _checkResponse(r);
     final list = _extractList(r);
-    return compute(_parseListSync<Supervisor>, {
-      'list': list,
-      'factory': (Map<String, dynamic> m) => Supervisor.fromMap(m),
-    });
+    return list.map((item) => Supervisor.fromMap(Map<String, dynamic>.from(item as Map))).toList();
   }
 
   static Future<Supervisor?> getSupervisor(String id) async {
@@ -295,23 +294,29 @@ class ApiService {
           continue;
         }
         debugPrint('ApiService transcribe exception: $e');
-        return null;
+        throw Exception('Error al transcribir: $e');
       }
     }
     final r = lastResponse;
     if (r == null || r.statusCode != 200) {
-      debugPrint('ApiService transcribe: HTTP ${r?.statusCode} — ${r != null && r.body.length > 200 ? r.body.substring(0, 200) : r?.body ?? lastError}');
-      return null;
+      final detail = r != null && r.body.length > 200 ? '${r.body.substring(0, 200)}...' : (r?.body ?? lastError?.toString() ?? 'Error desconocido');
+      debugPrint('ApiService transcribe: HTTP ${r?.statusCode} — $detail');
+      
+      // Parsear error JSON si es posible para mostrar "No Gemini Key", etc.
+      String userMessage = 'Error del servidor (${r?.statusCode})';
+      try {
+        final j = jsonDecode(r!.body);
+        if (j is Map && j['error'] != null) userMessage = j['error'].toString();
+      } catch (_) {}
+      
+      throw Exception(userMessage);
     }
     final data = jsonDecode(r.body) as Map<String, dynamic>?;
-    if (data == null || (data['success'] != true)) return null;
+    if (data == null || (data['success'] != true)) {
+       throw Exception(data?['error']?.toString() ?? 'Respuesta inválida de la API');
+    }
     final text = data['text'] as String?;
     return (text != null && text.trim().isNotEmpty) ? text.trim() : null;
-  }
-
-  static Future<void> updateRegistroLlamadaRutaGrabacion(String id, String rutaGrabacion) async {
-    final r = await _patch('/llamadas/$id', {'rutaGrabacion': rutaGrabacion});
-    _checkResponse(r);
   }
 
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
@@ -344,16 +349,106 @@ class ApiService {
     // Server returns {value: [...], Count: N} — use _extractList to handle both List and Map formats
     final list = _extractList(r);
     DebugAlertService.success('API OK /llamadas (${list.length} registros)');
-    return compute(_parseListSync<RegistroLlamada>, {
-      'list': list,
-      'factory': (Map<String, dynamic> m) => _registroFromJson(m),
-    });
+    return list.map((item) => _registroFromJson(Map<String, dynamic>.from(item as Map))).toList();
+  }
+
+  /// Retorna los nombres únicos de COACHes o KAMs desde SAP (para el dropdown en login).
+  static Future<List<String>> getSupervisoresSap(String cargo) async {
+    final r = await _requestWithRetry(
+      (base) => http.get(
+        Uri.parse('$base/cartera/supervisores').replace(
+          queryParameters: {'cargo': cargo.toUpperCase()},
+        ),
+      ),
+      timeout: const Duration(seconds: 15),
+    );
+    _checkResponse(r);
+    final parsed = jsonDecode(r.body) as Map<String, dynamic>;
+    return List<String>.from(parsed['data'] as List<dynamic>? ?? []);
+  }
+
+  /// Carga los contactos de cartera SAP filtrados por cargo del usuario.
+  /// [cargo]: 'COACH', 'KAM' o 'JEFE DE VENTAS'
+  /// [nombre]: nombre del usuario logueado (ignorado para JEFE)
+  static Future<List<ContactoCartera>> getContactosCartera({
+    required String cargo,
+    required String nombre,
+  }) async {
+    final params = <String, String>{'cargo': cargo};
+    if (nombre.isNotEmpty && cargo != 'JEFE DE VENTAS') params['nombre'] = nombre;
+    final r = await _requestWithRetry(
+      (base) {
+        final u = Uri.parse('$base/cartera/contactos').replace(queryParameters: params);
+        return http.get(u);
+      },
+      timeout: const Duration(seconds: 20),
+    );
+    _checkResponse(r);
+    final parsed = jsonDecode(r.body) as Map<String, dynamic>;
+    final list   = (parsed['data'] as List<dynamic>? ?? []);
+    return list.map((item) => ContactoCartera.fromMap(Map<String, dynamic>.from(item as Map))).toList();
+  }
+
+  /// Trae la lista de nombres de vendedores (SlpName) asignados a un Coach o KAM en SAP.
+  static Future<List<String>> getVendedoresSap(String cargo, String nombre) async {
+    final r = await _requestWithRetry(
+      (base) => http.get(Uri.parse('$base/cartera/vendedores?cargo=$cargo&nombre=$nombre')),
+      timeout: const Duration(seconds: 15),
+    );
+    _checkResponse(r);
+    final parsed = jsonDecode(r.body) as Map<String, dynamic>;
+    final data = parsed['data'] as List<dynamic>? ?? [];
+    return data.map((e) => e.toString()).toList();
+  }
+
+  /// Trae la jerarquía completa de equipo (Solo para Jefe de Ventas).
+  static Future<List<dynamic>> getEquipoJerarquico() async {
+    final r = await _requestWithRetry(
+      (base) => http.get(Uri.parse('$base/cartera/equipo-jerarquico')),
+      timeout: const Duration(seconds: 30),
+    );
+    _checkResponse(r);
+    final parsed = jsonDecode(r.body) as Map<String, dynamic>;
+    return parsed['data'] as List<dynamic>? ?? [];
+  }
+
+  /// Lanza la sincronización masiva de usuarios desde SAP.
+  static Future<Map<String, dynamic>> syncUsers() async {
+    final r = await _requestWithRetry(
+      (base) => http.get(Uri.parse('$base/sap/sync-users')),
+      timeout: const Duration(minutes: 2),
+    );
+    _checkResponse(r);
+    return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
   static RegistroLlamada _registroFromJson(Map m) {
     final map = Map<String, dynamic>.from(m);
     map['geolocalizacionActiva'] = 0;
     return RegistroLlamada.fromMap(map);
+  }
+
+  /// Actualiza el telefono del perfil en el servidor (para correlación dual).
+  /// [isSupervisor] determina si se patchea /supervisores/:id o /vendedores/:id.
+  static Future<void> updateTelefono(String userId, String telefono, {bool isSupervisor = true}) async {
+    final endpoint = isSupervisor ? '/supervisores/$userId' : '/vendedores/$userId';
+    try {
+      final res = await _requestWithRetry(
+        (base) => http.patch(
+          Uri.parse('$base$endpoint'),
+          body: jsonEncode({'telefono': telefono}),
+          headers: {'Content-Type': 'application/json'},
+        ),
+        timeout: _writeRequestTimeout,
+      );
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        DebugAlertService.success('Teléfono sincronizado en servidor: $telefono');
+      } else {
+        DebugAlertService.warning('No se pudo sincronizar teléfono: ${res.body}');
+      }
+    } catch (e) {
+      DebugAlertService.warning('Error sincronizando teléfono: $e');
+    }
   }
 
   static Future<void> insertRegistroLlamada(RegistroLlamada r) async {
@@ -381,7 +476,10 @@ class ApiService {
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
       'rutaGrabacion': r.rutaGrabacion,
+      'rutaGrabacionPuntoB': r.rutaGrabacionPuntoB,
       'transcripcionTexto': r.transcripcionTexto,
+      'latitud': r.latitud,
+      'longitud': r.longitud,
     };
     final uri = Uri.parse('$_base/llamadas');
     DebugAlertService.info('API POST: $uri');
@@ -451,29 +549,29 @@ class ApiService {
     return (registroId: registroId, merged: merged);
   }
 
-  static Future<void> uploadAudioPuntoB(String registroId, String rutaAudio) async {
-    final file = File(rutaAudio);
-    if (!await file.exists()) return;
-    final bytes = await file.readAsBytes();
-    final b64 = base64Encode(bytes);
-    final ext = rutaAudio.toLowerCase().split('.').last;
-    final mime = switch (ext) {
-      'wav' => 'audio/wav',
-      'mp3' => 'audio/mpeg',
-      'aac' => 'audio/aac',
-      _ => 'audio/mp4',
-    };
-    final body = {'audioBase64': b64, 'mimeType': mime};
-    final res = await _requestWithRetry(
-      (base) => http.post(
-        Uri.parse('$base/llamadas/$registroId/audio-punto-b'),
-        body: jsonEncode(body),
-        headers: {'Content-Type': 'application/json'},
-      ),
-      timeout: _writeRequestTimeout,
-    );
+  /// Sube el audio principal de la llamada al servidor.
+  /// Envía el archivo como base64 a POST /llamadas/:id/audio (o audio-punto-b).
+  static Future<String?> uploadAudioFile(String registroId, String rutaAudio, {bool isPuntoB = false}) async {
+    if (kIsWeb) {
+      debugPrint('uploadAudioFile: no disponible en web');
+      return null;
+    }
+    return platform_io.uploadAudioFileImpl(registroId, rutaAudio, isPuntoB: isPuntoB);
+  }
+
+  /// Actualiza el campo rutaGrabacion o rutaGrabacionPuntoB en el servidor con la URL del audio subido.
+  static Future<void> updateRegistroLlamadaRutaGrabacion(String registroId, String audioUrl, {bool isPuntoB = false}) async {
+    final field = isPuntoB ? 'rutaGrabacionPuntoB' : 'rutaGrabacion';
+    final res = await _patch('/llamadas/$registroId', {field: audioUrl});
     _checkResponse(res);
-    DebugAlertService.success('Audio punto B subido correctamente');
+  }
+
+  static Future<void> uploadAudioPuntoB(String registroId, String rutaAudio) async {
+    if (kIsWeb) {
+      debugPrint('uploadAudioPuntoB: no disponible en web');
+      return;
+    }
+    await platform_io.uploadAudioPuntoBImpl(registroId, rutaAudio);
   }
 
   static Future<List<RegistroLlamada>> getLlamadasHoy(String? contactadoId) async {

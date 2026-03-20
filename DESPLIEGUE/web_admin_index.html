@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minuto a Minuto — Panel Administrativo</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root,[data-theme="dark"]{
+  --bg:#080808;--surface:#111;--surface2:#181818;--surface3:#222;
+  --border:rgba(255,255,255,.07);--border-h:rgba(255,255,255,.14);
+  --text:#fff;--text2:rgba(255,255,255,.45);--text3:rgba(255,255,255,.22);
+  --green:#4ade80;--green-bg:rgba(74,222,128,.08);--green-b:rgba(74,222,128,.2);
+  --amber:#fbbf24;--amber-bg:rgba(251,191,36,.08);--amber-b:rgba(251,191,36,.2);
+  --red:#f87171;--red-bg:rgba(248,113,113,.08);--red-b:rgba(248,113,113,.2);
+  --blue:#60a5fa;--blue-bg:rgba(96,165,250,.08);--blue-b:rgba(96,165,250,.2);
+  --btn-bg:#1a1a1a;--btn-hover:#242424;--r:16px;--r2:10px;
+}
+[data-theme="light"]{
+  --bg:#f4f4f5;--surface:#fff;--surface2:#f9f9fa;--surface3:#f0f0f2;
+  --border:rgba(0,0,0,.09);--border-h:rgba(0,0,0,.16);
+  --text:#0a0a0a;--text2:rgba(0,0,0,.5);--text3:rgba(0,0,0,.3);
+  --green:#16a34a;--green-bg:rgba(22,163,74,.07);--green-b:rgba(22,163,74,.2);
+  --amber:#d97706;--amber-bg:rgba(217,119,6,.07);--amber-b:rgba(217,119,6,.2);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.07);--red-b:rgba(220,38,38,.2);
+  --blue:#2563eb;--blue-bg:rgba(37,99,235,.07);--blue-b:rgba(37,99,235,.2);
+  --btn-bg:#ebebed;--btn-hover:#e1e1e3;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .25s,color .25s;}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:rgba(128,128,128,.25);border-radius:3px;}
+.topbar{position:sticky;top:0;z-index:200;background:var(--surface);border-bottom:1px solid var(--border);
+  backdrop-filter:blur(20px);padding:0 20px;height:60px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.brand{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.brand-logo{background:#fff;border-radius:7px;padding:4px 10px;font-size:13px;font-weight:900;color:#000;letter-spacing:-.3px;white-space:nowrap;}
+.brand-text .t1{font-size:12px;font-weight:800;letter-spacing:2px;}
+.brand-text .t2{font-size:10px;color:var(--text2);letter-spacing:.5px;}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.chip{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);
+  padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+.dot{width:7px;height:7px;border-radius:50%;}
+.dot-green{background:var(--green);box-shadow:0 0 7px var(--green);animation:blink 2s infinite;}
+.dot-red{background:var(--red);}
+.dot-amber{background:var(--amber);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.btn{background:var(--btn-bg);border:1px solid var(--border);color:var(--text2);
+  font-family:inherit;font-size:12px;font-weight:600;padding:7px 14px;
+  border-radius:8px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn:hover{background:var(--btn-hover);border-color:var(--border-h);color:var(--text);}
+.theme-toggle{background:var(--btn-bg);border:1px solid var(--border);border-radius:20px;
+  padding:5px 10px;cursor:pointer;font-size:14px;line-height:1;transition:.15s;}
+.theme-toggle:hover{border-color:var(--border-h);}
+.tabs{display:flex;gap:2px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tab{padding:12px 18px;cursor:pointer;border:none;background:none;font-family:inherit;font-size:13px;
+  font-weight:600;color:var(--text2);border-bottom:2px solid transparent;position:relative;top:1px;
+  display:flex;align-items:center;gap:7px;transition:color .15s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--text);border-bottom-color:var(--text);}
+.badge{background:var(--surface3);border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px;}
+.tab.active .badge{background:rgba(128,128,128,.2);}
+.main{padding:20px;}
+.panel{display:none;}.panel.active{display:block;}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;}
+.stat:hover{border-color:var(--border-h);}
+.stat-l{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.9px;text-transform:uppercase;margin-bottom:8px;}
+.stat-v{font-size:28px;font-weight:800;}
+.stat-s{font-size:11px;color:var(--text3);margin-top:4px;}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.filters input,.filters select{background:var(--surface);border:1px solid var(--border);color:var(--text);
+  font-family:inherit;font-size:12px;padding:8px 12px;border-radius:8px;outline:none;transition:border-color .15s;}
+.filters input::placeholder{color:var(--text3);}
+.filters input:focus,.filters select:focus{border-color:var(--border-h);}
+.filters select option{background:var(--surface2);}
+input[type="date"]{color-scheme:dark;}
+[data-theme="light"] input[type="date"]{color-scheme:light;}
+.fl{font-size:11px;color:var(--text3);font-weight:500;white-space:nowrap;}
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead th{background:var(--surface2);padding:11px 14px;text-align:left;font-size:10px;font-weight:700;
+  color:var(--text2);letter-spacing:.8px;text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--surface2);}
+tbody td{padding:11px 14px;font-size:12px;vertical-align:middle;}
+.loading-r td,.empty-r td{text-align:center;padding:44px;color:var(--text3);font-size:12px;}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(128,128,128,.2);
+  border-top-color:rgba(128,128,128,.6);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;
+  letter-spacing:.2px;padding:3px 9px;border-radius:20px;}
+.p-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-b);}
+.p-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-b);}
+.p-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-b);}
+.p-blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-b);}
+.p-gray{background:var(--surface3);color:var(--text2);border:1px solid var(--border);}
+.audio-cell{display:flex;align-items:center;gap:7px;}
+.play-btn{width:30px;height:30px;border-radius:50%;background:var(--surface3);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex-shrink:0;font-size:11px;color:var(--text);}
+.play-btn:hover{border-color:var(--border-h);background:var(--btn-hover);}
+.audio-track{flex:1;height:3px;background:var(--surface3);border-radius:2px;min-width:50px;overflow:hidden;cursor:pointer;}
+.audio-fill{height:100%;background:var(--text);width:0%;border-radius:2px;transition:width .08s;}
+.a-time{font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.upload-btn{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;
+  padding:4px 10px;border-radius:7px;background:var(--amber-bg);border:1px solid var(--amber-b);
+  color:var(--amber);cursor:pointer;transition:all .15s;}
+.upload-btn:hover{opacity:.8;}
+.upload-btn input{display:none;}
+.transc-btn{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+  padding:4px 10px;border-radius:7px;background:var(--blue-bg);border:1px solid var(--blue-b);
+  color:var(--blue);cursor:pointer;transition:.15s;font-family:inherit;}
+.transc-btn:hover{opacity:.8;}
+.transc-btn:disabled{opacity:.4;cursor:not-allowed;}
+.exp-row td{padding:0;background:var(--surface2);}
+.exp-content{padding:14px 18px;border-top:1px solid var(--border);}
+.exp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:10px;}
+.di label{font-size:9px;font-weight:700;letter-spacing:.7px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:2px;}
+.di span{font-size:12px;color:var(--text2);}
+.transc-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r2);padding:12px;margin-top:10px;}
+.transc-text{font-size:12px;color:var(--text2);font-style:italic;line-height:1.7;}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:border-color .15s;}
+.scard:hover{border-color:var(--border-h);}
+.scard-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.avatar{width:42px;height:42px;border-radius:10px;background:var(--surface3);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--text2);flex-shrink:0;}
+.sname{font-size:13px;font-weight:700;margin-bottom:3px;}
+.smeta{font-size:11px;color:var(--text2);}
+.scard-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.ss{background:var(--surface2);border-radius:var(--r2);padding:10px 12px;border:1px solid var(--border);}
+.ss-l{font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--text3);text-transform:uppercase;}
+.ss-v{font-size:16px;font-weight:800;margin-top:2px;}
+.pgn{display:flex;gap:8px;align-items:center;padding:10px 0;justify-content:flex-end;}
+.pgn-info{font-size:11px;color:var(--text3);}
+  /* MAP */
+  #map-container{height:calc(100vh - 130px);border-radius:var(--r);overflow:hidden;border:1px solid var(--border);}
+  .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--r2);box-shadow:0 4px 24px rgba(0,0,0,.4);}
+  .leaflet-popup-tip{background:var(--surface);}
+  .map-popup-title{font-weight:800;font-size:13px;margin-bottom:4px;}
+  .map-popup-sub{font-size:11px;color:var(--text2);margin-bottom:2px;}
+  .map-btn{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+    padding:3px 8px;border-radius:7px;background:var(--blue-bg);border:1px solid var(--blue-b);
+    color:var(--blue);cursor:pointer;text-decoration:none;margin-top:6px;}
+  .loc-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;
+    padding:3px 8px;border-radius:7px;background:var(--green-bg);border:1px solid var(--green-b);
+    color:var(--green);cursor:pointer;transition:.15s;}
+  .loc-chip:hover{opacity:.8;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;
+  align-items:center;justify-content:center;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:24px;max-width:520px;width:100%;max-height:80vh;overflow-y:auto;}
+.modal h3{font-size:15px;font-weight:800;margin-bottom:4px;}
+.modal p{font-size:12px;color:var(--text2);margin-bottom:16px;}
+@media(max-width:700px){
+  .topbar{padding:0 12px;}.main{padding:12px;}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .filters{flex-direction:column;}.filters input,.filters select{width:100%;}
+}
+.sync-btn{background:linear-gradient(135deg,#2563eb,#7c3aed);border:none;color:#fff;
+  font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;
+  border-radius:8px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.sync-btn:hover{opacity:.85;transform:scale(1.02);}
+.sync-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.sync-log{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r2);
+  padding:12px;max-height:400px;overflow-y:auto;font-size:11px;line-height:1.8;
+  font-family:'Courier New',monospace;color:var(--text2);white-space:pre-wrap;}
+.admin-lock{text-align:center;padding:60px 20px;}
+.admin-lock input{background:var(--surface);border:1px solid var(--border);color:var(--text);
+  font-family:inherit;font-size:14px;padding:10px 16px;border-radius:8px;outline:none;width:260px;text-align:center;}
+.admin-lock button{margin-top:12px;}
+.edit-btn{background:var(--blue-bg);border:1px solid var(--blue-b);color:var(--blue);
+  font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.del-btn{background:var(--red-bg);border:1px solid var(--red-b);color:var(--red);
+  font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.edit-btn:hover,.del-btn:hover{opacity:.8;}
+.modal-field{margin-bottom:12px;}
+.modal-field label{display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.modal-field input,.modal-field select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  font-family:inherit;font-size:13px;padding:8px 12px;border-radius:8px;outline:none;}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">Oral-Plus<sup style="font-size:8px">&#174;</sup></div>
+    <div class="brand-text">
+      <div class="t1">MINUTO A MINUTO</div>
+      <div class="t2">Panel Administrativo</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="chip" id="apiChip">
+      <div class="dot dot-amber"></div>
+      <span id="apiLabel" style="color:var(--amber)">Conectando...</span>
+    </div>
+    <div class="chip"><span id="clockEl">--</span></div>
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">&#127769;</button>
+    <button class="btn" onclick="loadAll()">&#8635; Actualizar</button>
+    <button class="sync-btn" id="syncBtn" onclick="syncBase()">&#9889; Actualizar Base</button>
+  </div>
+</header>
+
+<nav class="tabs" id="mainTabs">
+  <button class="tab active" onclick="switchTab('overview',this)">&#128202; Resumen</button>
+  <button class="tab" onclick="switchTab('calls',this)">&#128222; Llamadas <span class="badge" id="b-calls">--</span></button>
+  <button class="tab" onclick="switchTab('sups',this)">&#128100; Lideres <span class="badge" id="b-sups">--</span></button>
+  <button class="tab" onclick="switchTab('vends',this)">&#129489; Vendedores <span class="badge" id="b-vends">--</span></button>
+  <button class="tab" id="tab-map" onclick="switchTab('map',this)">&#127757; Mapa <span class="badge" id="b-map">0</span></button>
+  <button class="tab" onclick="switchTab('admin',this)">&#128272; Admin</button>
+</nav>
+
+<main class="main">
+<div class="panel active" id="p-overview">
+  <div class="stats">
+    <div class="stat"><div class="stat-l">Llamadas Hoy</div><div class="stat-v" id="s-hoy">--</div><div class="stat-s">dia actual</div></div>
+    <div class="stat"><div class="stat-l">Llamadas Mes</div><div class="stat-v" id="s-mes">--</div><div class="stat-s">desde el 1 del mes</div></div>
+    <div class="stat"><div class="stat-l">Lideres</div><div class="stat-v" id="s-sups">--</div><div class="stat-s">activos</div></div>
+    <div class="stat"><div class="stat-l">Vendedores</div><div class="stat-v" id="s-vends">--</div><div class="stat-s">activos</div></div>
+    <div class="stat"><div class="stat-l">Con Grabacion</div><div class="stat-v" id="s-audio">--</div><div class="stat-s">llamadas con audio</div></div>
+    <div class="stat"><div class="stat-l">Duracion Prom.</div><div class="stat-v" id="s-dur">--</div><div class="stat-s">minutos promedio</div></div>
+  </div>
+  <div style="margin-bottom:12px;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text2);text-transform:uppercase;">Ultimas llamadas del dia</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Hora</th><th>Lider</th><th>Cargo</th><th>Contactado</th><th>Duracion</th><th>Audio</th><th>Transcripcion</th></tr></thead>
+    <tbody id="ov-body"><tr class="loading-r"><td colspan="7"><span class="spin"></span>Cargando...</td></tr></tbody>
+  </table></div>
+</div>
+
+<div class="panel" id="p-calls">
+  <div class="filters">
+    <span class="fl">Desde</span><input type="date" id="f-desde" onchange="fetchCalls()">
+    <span class="fl">Hasta</span><input type="date" id="f-hasta" onchange="fetchCalls()">
+    <input type="text" id="f-q" placeholder="Buscar lider, contacto, zona..." oninput="renderCalls()" style="min-width:220px;">
+    <select id="f-cargo" onchange="renderCalls()">
+      <option value="">Todos</option><option>COACH</option><option>KAM</option><option>JEFE</option>
+    </select>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>#</th><th>Fecha</th><th>Hora</th><th>Lider</th><th>Cargo</th><th>Zona</th><th>Contactado</th><th>Min</th><th>Audio</th><th>Transcripcion</th><th></th></tr></thead>
+    <tbody id="c-body"><tr class="loading-r"><td colspan="11"><span class="spin"></span>Cargando...</td></tr></tbody>
+  </table></div>
+  <div class="pgn" id="pgn"></div>
+</div>
+
+<div class="panel" id="p-sups">
+  <div class="filters">
+    <input type="text" id="sq" placeholder="Nombre, zona, codigo..." oninput="renderSups()" style="min-width:240px;">
+    <select id="s-cargo" onchange="renderSups()">
+      <option value="">Todos</option><option>COACH</option><option>KAM</option><option>JEFE</option>
+    </select>
+  </div>
+  <div class="cards" id="sups-grid"><div style="grid-column:1/-1;text-align:center;padding:44px;color:var(--text3);"><span class="spin"></span>Cargando...</div></div>
+</div>
+
+<div class="panel" id="p-vends">
+  <div class="filters">
+    <input type="text" id="vq" placeholder="Nombre, zona, codigo..." oninput="renderVends()" style="min-width:240px;">
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Codigo</th><th>Nombre</th><th>Zona</th><th>Coach</th><th>Telefono</th></tr></thead>
+    <tbody id="v-body"><tr class="loading-r"><td colspan="5"><span class="spin"></span>Cargando...</td></tr></tbody>
+  </table></div>
+</div>
+
+<!-- ADMIN -->
+<div class="panel" id="p-admin">
+  <div id="adminLock" class="admin-lock">
+    <div style="font-size:40px;margin-bottom:12px;">&#128272;</div>
+    <div style="font-size:15px;font-weight:800;margin-bottom:6px;">Acceso Admin</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Ingresa la clave de administrador</div>
+    <input type="password" id="adminPw" placeholder="Clave admin" onkeydown="if(event.key==='Enter')adminLogin()">
+    <br><button class="sync-btn" style="margin-top:12px;" onclick="adminLogin()">Ingresar</button>
+    <div id="adminErr" style="color:var(--red);font-size:11px;margin-top:8px;"></div>
+  </div>
+  <div id="adminPanel" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text2);text-transform:uppercase;">Gestion de usuarios</div>
+      <div style="display:flex;gap:8px;"><input type="text" id="aq" placeholder="Buscar..." oninput="renderAdmin()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:6px 12px;border-radius:8px;outline:none;min-width:200px;"></div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Tipo</th><th>Nombre</th><th>Alias</th><th>Codigo</th><th>Cargo</th><th>Zona</th><th>Telefono</th><th>Acciones</th></tr></thead>
+      <tbody id="admin-body"><tr class="loading-r"><td colspan="8"><span class="spin"></span>Cargando...</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR USUARIO -->
+<div class="modal-bg" id="editUserModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal" style="max-width:440px;">
+    <h3 id="editUserTitle">Editar usuario</h3>
+    <p id="editUserSub" style="font-size:11px;color:var(--text2);"></p>
+    <div class="modal-field"><label>Nombre</label><input id="eu-nombre"></div>
+    <div class="modal-field" id="eu-cargo-wrap"><label>Cargo</label><select id="eu-cargo"><option>COACH</option><option>KAM</option><option>JEFE</option></select></div>
+    <div class="modal-field"><label>Alias (Login)</label><input id="eu-alias"></div>
+    <div class="modal-field"><label>Codigo (Contraseña)</label><input id="eu-codigo"></div>
+    <div class="modal-field"><label>Zona</label><input id="eu-zona"></div>
+    <div class="modal-field"><label>Telefono</label><input id="eu-telefono"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="sync-btn" style="flex:1;" onclick="saveEditUser()">Guardar cambios</button>
+      <button class="btn" style="flex:1;" onclick="document.getElementById('editUserModal').classList.remove('show')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAPA -->
+<div class="panel" id="p-map">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text2);text-transform:uppercase;">Ubicacion de llamadas</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <span class="pill p-green" style="cursor:default;">&#9679; COACH</span>
+      <span class="pill p-blue" style="cursor:default;">&#9679; KAM</span>
+      <span class="pill p-amber" style="cursor:default;">&#9679; JEFE</span>
+      <span class="pill p-gray" style="cursor:default;">&#9679; Otro</span>
+    </div>
+  </div>
+  <div id="map-container"></div>
+</div>
+</main>
+
+<!-- MODAL TRANSCRIPCION -->
+<div class="modal-bg" id="transcModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal">
+    <h3>Transcribir audio</h3>
+    <p>Si el audio esta en el servidor, se descarga y transcribe automaticamente. Si es ruta local, carga el archivo desde tu PC.</p>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:5px;">Ruta/URL</div>
+      <code style="font-size:11px;color:var(--text2);word-break:break-all;" id="modalPath">--</code>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px;background:var(--surface2);border:1px dashed var(--border);border-radius:var(--r2);margin-bottom:14px;">
+      <span style="font-size:20px;">&#128193;</span>
+      <div><div style="font-size:13px;font-weight:700;">Seleccionar archivo local</div><div style="font-size:11px;color:var(--text2);">MP3, WAV, AAC, M4A</div></div>
+      <input type="file" id="modalFileIn" accept="audio/*" onchange="onModalFile()" style="display:none;">
+    </label>
+    <audio id="modalAudio" controls style="width:100%;border-radius:8px;margin-bottom:12px;display:none;"></audio>
+    <button class="transc-btn" id="modalTranscBtn" onclick="transcribeModal()" disabled style="margin-bottom:10px;">Transcribir con IA</button>
+    <div class="transc-box" id="modalTranscBox" style="display:none;">
+      <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Transcripcion</div>
+      <div class="transc-text" id="modalTranscText"></div>
+      <button class="btn" style="margin-top:10px;font-size:11px;" onclick="saveTranscription()">Guardar en servidor</button>
+    </div>
+    <button class="btn" style="margin-top:12px;width:100%;" onclick="document.getElementById('transcModal').classList.remove('show')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL SYNC SAP -->
+<div class="modal-bg" id="syncModal" onclick="if(event.target===this&&!window.__syncRunning)this.classList.remove('show')">
+  <div class="modal" style="max-width:600px;">
+    <h3>&#9889; Sincronizar Base desde SAP</h3>
+    <p>Se actualizaran vendedores, coaches, KAMs, zonas y jerarquias desde SAP.</p>
+    <div class="sync-log" id="syncLog">Esperando inicio...</div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="sync-btn" id="syncStartBtn" onclick="runSync()" style="flex:1;">Iniciar sincronizacion</button>
+      <button class="btn" id="syncCloseBtn" onclick="document.getElementById('syncModal').classList.remove('show')" style="flex:1;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var API = 'https://minutoamimuto.oral-plus.com';
+var allCalls = [], allSups = [], allVends = [];
+var callPage = 1, PAGE = 50;
+var currentAudio = null, curBtn = null, curFill = null;
+var modalCallId = null;
+
+// ── THEME
+function toggleTheme() {
+  var html = document.documentElement;
+  var dark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', dark ? 'light' : 'dark');
+  document.getElementById('themeBtn').innerHTML = dark ? '&#9728;' : '&#127769;';
+  localStorage.setItem('mam_theme', dark ? 'light' : 'dark');
+}
+(function() {
+  var t = localStorage.getItem('mam_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').innerHTML = t === 'dark' ? '&#127769;' : '&#9728;';
+})();
+
+// ── CLOCK
+function tick() {
+  var n = new Date();
+  document.getElementById('clockEl').textContent =
+    n.toLocaleDateString('es-CO', {weekday:'short',day:'2-digit',month:'short'}) + ' ' +
+    n.toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
+}
+setInterval(tick, 1000); tick();
+
+// ── TABS
+var leafletMap = null;
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('p-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'map') initMap();
+}
+
+// ── UTILS
+function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function fmtDate(s) { if (!s) return '--'; try { return new Date(s).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); } catch(e) { return s; } }
+function fmtTime(s) {
+  if (!s) return '--';
+  // Extraer HH:mm directamente del string para evitar conversion de zona horaria
+  // Soporta: "2026-03-16T12:34:09.477Z", "2026-03-16 12:34:09.477", "2026-03-16T12:34:09"
+  var m = String(s).match(/[T\s](\d{2}):(\d{2})/);
+  if (m) {
+    var h = parseInt(m[1], 10), min = m[2];
+    var ampm = h >= 12 ? 'p.\u00adm.' : 'a.\u00adm.';
+    h = h % 12 || 12;
+    return h + ':' + min + ' ' + ampm;
+  }
+  try { return new Date(s).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}); } catch(e) { return s; }
+}
+function fmt(n) { return n != null ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '--'; }
+function initials(n) { return (n||'').split(' ').slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase() || '?'; }
+function cargoPill(c) {
+  var map = {COACH:'p-green', KAM:'p-blue', JEFE:'p-amber'};
+  var cls = map[(c||'').toUpperCase()] || 'p-gray';
+  return '<span class="pill ' + cls + '">' + esc(c||'--') + '</span>';
+}
+function extractList(d) { return Array.isArray(d) ? d : (d && (d.value || d.data || d.rows || d.recordset) ? (d.value || d.data || d.rows || d.recordset) : []); }
+
+// Resolver URL de audio
+function audioUrl(path) {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  if (path.startsWith('/audio/')) return API + path;
+  return null;
+}
+
+// ── MAP
+var mapMarkers = [];
+var mapMarkersMap = {};
+function markerColor(cargo) {
+  var c = (cargo||'').toUpperCase();
+  if (c === 'COACH') return '#4ade80';
+  if (c === 'KAM') return '#60a5fa';
+  if (c === 'JEFE') return '#fbbf24';
+  return '#9ca3af';
+}
+function makeIcon(cargo) {
+  var color = markerColor(cargo);
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">' +
+    '<path d="M14 0C6.3 0 0 6.3 0 14c0 9.8 14 22 14 22s14-12.2 14-22C28 6.3 21.7 0 14 0z" fill="' + color + '"/>' +
+    '<circle cx="14" cy="14" r="6" fill="#000" opacity=".35"/>' +
+    '</svg>';
+  return L.divIcon({
+    html: svg,
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -36],
+    className: ''
+  });
+}
+function initMap() {
+  if (!leafletMap) {
+    leafletMap = L.map('map-container').setView([4.5709, -74.2973], 6);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(leafletMap);
+  }
+  renderMap();
+}
+var _mapCallsRendered = 0;
+function renderMap() {
+  if (!leafletMap) return;
+  // Limpiar marcadores anteriores
+  mapMarkers.forEach(function(m){ leafletMap.removeLayer(m); });
+  mapMarkers = [];
+  mapMarkersMap = {};
+  var withLoc = allCalls.filter(function(c){ return c.latitud && c.longitud; });
+  document.getElementById('b-map').textContent = withLoc.length;
+  if (!withLoc.length) return;
+  var bounds = [];
+  withLoc.forEach(function(c) {
+    var lat = parseFloat(c.latitud), lng = parseFloat(c.longitud);
+    if (isNaN(lat)||isNaN(lng)) return;
+    var icon = makeIcon(c.cargoLider);
+    var popup = '<div class="map-popup-title">' + esc(c.nombreLider||'--') + '</div>' +
+      '<div class="map-popup-sub">' + esc(c.cargoLider||'--') + ' &bull; ' + esc(c.zona||'--') + '</div>' +
+      '<div class="map-popup-sub">Contactado: <b>' + esc(c.nombreContactado||'--') + '</b></div>' +
+      '<div class="map-popup-sub">' + fmtTime(c.fechaCreacion||c.horaInicio) + ' &bull; ' + (c.duracionMinutos||0) + ' min</div>' +
+      '<a class="map-btn" href="https://www.google.com/maps?q=' + lat + ',' + lng + '" target="_blank">Abrir en Google Maps</a>';
+    var marker = L.marker([lat, lng], {icon: icon}).addTo(leafletMap).bindPopup(popup);
+    mapMarkers.push(marker);
+    mapMarkersMap[c.id] = marker;
+    bounds.push([lat, lng]);
+  });
+  if (bounds.length) leafletMap.fitBounds(bounds, {padding:[30,30]});
+  _mapCallsRendered = allCalls.length;
+}
+function goToMapMarker(callId, lat, lng) {
+  var mapTab = document.getElementById('tab-map');
+  if (mapTab) mapTab.click();
+  setTimeout(function() {
+    if (leafletMap) {
+      leafletMap.setView([lat, lng], 16);
+      if (mapMarkersMap[callId]) mapMarkersMap[callId].openPopup();
+    }
+  }, 200);
+}
+
+// ── SERVER STATUS
+function checkServer() {
+  var chip = document.getElementById('apiChip');
+  var lbl = document.getElementById('apiLabel');
+  fetch(API + '/health/db')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var ok = d.success === true;
+      chip.querySelector('.dot').className = 'dot ' + (ok ? 'dot-green' : 'dot-red');
+      lbl.textContent = ok ? 'API conectada' : 'Error de BD';
+      lbl.style.color = ok ? 'var(--green)' : 'var(--red)';
+    })
+    .catch(function() {
+      chip.querySelector('.dot').className = 'dot dot-red';
+      lbl.textContent = 'Sin conexion';
+      lbl.style.color = 'var(--red)';
+    });
+}
+
+// ── LOAD ALL
+function loadAll() {
+  checkServer();
+  loadSups();
+  loadVends();
+  fetchCalls();
+}
+
+// ── SUPERVISORS
+function loadSups() {
+  fetch(API + '/supervisores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      allSups = extractList(data);
+      document.getElementById('b-sups').textContent = allSups.length;
+      document.getElementById('s-sups').textContent = allSups.length;
+      renderSups();
+    })
+    .catch(function(e) { console.error('loadSups:', e); });
+}
+function renderSups() {
+  var q = (document.getElementById('sq') ? document.getElementById('sq').value : '').toLowerCase();
+  var cargo = (document.getElementById('s-cargo') ? document.getElementById('s-cargo').value : '').toUpperCase();
+  var list = allSups.filter(function(s) {
+    var mq = !q || [s.nombre,s.zona,s.codigo,s.telefono].some(function(f){return (f||'').toLowerCase().indexOf(q)>=0;});
+    var mc = !cargo || (s.cargo||'').toUpperCase().indexOf(cargo) >= 0;
+    return mq && mc;
+  });
+  var g = document.getElementById('sups-grid');
+  if (!list.length) { g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:44px;color:var(--text3);">Sin lideres</div>'; return; }
+  var callsMap = {};
+  allCalls.forEach(function(c) { var k = c.nombreLider||''; callsMap[k] = (callsMap[k]||0)+1; });
+  g.innerHTML = list.map(function(s) {
+    var calls = callsMap[s.nombre] || 0;
+    return '<div class="scard">' +
+      '<div class="scard-head">' +
+        '<div class="avatar">' + esc(initials(s.nombre)) + '</div>' +
+        '<div><div class="sname">' + esc(s.nombre) + '</div>' +
+        '<div class="smeta">' + cargoPill(s.cargo) + ' &nbsp;' + esc(s.zona||'--') + '</div></div>' +
+      '</div>' +
+      '<div class="scard-stats">' +
+        '<div class="ss"><div class="ss-l">Codigo</div><div class="ss-v" style="font-size:13px;">' + esc(s.codigo||'--') + '</div></div>' +
+        '<div class="ss"><div class="ss-l">Llamadas</div><div class="ss-v">' + calls + '</div></div>' +
+        '<div class="ss"><div class="ss-l">Telefono</div><div class="ss-v" style="font-size:12px;">' + esc(s.telefono||'--') + '</div></div>' +
+        '<div class="ss"><div class="ss-l">Superior</div><div class="ss-v" style="font-size:11px;color:var(--text2);">' + esc(s.superiorId||'Ninguno') + '</div></div>' +
+      '</div></div>';
+  }).join('');
+}
+
+// ── VENDORS
+function loadVends() {
+  fetch(API + '/vendedores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      allVends = extractList(data);
+      document.getElementById('b-vends').textContent = allVends.length;
+      document.getElementById('s-vends').textContent = allVends.length;
+      renderVends();
+    })
+    .catch(function(e) { console.error('loadVends:', e); });
+}
+function renderVends() {
+  var q = (document.getElementById('vq') ? document.getElementById('vq').value : '').toLowerCase();
+  var list = allVends.filter(function(v) {
+    return !q || [v.nombre,v.zona,v.codigo,v.telefono].some(function(f){return (f||'').toLowerCase().indexOf(q)>=0;});
+  });
+  var tb = document.getElementById('v-body');
+  var coachMap = {};
+  allSups.forEach(function(s) { coachMap[s.id] = s.nombre; });
+  if (!list.length) { tb.innerHTML = '<tr class="empty-r"><td colspan="5">Sin vendedores</td></tr>'; return; }
+  tb.innerHTML = list.map(function(v) {
+    return '<tr>' +
+      '<td><code style="font-size:10px;color:var(--text2);">' + esc(v.codigo||'--') + '</code></td>' +
+      '<td style="font-weight:600;">' + esc(v.nombre||'--') + '</td>' +
+      '<td>' + esc(v.zona||'--') + '</td>' +
+      '<td style="color:var(--text2);">' + esc(coachMap[v.coachId]||v.coachId||'--') + '</td>' +
+      '<td style="color:var(--text2);">' + esc(v.telefono||'--') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ── CALLS
+function fetchCalls() {
+  var now = new Date();
+  var desde = (document.getElementById('f-desde').value) || new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0];
+  var hasta = (document.getElementById('f-hasta').value) || now.toISOString().split('T')[0];
+  document.getElementById('f-desde').value = desde;
+  document.getElementById('f-hasta').value = hasta;
+  document.getElementById('c-body').innerHTML = '<tr class="loading-r"><td colspan="11"><span class="spin"></span>Cargando...</td></tr>';
+  fetch(API + '/llamadas?desde=' + desde + '&hasta=' + hasta)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      allCalls = extractList(data);
+      allCalls.sort(function(a,b) { return new Date(b.horaInicio||b.fecha) - new Date(a.horaInicio||a.fecha); });
+      callPage = 1;
+      updateStats(); renderCalls(); renderOv(); renderSups();
+      document.getElementById('b-calls').textContent = allCalls.length;
+    })
+    .catch(function(e) {
+      document.getElementById('c-body').innerHTML = '<tr class="empty-r"><td colspan="11">Error al cargar: ' + esc(e.message) + '</td></tr>';
+      console.error('fetchCalls:', e);
+    });
+}
+function updateStats() {
+  var today = new Date().toISOString().split('T')[0];
+  var hoy = allCalls.filter(function(c){ return (c.fecha||'').indexOf(today) === 0; });
+  document.getElementById('s-hoy').textContent = hoy.length;
+  document.getElementById('s-mes').textContent = allCalls.length;
+  var withAudio = allCalls.filter(function(c){ return c.rutaGrabacion || c.rutaGrabacionPuntoB; });
+  document.getElementById('s-audio').textContent = withAudio.length;
+  var durs = allCalls.map(function(c){ return c.duracionMinutos; }).filter(function(d){ return d != null && d > 0; });
+  document.getElementById('s-dur').textContent = durs.length ? (durs.reduce(function(a,b){return a+b;},0)/durs.length).toFixed(1) : '--';
+}
+function renderCalls() {
+  var q = (document.getElementById('f-q') ? document.getElementById('f-q').value : '').toLowerCase();
+  var cargo = (document.getElementById('f-cargo') ? document.getElementById('f-cargo').value : '').toUpperCase();
+  var filtered = allCalls.filter(function(c) {
+    var mq = !q || [c.nombreLider,c.nombreContactado,c.zona,c.numeroContacto].some(function(f){return (f||'').toLowerCase().indexOf(q)>=0;});
+    var mc = !cargo || (c.cargoLider||'').toUpperCase().indexOf(cargo) >= 0;
+    return mq && mc;
+  });
+  var total = filtered.length;
+  var maxPage = Math.max(1, Math.ceil(total / PAGE));
+  if (callPage > maxPage) callPage = maxPage;
+  var slice = filtered.slice((callPage-1)*PAGE, callPage*PAGE);
+  var tb = document.getElementById('c-body');
+  if (!slice.length) { tb.innerHTML = '<tr class="empty-r"><td colspan="11">Sin llamadas</td></tr>'; renderPgn(0,0); return; }
+  tb.innerHTML = slice.map(function(c, i) {
+    var idx = (callPage-1)*PAGE + i + 1;
+    var rid = 'er' + idx;
+    var hasTr = c.transcripcionTexto;
+    return '<tr onclick="toggleExp(\'' + rid + '\',event)" style="cursor:pointer;">' +
+      '<td style="color:var(--text3);font-size:10px;">' + idx + '</td>' +
+      '<td style="font-size:11px;color:var(--text2);">' + fmtDate(c.fecha) + '</td>' +
+      '<td style="font-size:11px;">' + fmtTime(c.fechaCreacion || c.horaInicio) + '</td>' +
+      '<td style="font-weight:600;">' + esc(c.nombreLider||'--') + '</td>' +
+      '<td>' + cargoPill(c.cargoLider) + '</td>' +
+      '<td style="font-size:11px;color:var(--text2);">' + esc(c.zona||'--') + '</td>' +
+      '<td style="font-weight:600;">' + esc(c.nombreContactado||'--') + '</td>' +
+      '<td style="font-weight:700;">' + (c.duracionMinutos != null ? c.duracionMinutos : '--') + '</td>' +
+      '<td>' + renderAudioCell(c, idx) + '</td>' +
+      '<td style="max-width:120px;">' + (hasTr ? '<span style="font-size:10px;color:var(--text2);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:120px;" title="' + esc(c.transcripcionTexto) + '">' + esc(c.transcripcionTexto) + '</span>' : '<span style="color:var(--text3);font-size:10px;">--</span>') + '</td>' +
+      '<td style="color:var(--text3);">&rsaquo;</td>' +
+      '</tr>' +
+      '<tr class="exp-row" id="' + rid + '" style="display:none;">' +
+        '<td colspan="11"><div class="exp-content">' + renderExpand(c) + '</div></td>' +
+      '</tr>';
+  }).join('');
+  renderPgn(total, maxPage);
+}
+
+function renderAudioCell(c, idx) {
+  var ruta = c.rutaGrabacion || c.rutaGrabacionPuntoB || '';
+  var url = audioUrl(ruta);
+  var cid = esc(c.id || '');
+  if (!ruta) {
+    return '<label class="upload-btn" title="Cargar audio">' +
+      '<input type="file" accept="audio/*" onchange="handleUploadPlay(event,' + idx + ')" onclick="event.stopPropagation()">' +
+      '&#128193; Cargar</label>';
+  }
+  if (url) {
+    // Audio en servidor — reproductor inline
+    return '<div class="audio-cell">' +
+      '<div class="play-btn" id="pb' + idx + '" onclick="playHttp(event,\'' + url + '\',' + idx + ')">&#9654;</div>' +
+      '<div class="audio-track" id="at' + idx + '" onclick="seekAudio(event,' + idx + ')"><div class="audio-fill" id="af' + idx + '"></div></div>' +
+      '<span class="a-time" id="tm' + idx + '">0:00</span>' +
+      '<button class="transc-btn" onclick="openModalUrl(\'' + cid + '\',\'' + url + '\',event)">IA</button>' +
+      '</div>';
+  }
+  // Ruta local de dispositivo
+  return '<div class="audio-cell">' +
+    '<label class="upload-btn" onclick="event.stopPropagation()">' +
+      '<input type="file" accept="audio/*" onchange="handleUploadPlay(event,' + idx + ')">&#128193; Cargar' +
+    '</label>' +
+    '<button class="transc-btn" onclick="openModal(\'' + cid + '\',\'' + esc(ruta) + '\',event)">IA</button>' +
+    '<div id="ulp' + idx + '" style="display:none;">' +
+      '<div class="audio-cell">' +
+        '<div class="play-btn" id="pb' + idx + '">&#9654;</div>' +
+        '<div class="audio-track" id="at' + idx + '"><div class="audio-fill" id="af' + idx + '"></div></div>' +
+        '<span class="a-time" id="tm' + idx + '">0:00</span>' +
+      '</div>' +
+    '</div>' +
+    '</div>';
+}
+
+function renderExpand(c) {
+  var lat = parseFloat(c.latitud), lng = parseFloat(c.longitud);
+  var hasLoc = !isNaN(lat) && !isNaN(lng) && c.latitud && c.longitud;
+  var locHtml = '';
+  if (hasLoc) {
+    var gmUrl = 'https://www.google.com/maps?q=' + lat + ',' + lng;
+    locHtml = '<div class="di" style="grid-column:1/-1">' +
+      '<label>Ubicacion GPS</label>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;">' +
+      '<span style="font-size:11px;color:var(--text2);font-family:monospace;">' + lat.toFixed(6) + ', ' + lng.toFixed(6) + '</span>' +
+      '<span class="loc-chip" onclick="goToMapMarker(\'' + esc(c.id) + '\',' + lat + ',' + lng + ')">&#127757; Ver en mapa</span>' +
+      '<a href="' + gmUrl + '" target="_blank" class="loc-chip" style="text-decoration:none;">&#128506; Google Maps</a>' +
+      '</div></div>';
+  }
+  var html = '<div class="exp-grid">' +
+    '<div class="di"><label>N&#176; Contacto</label><span>' + esc(c.numeroContacto||'--') + '</span></div>' +
+    '<div class="di"><label>N&#176; Prop.</label><span>' + esc(c.numeroPropietario||'--') + '</span></div>' +
+    '<div class="di"><label>C. Programados</label><span>' + (c.clientesProgramados != null ? c.clientesProgramados : '--') + '</span></div>' +
+    '<div class="di"><label>C. Visitados</label><span>' + (c.clientesVisitados != null ? c.clientesVisitados : '--') + '</span></div>' +
+    '<div class="di"><label>Venta Dia</label><span>' + (c.ventaDia != null ? '$' + fmt(c.ventaDia) : '--') + '</span></div>' +
+    '<div class="di"><label>Recaudo Dia</label><span>' + (c.recaudoDia != null ? '$' + fmt(c.recaudoDia) : '--') + '</span></div>' +
+    '<div class="di"><label>Cumplio Meta</label><span class="pill ' + (c.cumplioMeta ? 'p-green' : 'p-red') + '">' + (c.cumplioMeta ? 'Si' : 'No') + '</span></div>' +
+    '<div class="di"><label>Hora Fin</label><span>' + fmtTime(c.horaFin) + '</span></div>' +
+    '<div class="di"><label>ID</label><span style="font-size:9px;font-family:monospace;">' + esc(c.id||'--') + '</span></div>' +
+    locHtml +
+    (c.observaciones ? '<div class="di" style="grid-column:1/-1"><label>Observaciones</label><span>' + esc(c.observaciones) + '</span></div>' : '') +
+    (c.transcripcionTexto ? '<div class="di" style="grid-column:1/-1"><label>Transcripcion</label><div class="transc-box"><div class="transc-text">' + esc(c.transcripcionTexto) + '</div></div></div>' : '') +
+    '</div>';
+  return html;
+}
+
+// ── AUDIO PLAY (server URL)
+function playHttp(e, url, idx) {
+  e.stopPropagation();
+  var btn = document.getElementById('pb' + idx);
+  if (currentAudio && curBtn === btn) {
+    if (currentAudio.paused) { currentAudio.play(); btn.innerHTML = '&#9646;&#9646;'; }
+    else { currentAudio.pause(); btn.innerHTML = '&#9654;'; }
+    return;
+  }
+  if (currentAudio) { currentAudio.pause(); if (curBtn) curBtn.innerHTML = '&#9654;'; }
+  var audio = new Audio(url);
+  currentAudio = audio; curBtn = btn; curFill = document.getElementById('af' + idx);
+  var tm = document.getElementById('tm' + idx);
+  audio.ontimeupdate = function() {
+    if (audio.duration && curFill) {
+      curFill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+      var m = Math.floor(audio.currentTime / 60), s = Math.floor(audio.currentTime % 60);
+      if (tm) tm.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }
+  };
+  audio.onended = function() { btn.innerHTML = '&#9654;'; if (curFill) curFill.style.width = '0%'; currentAudio = null; };
+  audio.onerror = function() { btn.innerHTML = '&#10005;'; setTimeout(function(){btn.innerHTML='&#9654;';}, 1500); };
+  audio.play(); btn.innerHTML = '&#9646;&#9646;';
+}
+function seekAudio(e, idx) {
+  if (!currentAudio || !curBtn || curBtn.id !== 'pb' + idx) return;
+  var track = document.getElementById('at' + idx);
+  if (!track) return;
+  var rect = track.getBoundingClientRect();
+  currentAudio.currentTime = ((e.clientX - rect.left) / rect.width) * currentAudio.duration;
+}
+
+// ── UPLOAD & PLAY local file
+function handleUploadPlay(e, idx) {
+  e.stopPropagation();
+  var file = e.target.files[0]; if (!file) return;
+  var url = URL.createObjectURL(file);
+  var ulp = document.getElementById('ulp' + idx);
+  if (ulp) ulp.style.display = 'block';
+  var btn = document.getElementById('pb' + idx);
+  if (!btn) return;
+  if (currentAudio) { currentAudio.pause(); if (curBtn) curBtn.innerHTML = '&#9654;'; }
+  var audio = new Audio(url);
+  currentAudio = audio; curBtn = btn; curFill = document.getElementById('af' + idx);
+  var tm = document.getElementById('tm' + idx);
+  audio.ontimeupdate = function() {
+    if (audio.duration && curFill) {
+      curFill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+      var m = Math.floor(audio.currentTime / 60), s = Math.floor(audio.currentTime % 60);
+      if (tm) tm.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }
+  };
+  audio.onended = function() { btn.innerHTML = '&#9654;'; };
+  audio.play(); btn.innerHTML = '&#9646;&#9646;';
+  btn.onclick = function(ev) {
+    ev.stopPropagation();
+    if (audio.paused) { audio.play(); btn.innerHTML = '&#9646;&#9646;'; }
+    else { audio.pause(); btn.innerHTML = '&#9654;'; }
+  };
+  window['__audioFile_' + idx] = file;
+}
+
+// ── EXPAND ROW
+function toggleExp(rid, e) {
+  if (e.target.closest && e.target.closest('.upload-btn,.play-btn,.transc-btn,label,input,audio,button')) return;
+  var row = document.getElementById(rid);
+  if (!row) return;
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+
+// ── PAGINATION
+function renderPgn(total, max) {
+  var p = document.getElementById('pgn');
+  if (max <= 1) { p.innerHTML = ''; return; }
+  var html = '<span class="pgn-info">Pagina ' + callPage + '/' + max + ' &middot; ' + total + ' registros</span>';
+  if (callPage > 1) html += '<button class="btn" onclick="gotoPage(' + (callPage-1) + ')">&#8592; Anterior</button>';
+  if (callPage < max) html += '<button class="btn" onclick="gotoPage(' + (callPage+1) + ')">Siguiente &#8594;</button>';
+  p.innerHTML = html;
+}
+function gotoPage(p) { callPage = p; renderCalls(); document.getElementById('p-calls').scrollIntoView({behavior:'smooth'}); }
+
+// ── OVERVIEW
+function renderOv() {
+  var today = new Date().toISOString().split('T')[0];
+  var tod = allCalls.filter(function(c){ return (c.fecha||'').indexOf(today)===0; }).slice(0,15);
+  var tb = document.getElementById('ov-body');
+  if (!tod.length) { tb.innerHTML = '<tr class="empty-r"><td colspan="7">Sin llamadas hoy</td></tr>'; return; }
+  tb.innerHTML = tod.map(function(c) {
+    var ruta = c.rutaGrabacion || c.rutaGrabacionPuntoB;
+    return '<tr>' +
+      '<td>' + fmtTime(c.fechaCreacion || c.horaInicio) + '</td>' +
+      '<td style="font-weight:600;">' + esc(c.nombreLider||'--') + '</td>' +
+      '<td>' + cargoPill(c.cargoLider) + '</td>' +
+      '<td>' + esc(c.nombreContactado||'--') + '</td>' +
+      '<td><b>' + (c.duracionMinutos != null ? c.duracionMinutos : '--') + '</b> min</td>' +
+      '<td>' + (ruta ? '<span class="pill p-green">&#10003; Audio</span>' : '<span class="pill p-gray">Sin audio</span>') + '</td>' +
+      '<td>' + (c.transcripcionTexto ? '<span class="pill p-blue">&#10003; IA</span>' : '--') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ── TRANSCRIPTION MODAL
+function openModal(callId, path, e) {
+  if (e) e.stopPropagation();
+  modalCallId = callId;
+  document.getElementById('modalPath').textContent = path || '--';
+  document.getElementById('modalFileIn').value = '';
+  var ma = document.getElementById('modalAudio');
+  ma.style.display = 'none'; ma.src = '';
+  document.getElementById('modalTranscBtn').disabled = true;
+  document.getElementById('modalTranscBtn').textContent = 'Transcribir con IA';
+  document.getElementById('modalTranscBox').style.display = 'none';
+  document.getElementById('transcModal').classList.add('show');
+  window.__modalFile = null;
+  window.__modalServerUrl = null;
+}
+function openModalUrl(callId, url, e) {
+  if (e) e.stopPropagation();
+  modalCallId = callId;
+  document.getElementById('modalPath').textContent = url;
+  document.getElementById('modalFileIn').value = '';
+  var ma = document.getElementById('modalAudio');
+  ma.src = url; ma.style.display = 'block';
+  document.getElementById('modalTranscBtn').disabled = false;
+  document.getElementById('modalTranscBtn').textContent = 'Transcribir con IA';
+  document.getElementById('modalTranscBox').style.display = 'none';
+  document.getElementById('transcModal').classList.add('show');
+  window.__modalFile = null;
+  window.__modalServerUrl = url;
+}
+function onModalFile() {
+  var file = document.getElementById('modalFileIn').files[0]; if (!file) return;
+  var url = URL.createObjectURL(file);
+  var ma = document.getElementById('modalAudio');
+  ma.src = url; ma.style.display = 'block';
+  document.getElementById('modalTranscBtn').disabled = false;
+  window.__modalFile = file;
+  window.__modalServerUrl = null;
+}
+function b64FromBytes(bytes) {
+  var binary = '', chunk = 8192;
+  for (var i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+function transcribeModal() {
+  var btn = document.getElementById('modalTranscBtn');
+  btn.disabled = true; btn.textContent = 'Transcribiendo...';
+  var promise;
+  if (window.__modalFile) {
+    promise = window.__modalFile.arrayBuffer().then(function(buf) {
+      return { b64: b64FromBytes(new Uint8Array(buf)), mime: window.__modalFile.type || 'audio/mpeg' };
+    });
+  } else if (window.__modalServerUrl) {
+    btn.textContent = 'Descargando audio...';
+    promise = fetch(window.__modalServerUrl).then(function(r) {
+      var ct = r.headers.get('content-type') || 'audio/mp4';
+      return r.arrayBuffer().then(function(buf) {
+        return { b64: b64FromBytes(new Uint8Array(buf)), mime: ct.split(';')[0].trim() };
+      });
+    });
+  } else {
+    btn.textContent = 'Sin audio cargado'; btn.disabled = false; return;
+  }
+  promise.then(function(data) {
+    btn.textContent = 'Transcribiendo...';
+    return fetch(API + '/transcribe', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({audioBase64: data.b64, mimeType: data.mime})
+    });
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    var text = d.text || d.transcripcion || '';
+    if (text) {
+      document.getElementById('modalTranscText').textContent = text;
+      document.getElementById('modalTranscBox').style.display = 'block';
+      window.__pendingTransc = {id: modalCallId, text: text};
+      btn.textContent = 'Listo';
+    } else {
+      btn.textContent = 'Sin resultado';
+    }
+  }).catch(function(e) {
+    btn.textContent = 'Error: ' + e.message;
+  }).finally(function() {
+    btn.disabled = false;
+  });
+}
+function saveTranscription() {
+  var p = window.__pendingTransc; if (!p || !p.id) return;
+  fetch(API + '/llamadas/' + p.id, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({transcripcionTexto: p.text})
+  }).then(function(r) {
+    if (r.ok) {
+      alert('Transcripcion guardada');
+      document.getElementById('transcModal').classList.remove('show');
+      var call = allCalls.find(function(c){return c.id===p.id;});
+      if (call) call.transcripcionTexto = p.text;
+      renderCalls();
+    }
+  }).catch(function(e) { alert('Error: ' + e.message); });
+}
+
+// ── SYNC SAP
+function syncBase() {
+  document.getElementById('syncLog').textContent = 'Esperando inicio...';
+  document.getElementById('syncStartBtn').disabled = false;
+  document.getElementById('syncCloseBtn').disabled = false;
+  document.getElementById('syncModal').classList.add('show');
+}
+function runSync() {
+  var log = document.getElementById('syncLog');
+  var startBtn = document.getElementById('syncStartBtn');
+  var closeBtn = document.getElementById('syncCloseBtn');
+  var syncBtn = document.getElementById('syncBtn');
+  startBtn.disabled = true;
+  startBtn.textContent = 'Sincronizando...';
+  closeBtn.disabled = true;
+  syncBtn.disabled = true;
+  window.__syncRunning = true;
+  log.textContent = '🚀 Conectando con SAP...\n';
+  var es = new EventSource(API + '/sap/sync-users-stream');
+  es.onmessage = function(e) {
+    try {
+      var d = JSON.parse(e.data);
+      log.textContent += d.msg + '\n';
+      log.scrollTop = log.scrollHeight;
+    } catch(err) {
+      log.textContent += e.data + '\n';
+    }
+  };
+  es.addEventListener('end', function() {
+    es.close();
+    startBtn.disabled = false;
+    startBtn.textContent = 'Iniciar sincronizacion';
+    closeBtn.disabled = false;
+    syncBtn.disabled = false;
+    window.__syncRunning = false;
+    log.textContent += '\n✅ Proceso finalizado. Recargando datos...';
+    loadAll();
+  });
+  es.onerror = function() {
+    es.close();
+    startBtn.disabled = false;
+    startBtn.textContent = 'Reintentar';
+    closeBtn.disabled = false;
+    syncBtn.disabled = false;
+    window.__syncRunning = false;
+    log.textContent += '\n❌ Error de conexion. Verifica que el servidor este activo.';
+  };
+}
+
+// ── ADMIN PANEL
+var adminKey = '';
+var adminUsers = []; // combined sup+vend for admin table
+var _editingUser = null;
+
+function adminLogin() {
+  var pw = document.getElementById('adminPw').value;
+  fetch(API + '/admin/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: pw})
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      adminKey = pw;
+      document.getElementById('adminLock').style.display = 'none';
+      document.getElementById('adminPanel').style.display = 'block';
+      renderAdmin();
+    } else {
+      document.getElementById('adminErr').textContent = d.error || 'Clave incorrecta';
+    }
+  }).catch(function(e) {
+    document.getElementById('adminErr').textContent = 'Error de conexion: ' + e.message;
+  });
+}
+
+function renderAdmin() {
+  var q = (document.getElementById('aq') ? document.getElementById('aq').value : '').toLowerCase();
+  var combined = [];
+  allSups.forEach(function(s) { combined.push({type:'SUPERVISOR', id:s.id, nombre:s.nombre, alias:s.alias||'', codigo:s.codigo||'', cargo:s.cargo||'', zona:s.zona||'', telefono:s.telefono||''}); });
+  allVends.forEach(function(v) { combined.push({type:'VENDEDOR', id:v.id, nombre:v.nombre, alias:v.alias||'', codigo:v.codigo||'', cargo:'VENDEDOR', zona:v.zona||'', telefono:v.telefono||''}); });
+  adminUsers = combined;
+
+  var list = combined.filter(function(u) {
+    return !q || [u.nombre,u.alias,u.codigo,u.cargo,u.zona,u.telefono].some(function(f){return (f||'').toLowerCase().indexOf(q)>=0;});
+  });
+
+  var tb = document.getElementById('admin-body');
+  if (!list.length) { tb.innerHTML = '<tr class="empty-r"><td colspan="8">Sin resultados</td></tr>'; return; }
+  tb.innerHTML = list.map(function(u) {
+    var typePill = u.type === 'SUPERVISOR' ? '<span class="pill p-blue">' + esc(u.cargo) + '</span>' : '<span class="pill p-green">VENDEDOR</span>';
+    return '<tr>' +
+      '<td>' + typePill + '</td>' +
+      '<td style="font-weight:600;">' + esc(u.nombre) + '</td>' +
+      '<td><code style="font-size:11px;color:var(--amber);">' + esc(u.alias||'--') + '</code></td>' +
+      '<td><code style="font-size:11px;">' + esc(u.codigo) + '</code></td>' +
+      '<td>' + esc(u.cargo) + '</td>' +
+      '<td style="color:var(--text2);">' + esc(u.zona||'--') + '</td>' +
+      '<td style="color:var(--text2);font-size:11px;">' + esc(u.telefono||'--') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="edit-btn" onclick="openEditUser(\'' + esc(u.id) + '\',\'' + esc(u.type) + '\')">&#9998; Editar</button> ' +
+        '<button class="del-btn" onclick="deleteUser(\'' + esc(u.id) + '\',\'' + esc(u.type) + '\',\'' + esc(u.nombre).replace(/'/g,"\\'") + '\')">&#128465; Eliminar</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+function openEditUser(id, type) {
+  var u = adminUsers.find(function(x){return x.id===id && x.type===type;});
+  if (!u) return;
+  _editingUser = {id:id, type:type};
+  document.getElementById('editUserTitle').textContent = 'Editar ' + type.toLowerCase();
+  document.getElementById('editUserSub').textContent = 'ID: ' + id;
+  document.getElementById('eu-nombre').value = u.nombre || '';
+  document.getElementById('eu-alias').value = u.alias || '';
+  document.getElementById('eu-codigo').value = u.codigo || '';
+  document.getElementById('eu-zona').value = u.zona || '';
+  document.getElementById('eu-telefono').value = u.telefono || '';
+  var cargoWrap = document.getElementById('eu-cargo-wrap');
+  if (type === 'SUPERVISOR') {
+    cargoWrap.style.display = 'block';
+    document.getElementById('eu-cargo').value = u.cargo || 'COACH';
+  } else {
+    cargoWrap.style.display = 'none';
+  }
+  document.getElementById('editUserModal').classList.add('show');
+}
+
+function saveEditUser() {
+  if (!_editingUser) return;
+  var body = {
+    nombre: document.getElementById('eu-nombre').value,
+    alias: document.getElementById('eu-alias').value,
+    codigo: document.getElementById('eu-codigo').value,
+    zona: document.getElementById('eu-zona').value,
+    telefono: document.getElementById('eu-telefono').value
+  };
+  if (_editingUser.type === 'SUPERVISOR') {
+    body.cargo = document.getElementById('eu-cargo').value;
+  }
+  var endpoint = _editingUser.type === 'SUPERVISOR' ? 'supervisores' : 'vendedores';
+  fetch(API + '/admin/' + endpoint + '/' + _editingUser.id, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json', 'x-admin-key': adminKey},
+    body: JSON.stringify(body)
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      alert('Usuario actualizado correctamente');
+      document.getElementById('editUserModal').classList.remove('show');
+      loadAll();
+    } else {
+      alert('Error: ' + (d.error||'Desconocido'));
+    }
+  }).catch(function(e) { alert('Error: ' + e.message); });
+}
+
+function deleteUser(id, type, nombre) {
+  if (!confirm('¿Eliminar a ' + nombre + '?\n\nEsta accion no se puede deshacer.')) return;
+  var endpoint = type === 'SUPERVISOR' ? 'supervisores' : 'vendedores';
+  fetch(API + '/admin/' + endpoint + '/' + id, {
+    method: 'DELETE',
+    headers: {'x-admin-key': adminKey}
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      alert(nombre + ' eliminado');
+      loadAll();
+    } else {
+      alert('Error: ' + (d.error||'Desconocido'));
+    }
+  }).catch(function(e) { alert('Error: ' + e.message); });
+}
+
+// ── BOOT
+loadAll();
+</script>
+</body>
+</html>

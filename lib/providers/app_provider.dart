@@ -1,26 +1,33 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import '../models/vendedor.dart';
 import '../models/supervisor.dart';
 import '../models/registro_llamada.dart';
 import '../models/alerta.dart';
+import '../models/contacto_cartera.dart';
+import '../config/api_config.dart';
 import '../services/data_service.dart';
+import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/call_monitor_service.dart';
-
+import '../services/media_projection_service.dart';
 import '../services/alertas_service.dart';
 import '../services/post_call_notification_service.dart';
 import '../services/debug_alert_service.dart';
+import '../services/battery_optimization_service.dart';
+import '../services/sync_service.dart';
 import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/battery_optimization_service.dart';
-
+import '../widgets/samsung_setup_wizard.dart';
 class AppProvider with ChangeNotifier {
   List<Vendedor> _vendedores = [];
   List<Supervisor> _supervisores = [];
   List<RegistroLlamada> _llamadas = [];
   List<Alerta> _alertas = [];
+  List<ContactoCartera> _contactosCartera = [];
+  List<String> _vendedoresSap = [];
+  List<dynamic> _equipoJerarquico = [];
   Supervisor? _usuarioActual;
   Vendedor? _vendedorActual;
   String? _storedSupervisorId;
@@ -32,11 +39,15 @@ class AppProvider with ChangeNotifier {
   bool _isInitialized = false;
   bool _sessionResolved = false; // true cuando sabemos si hay sesión o no
   String? _initError;
+  static const Duration _initTimeout = Duration(seconds: 8);
 
   List<Vendedor> get vendedores => _vendedores;
   List<Supervisor> get supervisores => _supervisores;
   List<RegistroLlamada> get llamadas => _llamadas;
   List<Alerta> get alertas => _alertas;
+  List<ContactoCartera> get contactosCartera => _contactosCartera;
+  List<String> get vendedoresSap => _vendedoresSap;
+  List<dynamic> get equipoJerarquico => _equipoJerarquico;
   bool get isInitialized => _isInitialized && _sessionResolved;
   String? get initError => _initError;
   Supervisor? get usuarioActual => _usuarioActual;
@@ -47,137 +58,200 @@ class AppProvider with ChangeNotifier {
   bool get monitorLlamadasActivo => _monitorLlamadasActivo;
   bool get batteryOptimizationDisabled => _batteryOptimizationDisabled;
 
+  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode get themeMode => _themeMode;
+
   bool get esCoach => _usuarioActual?.esCoach ?? false;
   bool get esKam => _usuarioActual?.esKam ?? false;
   bool get esJefe => _usuarioActual?.esJefe ?? false;
   bool get esVendedor => _vendedorActual != null;
 
+  Future<void> toggleTheme() async {
+    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_theme_mode', _themeMode == ThemeMode.dark ? 'dark' : 'light');
+  }
+
   Future<void> init({bool force = false}) async {
     if (_isInitialized && !force) return;
-    _isInitialized = false;
-    _initError = null;
-    notifyListeners();
-
+    if (force) {
+      _sessionResolved = false;
+      _initError = null;
+      _vendedores = [];
+      _supervisores = [];
+      _llamadas = [];
+      _alertas = [];
+      _contactosCartera = [];
+      _vendedoresSap = [];
+      _equipoJerarquico = [];
+      _usuarioActual = null;
+      _vendedorActual = null;
+      notifyListeners();
+    }
     await runZonedGuarded(() async {
       try {
-        DebugAlertService.info('Iniciando sistema...');
-        await DataService.init().timeout(const Duration(seconds: 8));
-        await _readStoredSessionIds();
-        
-        // Carga inicial rápida de sesión
-        if (_storedSupervisorId != null || _storedVendedorId != null) {
-          unawaited(_resolverUsuarioGuardado());
+        DebugAlertService.info('Inicializando app...');
+        await DataService.init().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {},
+        );
+        SyncService.init();
+        await _readStoredSessionIds().timeout(
+          const Duration(seconds: 6),
+          onTimeout: () {
+            _storedSupervisorId = null;
+            _storedVendedorId = null;
+          },
+        );
+        DebugAlertService.success('Inicio instantáneo completado');
+      } catch (e, st) {
+        debugPrint('Error init Minuto a Minuto: $e\n$st');
+        if (e is TimeoutException || e.toString().contains('Tiempo de espera')) {
+          _storedSupervisorId = null;
+          _storedVendedorId = null;
+          _initError = null;
         } else {
-          _sessionResolved = true;
+          DebugAlertService.error('Error al iniciar: $e');
+          _initError = 'Error al cargar: $e';
+          if (!ApiConfig.useRemoteApi) _initError = '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
         }
-
-        DebugAlertService.success('Núcleo cargado');
-      } catch (e) {
-        debugPrint('AppProvider init error: $e');
-        _initError = 'Error de inicio: $e';
       } finally {
         _isInitialized = true;
-        notifyListeners();
+        // Si no hay sesión guardada localmente, mostrar login de inmediato
+        if (_storedSupervisorId == null && _storedVendedorId == null) {
+          _sessionResolved = true;
+          notifyListeners();
+        } else {
+          notifyListeners();
+        }
       }
-      // Carga pesada en background e inicialización de monitor
-      unawaited(_initializeCoreServices());
+      // Resolver sesión en red y cargar datos (puede tardar, pero con timeout corto)
+      unawaited(_warmUpPostInit());
     }, (error, stack) {
-      debugPrint('AppProvider Error Fatal: $error');
-      _initError = 'Fallo crítico: $error';
+      debugPrint('AppProvider zone: $error\n$stack');
+      _initError = 'Error inesperado: $error';
       _isInitialized = true;
       _sessionResolved = true;
       notifyListeners();
     });
   }
 
-  Future<void> _initializeCoreServices() async {
+  Future<void> _warmUpPostInit() async {
+    // Resolver usuario guardado con timeout máximo de 5s
+    // Si tarda más, mostrar login para evitar pantalla cargando infinita
     try {
-      // 1. Warm up data
-      await _warmUpData();
-      
-      // 2. Initialize Call Monitor Service (one single place)
-      if (!kIsWeb) {
-        await CallMonitorService.init().timeout(const Duration(seconds: 15));
-      }
-      
-      // 3. Battery and optimizations
-      await verificarOptimizacionBateria();
-    } catch (e) {
-      debugPrint('_initializeCoreServices error: $e');
-    }
-  }
-
-  Future<void> _warmUpData() async {
-    try {
-      final results = await Future.wait([
-        DataService.getVendedores().timeout(const Duration(seconds: 10)),
-        DataService.getSupervisores().timeout(const Duration(seconds: 10)),
-      ]).catchError((e) {
-        DebugAlertService.warning('Error cargando equipo: $e');
-        return [<Vendedor>[], <Supervisor>[]];
-      });
-
-      _vendedores = results[0] as List<Vendedor>;
-      _supervisores = results[1] as List<Supervisor>;
-      
-      if (_usuarioActual != null || _vendedorActual != null) {
-        await recargarDashboard().timeout(const Duration(seconds: 15));
-      }
-    } catch (e) {
-      debugPrint('_warmUpData error: $e');
-    } finally {
+      await Future.any([
+        _runInitStep(
+          'resolver sesión guardada',
+          _resolverUsuarioGuardado,
+          timeout: const Duration(seconds: 12),
+        ),
+        Future.delayed(const Duration(seconds: 12)),
+      ]);
+    } catch (_) {}
+    // Siempre marcar como resuelto para no bloquear la app
+    if (!_sessionResolved) {
+      _sessionResolved = true;
       notifyListeners();
     }
+    // Cargar listas en paralelo en segundo plano
+    final results = await Future.wait([
+      _loadListOrEmpty<Vendedor>(
+        DataService.getVendedores,
+        'vendedores (background)',
+        timeout: _initTimeout,
+      ),
+      _loadListOrEmpty<Supervisor>(
+        DataService.getSupervisores,
+        'supervisores (background)',
+        timeout: _initTimeout,
+      ),
+    ]);
+    _vendedores = results[0] as List<Vendedor>;
+    _supervisores = results[1] as List<Supervisor>;
+    notifyListeners();
   }
 
-  // Helpers eliminados por redundancia en V22
+  Future<List<T>> _loadListOrEmpty<T>(
+    Future<List<T>> Function() loader,
+    String label,
+    {Duration? timeout}
+  ) async {
+    try {
+      return await _withTimeout(loader(), label, timeout: timeout);
+    } catch (e) {
+      DebugAlertService.warning('Init parcial: no se cargó $label ($e)');
+      return <T>[];
+    }
+  }
 
+  Future<void> _runInitStep(
+    String label,
+    Future<void> Function() action,
+    {Duration? timeout}
+  ) async {
+    try {
+      await _withTimeout(action(), label, timeout: timeout);
+    } catch (e) {
+      DebugAlertService.warning('Init parcial: fallo en $label ($e)');
+    }
+  }
+
+  Future<T> _withTimeout<T>(
+    Future<T> future,
+    String label, {
+    Duration? timeout,
+  }) async {
+    final limit = timeout ?? _initTimeout;
+    try {
+      return await future.timeout(limit);
+    } on TimeoutException {
+      throw Exception('Tiempo de espera agotado en: $label');
+    }
+  }
 
   Future<void> _readStoredSessionIds() async {
     final prefs = await SharedPreferences.getInstance();
     _storedSupervisorId = prefs.getString('supervisor_id');
     _storedVendedorId = prefs.getString('vendedor_id');
+    final savedTheme = prefs.getString('app_theme_mode');
+    _themeMode = savedTheme == 'light' ? ThemeMode.light : ThemeMode.dark;
   }
 
   Future<void> _resolverUsuarioGuardado() async {
-    try {
-      await _readStoredSessionIds();
-      final supervisorId = _storedSupervisorId;
-      final vendedorId = _storedVendedorId;
+    await _readStoredSessionIds();
+    final supervisorId = _storedSupervisorId;
+    final vendedorId = _storedVendedorId;
 
-      Supervisor? s;
-      Vendedor? v;
-      if (supervisorId != null) {
-        try {
-          s = await DataService.getSupervisor(supervisorId).timeout(const Duration(seconds: 5));
-        } catch (_) {}
-      }
-      if (vendedorId != null) {
-        try {
-          v = await DataService.getVendedor(vendedorId).timeout(const Duration(seconds: 5));
-        } catch (_) {}
-      }
+    Supervisor? s;
+    Vendedor? v;
+    if (supervisorId != null) {
+      try {
+        s = await DataService.getSupervisor(supervisorId);
+      } catch (_) {}
+    }
+    if (vendedorId != null) {
+      try {
+        v = await DataService.getVendedor(vendedorId);
+      } catch (_) {}
+    }
 
-      final prefs = await SharedPreferences.getInstance();
-      if (supervisorId != null && s == null) {
-        await prefs.remove('supervisor_id');
-        _storedSupervisorId = null;
-      }
-      if (vendedorId != null && v == null) {
-        await prefs.remove('vendedor_id');
-        _storedVendedorId = null;
-      }
-      _usuarioActual = s;
-      _vendedorActual = v;
-      
-      if (s != null || v != null) {
-        unawaited(_asegurarMonitorActivo());
-      }
-    } catch (e) {
-      debugPrint('_resolverUsuarioGuardado error: $e');
-    } finally {
-      _sessionResolved = true;
-      notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    if (supervisorId != null && s == null) {
+      await prefs.remove('supervisor_id');
+      _storedSupervisorId = null;
+    }
+    if (vendedorId != null && v == null) {
+      await prefs.remove('vendedor_id');
+      _storedVendedorId = null;
+    }
+    _usuarioActual = s;
+    _vendedorActual = v;
+    notifyListeners();
+    if (s != null || v != null) {
+      // Sin context, se salta el wizard visual.
+      unawaited(asegurarMonitorConWizardOpcional(null));
     }
   }
 
@@ -190,17 +264,13 @@ class AppProvider with ChangeNotifier {
       await prefs.remove('vendedor_id');
       _storedSupervisorId = id;
       _storedVendedorId = null;
-      
-      await prefs.setString('user_name', _usuarioActual!.nombre);
-      await prefs.setString('user_zona', _usuarioActual!.zona);
-      await prefs.setString('user_cargo', _usuarioActual!.cargo.valor);
-
       if (_usuarioActual!.telefono != null && _usuarioActual!.telefono!.trim().isNotEmpty) {
         await prefs.setString('numero_telefono_propietario', _usuarioActual!.telefono!.trim());
       }
     }
     notifyListeners();
-    unawaited(_asegurarMonitorActivo());
+    // NOTA: EL WIZARD SE LLAMARÁ EXPLÍCITAMENTE EN LA PANTALLA DE LOGIN
+    // unawaited(_asegurarMonitorConWizardOpcional(context));
   }
 
   Future<void> loginVendedor(String id) async {
@@ -212,19 +282,16 @@ class AppProvider with ChangeNotifier {
       await prefs.remove('supervisor_id');
       _storedVendedorId = id;
       _storedSupervisorId = null;
-
-      await prefs.setString('user_name', _vendedorActual!.nombre);
-      await prefs.setString('user_zona', _vendedorActual!.zona);
-      await prefs.setString('user_cargo', 'Vendedor'); // O el NivelCargo correspondiente
-
       if (_vendedorActual!.telefono != null && _vendedorActual!.telefono!.trim().isNotEmpty) {
         await prefs.setString('numero_telefono_propietario', _vendedorActual!.telefono!.trim());
       }
     }
     notifyListeners();
-    unawaited(_asegurarMonitorActivo());
+    // NOTA: EL WIZARD SE LLAMARÁ EXPLÍCITAMENTE EN LA PANTALLA DE LOGIN
+    // unawaited(_asegurarMonitorConWizardOpcional(context));
   }
 
+  // Cambiado: Solo la lógica base de encendido. La invocación se hace tras revisar el Wizard.
   Future<void> _asegurarMonitorActivo() async {
     try {
       final activo = await CallMonitorService.isActive();
@@ -238,6 +305,15 @@ class AppProvider with ChangeNotifier {
     }
   }
 
+  /// Nuevo: Llama al Wizard Visual del Samsung (si aplica) y luego enciende el monitor
+  Future<void> asegurarMonitorConWizardOpcional(BuildContext? context) async {
+    if (context != null && context.mounted) {
+      // Si es Samsung y nunca vio el aviso, mostrarlo ahora (bloquea hasta que cierre)
+      await SamsungSetupWizard.checkAndShow(context);
+    }
+    await _asegurarMonitorActivo();
+  }
+
   Future<void> logout() async {
     _usuarioActual = null;
     _vendedorActual = null;
@@ -248,27 +324,32 @@ class AppProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('supervisor_id');
     await prefs.remove('vendedor_id');
-    await prefs.remove('user_name');
-    await prefs.remove('user_zona');
-    await prefs.remove('user_cargo');
     notifyListeners();
   }
 
-  /// Limpia todos los datos locales para resolver estados corruptos
+  /// Limpia datos de sesión/caché local para reintentar inicio limpio.
   Future<void> forceClearCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      _usuarioActual = null;
-      _vendedorActual = null;
       _storedSupervisorId = null;
       _storedVendedorId = null;
+      _usuarioActual = null;
+      _vendedorActual = null;
+      _vendedores = [];
+      _supervisores = [];
+      _llamadas = [];
+      _alertas = [];
+      _contactosCartera = [];
+      _vendedoresSap = [];
+      _equipoJerarquico = [];
       _isInitialized = false;
       _sessionResolved = false;
       _initError = null;
       notifyListeners();
     } catch (e) {
       debugPrint('forceClearCache error: $e');
+      rethrow;
     }
   }
 
@@ -288,7 +369,6 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<void> recargarDashboard() async {
-    unawaited(verificarOptimizacionBateria());
     final hoy = DateTime.now();
     _llamadas = await DataService.getRegistroLlamadas(
       desde: hoy,
@@ -305,7 +385,55 @@ class AppProvider with ChangeNotifier {
     if (!DataService.useDemoData) {
       await _notificarCoachAlertas8am();
     }
+    await _cargarDatosSapParaDashboard();
     notifyListeners();
+  }
+
+  String _mapCargoSap() {
+    if (_usuarioActual == null) return '';
+    if (_usuarioActual!.esCoach) return 'COACH';
+    if (_usuarioActual!.esKam) return 'KAM';
+    if (_usuarioActual!.esJefe) return 'JEFE DE VENTAS';
+    return '';
+  }
+
+  Future<void> _cargarDatosSapParaDashboard() async {
+    if (_usuarioActual == null) {
+      _contactosCartera = [];
+      _vendedoresSap = [];
+      _equipoJerarquico = [];
+      return;
+    }
+    final cargoSap = _mapCargoSap();
+    if (cargoSap.isEmpty) return;
+    final nombre = _usuarioActual!.nombre;
+    try {
+      _contactosCartera = await ApiService.getContactosCartera(
+        cargo: cargoSap,
+        nombre: nombre,
+      );
+    } catch (_) {
+      _contactosCartera = [];
+    }
+    try {
+      if (cargoSap == 'COACH' || cargoSap == 'KAM') {
+        _vendedoresSap = await ApiService.getVendedoresSap(cargoSap, nombre);
+      } else {
+        _vendedoresSap = [];
+      }
+    } catch (_) {
+      _vendedoresSap = [];
+    }
+    try {
+      // Cargar jerarquía para cualquier supervisor (JEFE, KAM, COACH)
+      if (cargoSap == 'JEFE DE VENTAS' || cargoSap == 'KAM' || cargoSap == 'COACH') {
+        _equipoJerarquico = await ApiService.getEquipoJerarquico();
+      } else {
+        _equipoJerarquico = [];
+      }
+    } catch (_) {
+      _equipoJerarquico = [];
+    }
   }
 
   /// Activa datos de demostración para presentaciones. Carga todo el dashboard con datos de prueba.
@@ -361,7 +489,7 @@ class AppProvider with ChangeNotifier {
     return _llamadas.where((l) => l.nombreContactado == nombre).toList();
   }
 
-  Future<void> registrarLlamada(RegistroLlamada r) async {
+  Future<({String savedTo, String registroId, bool hasGps, bool retrying})> registrarLlamada(RegistroLlamada r) async {
     if (r.duracionMinutos < AppConstants.duracionMinimaLlamada) {
       throw Exception(
           'La duración mínima debe ser ${AppConstants.duracionMinimaLlamada} minutos');
@@ -369,9 +497,10 @@ class AppProvider with ChangeNotifier {
     if (!r.confirmacionVeracidad) {
       throw Exception('Debe confirmar la veracidad del registro');
     }
-    await DataService.insertRegistroLlamada(r);
+    final result = await DataService.insertRegistroLlamada(r);
     await cargarDatosHoy();
     notifyListeners();
+    return result;
   }
 
   Future<void> iniciarGeolocalizacion() async {
@@ -406,7 +535,19 @@ class AppProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Solicita el permiso de MediaProjection al usuario.
+  /// Debe llamarse desde un contexto con BuildContext (UI).
+  Future<bool> solicitarPermisoMediaProjection() async {
+    try {
+      final granted = await MediaProjectionService.requestPermission();
+      return granted;
+    } catch (e) {
+      debugPrint('solicitarPermisoMediaProjection: $e');
+      return false;
+    }
+  }
 
+  bool get mediaProjectionGranted => MediaProjectionService.hasPermission;
 
   Future<void> detenerMonitorLlamadas() async {
     try {
@@ -419,7 +560,12 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<void> verificarOptimizacionBateria() async {
-    _batteryOptimizationDisabled = await BatteryOptimizationService.isIgnoringBatteryOptimizations();
+    try {
+      _batteryOptimizationDisabled =
+          await BatteryOptimizationService.isIgnoringBatteryOptimizations();
+    } catch (_) {
+      _batteryOptimizationDisabled = true;
+    }
     notifyListeners();
   }
 

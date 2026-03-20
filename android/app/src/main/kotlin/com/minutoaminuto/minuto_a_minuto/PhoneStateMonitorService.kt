@@ -87,11 +87,9 @@ class PhoneStateMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "RESTART_MONITOR") {
-            // No llamar a onCreate() manualmente. El sistema o startForegroundService ya lo hace.
-            // Solo asegurarnos de que la notificación esté activa si por alguna razón se perdió.
-            startForegroundNotification()
-        }
+        // Siempre llamar startForeground en onStartCommand para cubrir reinicios por START_STICKY
+        // (cuando el sistema reinicia el servicio, onCreate no siempre se llama antes)
+        startForegroundNotification()
         scheduleKeepAlive()
         return START_STICKY
     }
@@ -286,18 +284,21 @@ class PhoneStateMonitorService : Service() {
     }
 
     private fun startCallRecorder(number: String) {
-        try {
+        if (!CallRecorderService.isRecording.get()) {
             val intent = Intent(this, CallRecorderService::class.java).apply {
                 action = CallRecorderService.ACTION_START
                 putExtra(CallRecorderService.EXTRA_CALL_NUMBER, number)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
+                try {
+                    startForegroundService(intent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "No se pudo iniciar CallRecorder en foreground: ${e.message}")
+                    startService(intent)
+                }
             } else {
                 startService(intent)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "startCallRecorder error: ${e.message}")
         }
     }
 
@@ -332,8 +333,8 @@ class PhoneStateMonitorService : Service() {
     }
 
     private fun startForegroundNotification() {
-        try {
-            val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notif = try {
+            NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Minuto a Minuto")
                 .setContentText("Monitoreando llamadas...")
                 .setSmallIcon(android.R.drawable.ic_menu_call)
@@ -341,26 +342,56 @@ class PhoneStateMonitorService : Service() {
                 .setOngoing(true)
                 .setSilent(true)
                 .build()
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            } else {
-                startForeground(NOTIF_ID, notif)
-            }
         } catch (e: Exception) {
-            Log.e(TAG, "startForegroundNotification error: ${e.message}")
-            throw e
+            Log.e(TAG, "Error creando notificación: ${e.message}")
+            return
+        }
+
+        // Intentar tipos en orden de preferencia — se necesita al menos uno exitoso
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // 1. specialUse (API 34+)
+            if (Build.VERSION.SDK_INT >= 34) {
+                try {
+                    startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                    Log.d(TAG, "FGS iniciado con SPECIAL_USE")
+                    return
+                } catch (t: Throwable) {
+                    Log.w(TAG, "FGS SPECIAL_USE falló (${t.javaClass.simpleName}): ${t.message}")
+                }
+            }
+            // 2. dataSync — tipo menos restrictivo, siempre disponible en API 29+
+            try {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                Log.d(TAG, "FGS iniciado con DATA_SYNC")
+                return
+            } catch (t: Throwable) {
+                Log.w(TAG, "FGS DATA_SYNC falló (${t.javaClass.simpleName}): ${t.message}")
+            }
+            // 3. phoneCall como intento adicional
+            try {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+                Log.d(TAG, "FGS iniciado con PHONE_CALL")
+                return
+            } catch (t: Throwable) {
+                Log.w(TAG, "FGS PHONE_CALL falló (${t.javaClass.simpleName}): ${t.message}")
+            }
+        }
+        // Fallback final sin tipo (API < 29, o último recurso)
+        try {
+            startForeground(NOTIF_ID, notif)
+            Log.d(TAG, "FGS iniciado sin tipo (fallback)")
+        } catch (t: Throwable) {
+            // NUNCA llamar stopSelf() aquí: causa ForegroundServiceDidNotStartInTimeException
+            Log.e(TAG, "startForeground falló completamente (${t.javaClass.simpleName}): ${t.message}")
         }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Log.w(TAG, "App swipeada (at task removed) — Reiniciando monitor...")
-        val intent = Intent(this, PhoneStateMonitorService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        // NO usar startForegroundService() aquí: el proceso se está matando y
+        // startForeground() no se puede llamar a tiempo → ForegroundServiceDidNotStartInTimeException
+        // El AlarmManager (scheduleKeepAlive) se encarga de reiniciar el monitor.
+        Log.w(TAG, "App eliminada de recientes — el AlarmManager reiniciará el monitor")
+        scheduleKeepAlive()
         super.onTaskRemoved(rootIntent)
     }
 }

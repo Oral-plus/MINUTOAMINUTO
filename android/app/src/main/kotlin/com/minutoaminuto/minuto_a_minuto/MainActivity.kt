@@ -77,6 +77,7 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "isSpeakerOn" -> result.success(false)
+                    "getAmplitude" -> result.success(CallRecorderService.currentAmplitude)
                     "isAccessibilityEnabled" ->
                         result.success(CallRecordAccessibilityService.isAccessibilityEnabled(this))
                     "openAccessibilitySettings" -> {

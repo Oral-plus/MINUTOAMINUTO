@@ -9,6 +9,7 @@ class Supervisor {
   final String? telefono;
   final String? superiorId; // Coach -> KAM, KAM -> Jefe
   final List<String> subordinadosIds; // IDs de vendedores o coaches
+  final String? alias; // login simplificado KAM01, COACH01...
 
   Supervisor({
     required this.id,
@@ -19,6 +20,7 @@ class Supervisor {
     this.telefono,
     this.superiorId,
     this.subordinadosIds = const [],
+    this.alias,
   });
 
   bool get esCoach => cargo == NivelCargo.coach;
@@ -34,6 +36,7 @@ class Supervisor {
         'telefono': telefono,
         'superiorId': superiorId,
         'subordinadosIds': subordinadosIds.join(','),
+        'alias': alias,
       };
 
   factory Supervisor.fromMap(Map<String, dynamic> map) => Supervisor(
@@ -52,5 +55,6 @@ class Supervisor {
                 .where((s) => s.isNotEmpty)
                 .toList() ??
             [],
+        alias: map['alias'] as String?,
       );
 }

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minuto a Minuto | Admin Sync Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050505;
+            --accent: #FFD700;
+            --accent-glow: rgba(255, 215, 0, 0.3);
+            --card-bg: rgba(20, 20, 20, 0.8);
+            --text: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.5);
+            --terminal-bg: #0a0a0a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 215, 0, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(255, 215, 0, 0.03) 0%, transparent 40%);
+        }
+
+        .container {
+            width: 95%;
+            max-width: 900px;
+            padding: 40px;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 215, 0, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .header { text-align: center; margin-bottom: 30px; }
+        h1 { font-size: 2.2rem; font-weight: 800; background: linear-gradient(to right, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        p { color: var(--text-secondary); margin-top: 8px; }
+
+        .actions { display: flex; gap: 16px; justify-content: center; margin-bottom: 30px; }
+
+        .btn {
+            padding: 14px 28px;
+            border-radius: 14px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: none;
+            text-decoration: none;
+        }
+
+        .btn-primary { background: var(--accent); color: #000; box-shadow: 0 8px 16px -4px var(--accent-glow); }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-secondary { background: rgba(255, 255, 255, 0.05); color: #fff; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+        .terminal {
+            background: var(--terminal-bg);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .terminal-header {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .red { background: #ff5f56; }
+        .yellow { background: #ffbd2e; }
+        .green { background: #27c93f; }
+
+        .terminal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #d1d1d1;
+        }
+
+        .log-entry { margin-bottom: 4px; border-left: 2px solid transparent; padding-left: 10px; }
+        .log-start { color: var(--accent); font-weight: bold; margin-bottom: 10px; }
+        .log-create { color: #4ade80; border-left-color: #4ade80; }
+        .log-update { color: #60a5fa; border-left-color: #60a5fa; }
+        .log-skip { color: #94a3b8; }
+        .log-error { color: #f87171; background: rgba(239, 68, 68, 0.1); border-radius: 4px; padding: 4px 10px; }
+        .log-done { color: var(--accent); font-weight: bold; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px; }
+
+        .terminal-body::-webkit-scrollbar { width: 6px; }
+        .terminal-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+
+        .loader {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-radius: 50%;
+            border-top-color: #000;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading .loader { display: block; }
+        .loading .btn-text { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>Sincronización SAP Pro</h1>
+            <p>Monitoreo en tiempo real del registro y actualización de personal comercial.</p>
+        </div>
+
+        <div class="actions">
+            <button id="syncBtn" class="btn btn-primary" onclick="startStreamSync()">
+                <div class="loader"></div>
+                <span class="btn-text">🚀 Iniciar Sincronización</span>
+            </button>
+
+            <a href="/sap/export-excel" class="btn btn-secondary">
+                <span>📄 Descargar Excel</span>
+            </a>
+        </div>
+
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="dot red"></div>
+                <div class="dot yellow"></div>
+                <div class="dot green"></div>
+                <span style="font-size: 11px; color: var(--text-secondary); margin-left: 10px;">sap_sync_session.log</span>
+            </div>
+            <div id="terminalBody" class="terminal-body">
+                <div class="log-entry" style="color: #666;">Esperando inicio de operación...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+
+        function startStreamSync() {
+            const btn = document.getElementById('syncBtn');
+            const terminal = document.getElementById('terminalBody');
+            
+            btn.disabled = true;
+            btn.classList.add('loading');
+            terminal.innerHTML = ''; // Limpiar terminal
+
+            if (eventSource) eventSource.close();
+
+            eventSource = new EventSource('/sap/sync-users-stream');
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendLog(data.msg, data.type);
+            };
+
+            eventSource.addEventListener('end', function() {
+                eventSource.close();
+                btn.disabled = false;
+                btn.classList.remove('loading');
+            });
+
+            eventSource.onerror = function() {
+                appendLog("Conexión interrumpida o finalizada.", "error");
+                eventSource.close();
+                btn.disabled = false;
+                btn.classList.remove('loading');
+            };
+        }
+
+        function appendLog(msg, type) {
+            const terminal = document.getElementById('terminalBody');
+            const div = document.createElement('div');
+            div.className = `log-entry log-${type}`;
+            div.innerHTML = `> ${msg}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+    </script>
+</body>
+</html>

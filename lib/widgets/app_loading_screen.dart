@@ -61,7 +61,7 @@ class AppLoadingIndicator extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.white.withValues(alpha: 0.04),
+                    Colors.white.withOpacity(0.04),
                     Colors.transparent,
                   ],
                 ),
@@ -98,7 +98,7 @@ class AppLoadingIndicator extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.3),
+              color: Colors.white.withOpacity(0.3),
             ),
           ),
         ],
