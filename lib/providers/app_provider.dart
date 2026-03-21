@@ -19,6 +19,7 @@ import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/samsung_setup_wizard.dart';
 class AppProvider with ChangeNotifier {
@@ -156,6 +157,10 @@ class AppProvider with ChangeNotifier {
       _sessionResolved = true;
       notifyListeners();
     }
+    // Pedir permisos necesarios en cada arranque (si no están concedidos)
+    unawaited(_requestAllPermissions());
+    // Calentar GPS en cada arranque
+    unawaited(_warmupGps());
     // Cargar listas en paralelo en segundo plano
     final results = await Future.wait([
       _loadListOrEmpty<Vendedor>(
@@ -504,6 +509,26 @@ class AppProvider with ChangeNotifier {
     await cargarDatosHoy();
     notifyListeners();
     return result;
+  }
+
+  /// Revisa y solicita todos los permisos requeridos por la app en cada arranque.
+  Future<void> _requestAllPermissions() async {
+    try {
+      final permisos = [
+        Permission.location,
+        Permission.phone,
+        Permission.contacts,
+        Permission.microphone,
+        Permission.notification,
+        Permission.storage,
+      ];
+      for (final p in permisos) {
+        final status = await p.status;
+        if (status.isDenied) {
+          await p.request();
+        }
+      }
+    } catch (_) {}
   }
 
   /// Solicita permiso de ubicación y obtiene una posición inicial en background.
