@@ -302,6 +302,12 @@ tbody td{padding:12px 15px;font-size:12px;vertical-align:middle;}
 </div>
 
 <div class="panel" id="p-calls">
+  <div class="filters" style="margin-bottom:8px;">
+    <button class="btn" onclick="setDay(0)">Hoy</button>
+    <button class="btn" onclick="setDay(1)">Ayer</button>
+    <button class="btn" onclick="setWeek()">Esta semana</button>
+    <button class="btn" onclick="setMonth()">Este mes</button>
+  </div>
   <div class="filters">
     <span class="fl">Desde</span><input type="date" id="f-desde" onchange="fetchCalls()">
     <span class="fl">Hasta</span><input type="date" id="f-hasta" onchange="fetchCalls()">
@@ -675,6 +681,29 @@ function renderVends() {
       '<td style="color:var(--text2);">' + esc(v.telefono||'--') + '</td>' +
       '</tr>';
   }).join('');
+}
+
+// ── DATE QUICK FILTERS
+function isoDate(d) { return d.toISOString().split('T')[0]; }
+function setDay(daysAgo) {
+  var d = new Date(); d.setDate(d.getDate() - daysAgo);
+  var s = isoDate(d);
+  document.getElementById('f-desde').value = s;
+  document.getElementById('f-hasta').value = s;
+  fetchCalls();
+}
+function setWeek() {
+  var now = new Date();
+  var mon = new Date(now); mon.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+  document.getElementById('f-desde').value = isoDate(mon);
+  document.getElementById('f-hasta').value = isoDate(now);
+  fetchCalls();
+}
+function setMonth() {
+  var now = new Date();
+  document.getElementById('f-desde').value = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  document.getElementById('f-hasta').value = isoDate(now);
+  fetchCalls();
 }
 
 // ── CALLS

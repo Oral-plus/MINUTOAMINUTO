@@ -451,6 +451,13 @@ class ApiService {
     }
   }
 
+  /// Retorna la ruta solo si es una URL de servidor (/audio/...) — descarta rutas locales del dispositivo.
+  static String? _serverPath(String? path) {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('/audio/') || path.startsWith('http')) return path;
+    return null;
+  }
+
   /// Convierte DateTime a formato ISO-8601 compatible con JavaScript/Node.js
   /// (UTC, 3 decimales): "2026-03-21T12:39:00.123Z"
   static String _dt(DateTime dt) {
@@ -489,8 +496,8 @@ class ApiService {
       'recuperacionPerdidos': r.recuperacionPerdidos,
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
-      'rutaGrabacion': r.rutaGrabacion,
-      'rutaGrabacionPuntoB': r.rutaGrabacionPuntoB,
+      'rutaGrabacion': _serverPath(r.rutaGrabacion),
+      'rutaGrabacionPuntoB': _serverPath(r.rutaGrabacionPuntoB),
       'transcripcionTexto': r.transcripcionTexto,
       'latitud': r.latitud,
       'longitud': r.longitud,
@@ -531,8 +538,8 @@ class ApiService {
       'recuperacionPerdidos': r.recuperacionPerdidos,
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
-      'rutaGrabacion': r.rutaGrabacion,
-      'rutaGrabacionPuntoB': r.rutaGrabacionPuntoB,
+      'rutaGrabacion': _serverPath(r.rutaGrabacion),
+      'rutaGrabacionPuntoB': _serverPath(r.rutaGrabacionPuntoB),
       'transcripcionTexto': r.transcripcionTexto,
       'latitud': r.latitud,
       'longitud': r.longitud,
