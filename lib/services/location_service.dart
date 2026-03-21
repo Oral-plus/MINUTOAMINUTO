@@ -21,11 +21,6 @@ class LocationService {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.deniedForever) return false;
-      // Solicitar "always" para que el monitor de llamadas pueda obtener GPS en segundo plano
-      if (permission == LocationPermission.whileInUse) {
-        final upgraded = await Geolocator.requestPermission();
-        if (upgraded == LocationPermission.always) permission = upgraded;
-      }
       return permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always;
     } catch (_) {

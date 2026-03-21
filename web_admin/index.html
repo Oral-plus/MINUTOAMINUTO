@@ -551,7 +551,7 @@ function renderMap() {
   mapMarkers.forEach(function(m){ leafletMap.removeLayer(m); });
   mapMarkers = [];
   mapMarkersMap = {};
-  var withLoc = allCalls.filter(function(c){ return c.latitud && c.longitud; });
+  var withLoc = allCalls.filter(function(c){ return c.latitud != null && c.longitud != null && c.latitud !== 0 && c.longitud !== 0; });
   document.getElementById('b-map').textContent = withLoc.length;
   if (!withLoc.length) return;
   var bounds = [];

@@ -18,6 +18,7 @@ import '../services/sync_service.dart';
 import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/samsung_setup_wizard.dart';
 class AppProvider with ChangeNotifier {
@@ -267,6 +268,8 @@ class AppProvider with ChangeNotifier {
       if (_usuarioActual!.telefono != null && _usuarioActual!.telefono!.trim().isNotEmpty) {
         await prefs.setString('numero_telefono_propietario', _usuarioActual!.telefono!.trim());
       }
+      // Calentar GPS para que el monitor de llamadas tenga coordenadas disponibles
+      unawaited(_warmupGps());
     }
     notifyListeners();
     // NOTA: EL WIZARD SE LLAMARÁ EXPLÍCITAMENTE EN LA PANTALLA DE LOGIN
@@ -501,6 +504,26 @@ class AppProvider with ChangeNotifier {
     await cargarDatosHoy();
     notifyListeners();
     return result;
+  }
+
+  /// Solicita permiso de ubicación y obtiene una posición inicial en background.
+  /// Se llama al login (supervisores y vendedores) para que el monitor de llamadas
+  /// tenga coordenadas disponibles desde el primer momento.
+  Future<void> _warmupGps() async {
+    try {
+      final ok = await LocationService.requestPermission();
+      if (!ok) return;
+      Position? pos = await Geolocator.getLastKnownPosition();
+      if (pos == null) {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.reduced,
+            timeLimit: Duration(seconds: 15),
+          ),
+        ).timeout(const Duration(seconds: 17));
+      }
+      if (pos != null) LocationService.updateFromStream(pos);
+    } catch (_) {}
   }
 
   Future<void> iniciarGeolocalizacion() async {
