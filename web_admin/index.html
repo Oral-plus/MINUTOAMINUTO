@@ -899,15 +899,29 @@ function renderOv() {
   var tod = allCalls.filter(function(c){ return (c.fecha||'').indexOf(today)===0; }).slice(0,15);
   var tb = document.getElementById('ov-body');
   if (!tod.length) { tb.innerHTML = '<tr class="empty-r"><td colspan="7">Sin llamadas hoy</td></tr>'; return; }
-  tb.innerHTML = tod.map(function(c) {
-    var ruta = c.rutaGrabacion || c.rutaGrabacionPuntoB;
+  tb.innerHTML = tod.map(function(c, i) {
+    var ruta = c.rutaGrabacion || c.rutaGrabacionPuntoB || '';
+    var url = audioUrl(ruta);
+    var oid = 'ov' + i;
+    var audioCell;
+    if (url) {
+      audioCell = '<div class="audio-cell">' +
+        '<div class="play-btn" id="pb' + oid + '" onclick="playHttp(event,\'' + url + '\',\'' + oid + '\')">&#9654;</div>' +
+        '<div class="audio-track" id="at' + oid + '" onclick="seekAudio(event,\'' + oid + '\')"><div class="audio-fill" id="af' + oid + '"></div></div>' +
+        '<span class="a-time" id="tm' + oid + '">0:00</span>' +
+        '</div>';
+    } else if (ruta) {
+      audioCell = '<span class="pill p-amber">Local</span>';
+    } else {
+      audioCell = '<span class="pill p-gray">Sin audio</span>';
+    }
     return '<tr>' +
       '<td>' + fmtTime(c.fechaCreacion || c.horaInicio) + '</td>' +
       '<td style="font-weight:600;">' + esc(c.nombreLider||'--') + '</td>' +
       '<td>' + cargoPill(c.cargoLider) + '</td>' +
       '<td>' + esc(c.nombreContactado||'--') + '</td>' +
       '<td><b>' + (c.duracionMinutos != null ? c.duracionMinutos : '--') + '</b> min</td>' +
-      '<td>' + (ruta ? '<span class="pill p-green">&#10003; Audio</span>' : '<span class="pill p-gray">Sin audio</span>') + '</td>' +
+      '<td>' + audioCell + '</td>' +
       '<td>' + (c.transcripcionTexto ? '<span class="pill p-blue">&#10003; IA</span>' : '--') + '</td>' +
       '</tr>';
   }).join('');

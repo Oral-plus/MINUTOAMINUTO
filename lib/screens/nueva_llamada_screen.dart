@@ -34,10 +34,38 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
   String _observaciones = '';
   bool _confirmacionVeracidad = false;
 
+  Position? _cachedPosition;
+
   @override
   void initState() {
     super.initState();
     _horaInicio.value = DateTime.now();
+    _prefetchLocation();
+  }
+
+  Future<void> _prefetchLocation() async {
+    try {
+      final hasPermission = await LocationService.requestPermission();
+      if (!hasPermission) return;
+      Position? pos = LocationService.lastKnown;
+      if (pos == null) {
+        try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
+      }
+      if (pos == null) {
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.reduced,
+              timeLimit: Duration(seconds: 15),
+            ),
+          ).timeout(const Duration(seconds: 17));
+        } catch (_) {}
+      }
+      if (pos != null && mounted) {
+        LocationService.updateFromStream(pos);
+        if (mounted) setState(() => _cachedPosition = pos);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -341,15 +369,22 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
       return;
     }
 
-    // Ubicación: lastKnown del stream → última conocida de Android → GPS fresco
+    // Ubicación: prefetched → lastKnown del stream → última conocida de Android → GPS fresco
     double? lat, lng;
     try {
-      Position? pos = LocationService.lastKnown;
+      Position? pos = _cachedPosition ?? LocationService.lastKnown;
       if (pos == null) {
         try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
       }
       if (pos == null) {
-        pos = await LocationService.getCurrentPosition().timeout(const Duration(seconds: 6));
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.reduced,
+              timeLimit: Duration(seconds: 10),
+            ),
+          ).timeout(const Duration(seconds: 12));
+        } catch (_) {}
       }
       lat = pos?.latitude;
       lng = pos?.longitude;
