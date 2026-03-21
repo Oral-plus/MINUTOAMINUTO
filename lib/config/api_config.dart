@@ -10,16 +10,12 @@
 /// Para SQL Server: usar API remota con endpoints compatibles.
 class ApiConfig {
   /// URL de la API.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://minutoamimuto.oral-plus.com',
-  );
+  static const String baseUrl = String.fromEnvironment('API_BASE_URL',
+      defaultValue: 'https://minutoamimuto.oral-plus.com');
 
   /// Fallback si la principal falla.
-  static const String fallbackBaseUrl = String.fromEnvironment(
-    'API_FALLBACK_BASE_URL',
-    defaultValue: 'https://minutoamimuto.oral-plus.com',
-  );
+  static const String fallbackBaseUrl = String.fromEnvironment('FALLBACK_API_URL',
+      defaultValue: 'https://minutoaminuto-1.onrender.com');
   /// false = SQLite local (todo queda en el dispositivo).
   /// true = API remota (inserta en servidor).
   static const bool useRemoteApi = true;
@@ -30,6 +26,6 @@ class ApiConfig {
   ///   flutter build apk --dart-define=GEMINI_API_KEY=TU_CLAVE
   static const String geminiApiKey = String.fromEnvironment(
     'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyAOkxbh1vWEmE_xipowG_9JhM0nTscj5iQ', // Nueva clave generada con la cuenta principal
+    defaultValue: 'AIzaSyCv3DuViWqnvKYekLXgVl4lh3jtM-6iRys',
   );
 }

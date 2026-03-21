@@ -301,17 +301,18 @@ class _LlamadaCardState extends State<_LlamadaCard> {
         margin: const EdgeInsets.only(bottom: 2),
         decoration: BoxDecoration(
           color: context.ac.surfaceAlt,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _expandido
-                ? context.ac.fg.withOpacity(0.15)
-                : context.ac.fg.withOpacity(0.06),
+                ? context.ac.fg.withOpacity(0.12)
+                : context.ac.fg.withOpacity(0.04),
+            width: 0.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: context.ac.fg.withOpacity(_expandido ? 0.3 : 0.1),
-              blurRadius: _expandido ? 20 : 10,
-              offset: Offset(0, _expandido ? 10 : 4),
+              color: context.ac.fg.withOpacity(_expandido ? 0.08 : 0.03),
+              blurRadius: _expandido ? 24 : 12,
+              offset: Offset(0, _expandido ? 8 : 4),
             ),
           ],
         ),
@@ -328,12 +329,12 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: context.ac.fg.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.ac.fg.withOpacity(0.08)),
+                      color: context.ac.fg.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.ac.fg.withOpacity(0.06), width: 0.5),
                     ),
                     child: Icon(Icons.phone_in_talk_rounded,
-                        color: context.ac.fg.withOpacity(0.7), size: 22),
+                        color: context.ac.fg.withOpacity(0.6), size: 20),
                   ),
                   SizedBox(width: 14),
                   Expanded(
@@ -342,14 +343,15 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                       children: [
                         Text(widget.contacto,
                             style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: context.ac.fg,
-                                letterSpacing: -0.3)),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Georgia',
+                                color: context.ac.fg.withOpacity(0.9),
+                                letterSpacing: 0.2)),
                         SizedBox(height: 4),
                         Text('$horaStr  ·  $agoStr',
                             style: TextStyle(
-                                fontSize: 11, color: context.ac.fg.withOpacity(0.3), fontWeight: FontWeight.w600)),
+                                fontSize: 12, color: context.ac.fg.withOpacity(0.4), fontWeight: FontWeight.w400, letterSpacing: 0.5)),
                       ],
                     ),
                   ),
@@ -1042,14 +1044,15 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
           Row(
             children: [
               // Play button with glow effect
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   boxShadow: _playing ? [
                     BoxShadow(
-                      color: const Color(0xFF4ADE80).withOpacity(0.3),
-                      blurRadius: 16,
-                      spreadRadius: 2,
+                      color: const Color(0xFFD4AF37).withOpacity(0.4),
+                      blurRadius: 20,
+                      spreadRadius: 4,
                     ),
                   ] : [],
                 ),
@@ -1072,9 +1075,9 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                         ),
                   style: IconButton.styleFrom(
                     backgroundColor: _playing
-                        ? const Color(0xFF4ADE80)
+                        ? const Color(0xFFD4AF37)
                         : context.ac.fg.withOpacity(0.12),
-                    foregroundColor: context.ac.fg,
+                    foregroundColor: _playing ? const Color(0xFF111827) : context.ac.fg,
                     minimumSize: const Size(48, 48),
                   ),
                 ),
@@ -1146,7 +1149,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
           // Waveform-style slider
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: _playing ? const Color(0xFF4ADE80) : context.ac.fg.withOpacity(0.5),
+              activeTrackColor: _playing ? const Color(0xFFD4AF37) : context.ac.fg.withOpacity(0.5),
               inactiveTrackColor: context.ac.fg.withOpacity(0.08),
               thumbColor: context.ac.fg,
               trackHeight: 4,

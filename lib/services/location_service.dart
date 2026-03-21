@@ -4,6 +4,14 @@ import 'data_service.dart';
 class LocationService {
   static Position? _lastKnown;
 
+  /// Última posición conocida (actualizada desde el stream en tiempo real).
+  static Position? get lastKnown => _lastKnown;
+
+  /// Llama esto desde el listener del stream para mantener la posición actualizada.
+  static void updateFromStream(Position pos) {
+    _lastKnown = pos;
+  }
+
   static Future<bool> requestPermission() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();

@@ -451,12 +451,26 @@ class ApiService {
     }
   }
 
+  /// Convierte DateTime a formato ISO-8601 compatible con JavaScript/Node.js
+  /// (UTC, 3 decimales): "2026-03-21T12:39:00.123Z"
+  static String _dt(DateTime dt) {
+    final u = dt.toUtc();
+    final ms = u.millisecond.toString().padLeft(3, '0');
+    return '${u.year.toString().padLeft(4,'0')}-'
+        '${u.month.toString().padLeft(2,'0')}-'
+        '${u.day.toString().padLeft(2,'0')}T'
+        '${u.hour.toString().padLeft(2,'0')}:'
+        '${u.minute.toString().padLeft(2,'0')}:'
+        '${u.second.toString().padLeft(2,'0')}.'
+        '${ms}Z';
+  }
+
   static Future<void> insertRegistroLlamada(RegistroLlamada r) async {
     final body = {
       'id': r.id,
       'fecha': r.fecha.toIso8601String().split('T')[0],
-      'horaInicio': r.horaInicio.toIso8601String(),
-      'horaFin': r.horaFin.toIso8601String(),
+      'horaInicio': _dt(r.horaInicio),
+      'horaFin': _dt(r.horaFin),
       'duracionMinutos': r.duracionMinutos,
       'tipoLlamada': r.tipoLlamada.valor,
       'cargoLider': r.cargoLider.valor,
@@ -483,14 +497,7 @@ class ApiService {
     };
     final uri = Uri.parse('$_base/llamadas');
     DebugAlertService.info('API POST: $uri');
-    final res = await _requestWithRetry(
-      (base) => http.post(
-        Uri.parse('$base/llamadas'),
-        body: jsonEncode(body),
-        headers: {'Content-Type': 'application/json'},
-      ),
-      timeout: _writeRequestTimeout,
-    );
+    final res = await _post('/llamadas', body);
     _checkResponse(res);
     final parsed = jsonDecode(res.body);
     if (parsed is! Map || parsed['success'] != true) {
@@ -504,8 +511,8 @@ class ApiService {
     final body = {
       'id': r.id,
       'fecha': r.fecha.toIso8601String().split('T')[0],
-      'horaInicio': r.horaInicio.toIso8601String(),
-      'horaFin': r.horaFin.toIso8601String(),
+      'horaInicio': _dt(r.horaInicio),
+      'horaFin': _dt(r.horaFin),
       'duracionMinutos': r.duracionMinutos,
       'tipoLlamada': r.tipoLlamada.valor,
       'cargoLider': r.cargoLider.valor,
@@ -525,18 +532,15 @@ class ApiService {
       'observaciones': r.observaciones,
       'confirmacionVeracidad': r.confirmacionVeracidad ? 1 : 0,
       'rutaGrabacion': r.rutaGrabacion,
+      'rutaGrabacionPuntoB': r.rutaGrabacionPuntoB,
       'transcripcionTexto': r.transcripcionTexto,
-      if (r.latitud != null && r.longitud != null) 'latitud': r.latitud,
-      if (r.latitud != null && r.longitud != null) 'longitud': r.longitud,
+      'latitud': r.latitud,
+      'longitud': r.longitud,
     };
-    final res = await _requestWithRetry(
-      (base) => http.post(
-        Uri.parse('$base/llamadas'),
-        body: jsonEncode(body),
-        headers: {'Content-Type': 'application/json'},
-      ),
-      timeout: _writeRequestTimeout,
-    );
+    final uri = Uri.parse('$_base/llamadas');
+    DebugAlertService.info('API POST (correlacion): $uri');
+    final res = await _post('/llamadas', body);
+
     _checkResponse(res);
     final parsed = jsonDecode(res.body) as Map<String, dynamic>;
     if (parsed['success'] != true) {

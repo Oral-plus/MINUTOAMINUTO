@@ -344,11 +344,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(c.icon, size: 13,
-                                                color: sel ? context.ac.fg : context.ac.fg.withOpacity(0.54)),
+                                                color: sel ? const Color(0xFF111827) : context.ac.fg.withOpacity(0.54)),
                                             SizedBox(width: 6),
                                             Text(c.label,
                                                 style: TextStyle(
-                                                    color: sel ? context.ac.fg : context.ac.fg.withOpacity(0.7),
+                                                    color: sel ? const Color(0xFF111827) : context.ac.fg.withOpacity(0.7),
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w600)),
                                           ],
@@ -674,11 +674,11 @@ class _PremiumButton extends StatelessWidget {
         ),
         child: loading
             ? Center(child: SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: context.ac.fg.withOpacity(0.54))))
+                child: CircularProgressIndicator(strokeWidth: 2, color: enabled ? const Color(0xFF111827).withOpacity(0.54) : context.ac.fg.withOpacity(0.54))))
             : Text(label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: enabled ? context.ac.fg : context.ac.fgSubtle,
+                    color: enabled ? const Color(0xFF111827) : context.ac.fgSubtle,
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     letterSpacing: 0.5)),

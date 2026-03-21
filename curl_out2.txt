@@ -1,0 +1,121 @@
+﻿curl.exe : * Host minut
+oamimuto.oral-plus.com:
+443 was resolved.
+En línea: 1 Carácter: 1
++ curl.exe -s -v -A 
+"MinutoAMinuto/2.2.1 
+(Android)" 
+https://minutoamimu ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (* Host minuto   
+ am...3 was resolve    
+d.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+* IPv6: (none)
+* IPv4: 181.205.151.221
+*   Trying 
+181.205.151.221:443...
+* schannel: disabled 
+automatic use of 
+client certificate
+* ALPN: curl offers 
+http/1.1
+* ALPN: server 
+accepted http/1.1
+* Established 
+connection to minutoami
+muto.oral-plus.com 
+(181.205.151.221 port 
+443) from 192.168.1.61 
+port 51437 
+* using HTTP/1.x
+> GET /health/db 
+HTTP/1.1
+
+> Host: minutoamimuto.o
+ral-plus.com
+
+> User-Agent: 
+MinutoAMinuto/2.2.1 
+(Android)
+
+> Accept: */*
+
+> 
+
+* Request completely 
+sent off
+* schannel: remote 
+party requests 
+renegotiation
+* schannel: 
+renegotiating SSL/TLS 
+connection
+* schannel: SSL/TLS 
+connection renegotiated
+* schannel: remote 
+party requests 
+renegotiation
+* schannel: 
+renegotiating SSL/TLS 
+connection
+* schannel: SSL/TLS 
+connection renegotiated
+< HTTP/1.1 200 OK
+
+< Date: Sat, 21 Mar 
+2026 07:02:54 GMT
+
+< Content-Type: 
+application/json; 
+charset=utf-8
+
+< Content-Length: 300
+
+< Connection: 
+keep-alive
+
+< Access-Control-Allow-
+Origin: *
+
+< ETag: W/"12c-+bVD879K
+HA4WzsKZXjIZaSZmiCQ"
+
+< Referrer-Policy: no-r
+eferrer-when-downgrade
+
+< X-DNS-Prefetch-Contro
+l: off
+
+< X-Content-Type-Option
+s: nosniff
+
+< X-Frame-Options: 
+SAMEORIGIN
+
+< Strict-Transport-Secu
+rity: 
+max-age=63072000; 
+includeSubDomains; 
+preload
+
+< Alt-Svc: h3=":443"; 
+ma=86400
+
+< 
+
+{ [300 bytes data]
+* Connection #0 to 
+host minutoamimuto.oral
+-plus.com:443 left 
+intact
+{"success":true,"database":{"server":"192.168.2.244","database":"minuto_a_minuto","port":1433,"connected":true},"checks":{"ping":{"ok":1,"db_name":"minuto_a_minuto","server_time":"2026-03-21T02:02:49.113Z"},"tableExists":false,"tableRows":null},"queryTimeMs":8,"timestamp":"2026-03-21T07:02:54.028Z"}

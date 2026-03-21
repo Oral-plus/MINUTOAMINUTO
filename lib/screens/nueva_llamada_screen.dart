@@ -8,6 +8,7 @@ import '../models/registro_llamada.dart';
 import '../models/tipo_llamada.dart';
 import '../utils/constants.dart';
 import '../widgets/app_feedback.dart';
+import '../services/location_service.dart';
 import 'speech_llamada_screen.dart';
 
 class NuevaLlamadaScreen extends StatefulWidget {
@@ -340,23 +341,18 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
       return;
     }
 
-    // Capturar ubicacion GPS antes de guardar
+    // Ubicación: lastKnown del stream → última conocida de Android → GPS fresco
     double? lat, lng;
     try {
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
+      Position? pos = LocationService.lastKnown;
+      if (pos == null) {
+        try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
       }
-      if (perm == LocationPermission.whileInUse || perm == LocationPermission.always) {
-        final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 8),
-          ),
-        );
-        lat = pos.latitude;
-        lng = pos.longitude;
+      if (pos == null) {
+        pos = await LocationService.getCurrentPosition().timeout(const Duration(seconds: 6));
       }
+      lat = pos?.latitude;
+      lng = pos?.longitude;
     } catch (_) {}
 
     final r = RegistroLlamada(

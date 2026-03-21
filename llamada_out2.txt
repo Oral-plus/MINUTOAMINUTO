@@ -1,0 +1,31 @@
+﻿curl.exe : Note: 
+Unnecessary use of -X 
+or --request, POST is 
+already inferred.
+En línea: 1 Carácter: 1
++ curl.exe -s -v -X 
+POST -H "Content-Type: 
+application/json" -H 
+"Accept ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (Note: Unneces   
+ sa...ready inferre    
+d.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+* Could not resolve 
+host: minutoaminuto.ora
+l-plus.com
+* Store negative name 
+resolve for minutoaminu
+to.oral-plus.com:443
+* shutting down 
+connection #0

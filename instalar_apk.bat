@@ -9,7 +9,7 @@ set APK=build\app\outputs\flutter-apk\app-release.apk
 
 if not exist "%APK%" (
     echo APK no encontrado. Construyendo...
-    call flutter build apk --release
+    call .\flutter\bin\flutter.bat build apk --release
     if errorlevel 1 (
         echo Error al construir.
         pause

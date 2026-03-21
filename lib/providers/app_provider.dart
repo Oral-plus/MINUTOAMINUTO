@@ -509,6 +509,7 @@ class AppProvider with ChangeNotifier {
     if (_geolocalizacionActiva) {
       await LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
       _locationSub = LocationService.positionStream.listen((pos) {
+        LocationService.updateFromStream(pos);
         LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
       });
     }

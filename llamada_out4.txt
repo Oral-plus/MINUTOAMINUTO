@@ -1,0 +1,132 @@
+﻿curl.exe : Note: 
+Unnecessary use of -X 
+or --request, POST is 
+already inferred.
+En línea: 1 Carácter: 1
++ curl.exe -s -v -X 
+POST -H "Content-Type: 
+application/json" -H 
+"Accept ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (Note: Unneces   
+ sa...ready inferre    
+d.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+* Host minutoamimuto.or
+al-plus.com:443 was 
+resolved.
+* IPv6: (none)
+* IPv4: 181.205.151.221
+*   Trying 
+181.205.151.221:443...
+* schannel: disabled 
+automatic use of 
+client certificate
+* ALPN: curl offers 
+http/1.1
+* ALPN: server 
+accepted http/1.1
+* Established 
+connection to minutoami
+muto.oral-plus.com 
+(181.205.151.221 port 
+443) from 192.168.1.61 
+port 50076 
+* using HTTP/1.x
+> POST /llamadas 
+HTTP/1.1
+
+> Host: minutoamimuto.o
+ral-plus.com
+
+> User-Agent: 
+MinutoAMinuto/2.2.1 
+(Android)
+
+> Content-Type: 
+application/json
+
+> Accept: 
+application/json
+
+> Content-Length: 731
+
+> 
+
+} [731 bytes data]
+* upload completely 
+sent off: 731 bytes
+* schannel: remote 
+party requests 
+renegotiation
+* schannel: 
+renegotiating SSL/TLS 
+connection
+* schannel: SSL/TLS 
+connection renegotiated
+* schannel: remote 
+party requests 
+renegotiation
+* schannel: 
+renegotiating SSL/TLS 
+connection
+* schannel: SSL/TLS 
+connection renegotiated
+< HTTP/1.1 200 OK
+
+< Date: Sat, 21 Mar 
+2026 07:14:55 GMT
+
+< Content-Type: 
+application/json; 
+charset=utf-8
+
+< Content-Length: 50
+
+< Connection: 
+keep-alive
+
+< Access-Control-Allow-
+Origin: *
+
+< ETag: W/"32-e8BApLGw6
+5XL3gtrU9t88+H91iY"
+
+< Referrer-Policy: no-r
+eferrer-when-downgrade
+
+< X-DNS-Prefetch-Contro
+l: off
+
+< X-Content-Type-Option
+s: nosniff
+
+< X-Frame-Options: 
+SAMEORIGIN
+
+< Strict-Transport-Secu
+rity: 
+max-age=63072000; 
+includeSubDomains; 
+preload
+
+< Alt-Svc: h3=":443"; 
+ma=86400
+
+< 
+
+{ [50 bytes data]
+* Connection #0 to 
+host minutoamimuto.oral
+-plus.com:443 left 
+intact
+{"success":true,"id":"test-123","mode":"inserted"}

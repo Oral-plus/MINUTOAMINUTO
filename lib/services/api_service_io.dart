@@ -36,11 +36,18 @@ Future<String?> uploadAudioFileImpl(String registroId, String rutaAudio, {bool i
         'mimeType': mime,
         'filename': 'audio_${registroId}_${isPuntoB ? "B" : "A"}.$ext'
       }),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'MinutoAMinuto/2.2.1 (Android)',
+      },
     ).timeout(const Duration(seconds: 90));
     if (res.statusCode >= 200 && res.statusCode < 300) {
       final parsed = jsonDecode(res.body);
-      final url = parsed?['audioUrl'] as String? ?? parsed?['url'] as String?;
+      String? url = parsed?['audioUrl'] as String? ?? parsed?['url'] as String?;
+      // Si la URL es relativa, convertirla a absoluta
+      if (url != null && url.isNotEmpty && !url.startsWith('http')) {
+        url = '${ApiConfig.baseUrl}${url.startsWith('/') ? '' : '/'}$url';
+      }
       final msg = url != null ? 'Audio subido: $url' : 'Audio subido correctamente';
       DebugAlertService.success(msg);
       return url;
@@ -69,7 +76,10 @@ Future<void> uploadAudioPuntoBImpl(String registroId, String rutaAudio) async {
   final res = await http.post(
     Uri.parse('$base/llamadas/$registroId/audio-punto-b'),
     body: jsonEncode(body),
-    headers: {'Content-Type': 'application/json'},
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'MinutoAMinuto/2.2.1 (Android)',
+    },
   ).timeout(ApiService.writeRequestTimeout);
   if (res.statusCode < 200 || res.statusCode >= 300) {
     throw Exception('API Error ${res.statusCode}: ${res.body}');

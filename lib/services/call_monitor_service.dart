@@ -920,17 +920,28 @@ class CallMonitorService {
     final supId = prefs.getString('supervisor_id');
     final venId = prefs.getString('vendedor_id');
     
+    // Ubicación: lastKnown del stream → última conocida de Android → GPS fresco
+    Position? pos = LocationService.lastKnown;
+    if (pos == null) {
+      try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
+    }
+    if (pos == null) {
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.reduced, timeLimit: Duration(seconds: 6)),
+        ).timeout(const Duration(seconds: 7));
+      } catch (_) {}
+    }
+
     final results = await Future.wait([
-      LocationService.getCurrentPosition().timeout(const Duration(seconds: 8)).catchError((_) => null),
       IpService.getPublicIp().timeout(const Duration(seconds: 6)).catchError((_) => null),
       supId != null ? DataService.getSupervisor(supId).catchError((_) => null) : Future.value(null),
       venId != null ? DataService.getVendedor(venId).catchError((_) => null) : Future.value(null),
     ]);
 
-    final pos = results[0] as Position?;
-    final ip = results[1] as String?;
-    final sup = results[2] as Supervisor?;
-    final ven = results[3] as Vendedor?;
+    final ip = results[0] as String?;
+    final sup = results[1] as Supervisor?;
+    final ven = results[2] as Vendedor?;
 
     final name = sup?.nombre ?? ven?.nombre ?? prefs.getString('user_name') ?? 'Usuario';
     final p = sup?.telefono ?? ven?.telefono ?? prefs.getString('numero_telefono_propietario');

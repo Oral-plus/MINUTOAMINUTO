@@ -8,12 +8,12 @@ import 'api_service.dart';
 import 'data_service.dart';
 
 class TranscriptionService {
-  // Modelos para Gemini directo (fallback cuando la API remota no está disponible)
+  // Modelos Gemini válidos (v1 API)
   static const List<String> _models = [
     'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-8b',
+    'gemini-2.0-flash-lite',
     'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
     'gemini-1.5-pro',
   ];
 
@@ -141,8 +141,8 @@ class TranscriptionService {
       }
 
       if (text == null || text.isEmpty) {
-        debugPrint('TranscriptionService: no se pudo transcribir. Exception: ${lastEx?.toString()}');
-        text = '⚠️ Transcripción pausada: La API Key de Inteligencia Artificial asociada a esta cuenta ha sido revocada por Google o expiró. Por favor, asigne una nueva clave para reanudar las transcripciones automáticas.';
+        debugPrint('TranscriptionService: no se pudo transcribir. ${lastEx?.toString()}');
+        return null;
       }
 
       try {
@@ -150,7 +150,6 @@ class TranscriptionService {
         debugPrint('TranscriptionService: transcripción guardada en registro $registroId');
       } catch (e) {
         debugPrint('TranscriptionService: error guardando transcripción: $e');
-        // No lanzamos excepcion aqui porque ya se transcribio
       }
       return text;
     } catch (e) {
@@ -166,7 +165,7 @@ class TranscriptionService {
     required String mimeType,
   }) async {
     final url =
-        'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
+        'https://generativelanguage.googleapis.com/v1/models/$model:generateContent?key=$apiKey';
 
     final body = {
       'contents': [
