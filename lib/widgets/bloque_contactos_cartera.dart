@@ -19,7 +19,7 @@ class BloqueContactosCartera extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF121212),
+            color: context.ac.surface,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: context.ac.fg.withOpacity(0.07)),
             boxShadow: [

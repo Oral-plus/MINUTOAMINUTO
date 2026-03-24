@@ -8,7 +8,7 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'api_client.php') {
     exit('Acceso denegado');
 }
 
-define('API_BASE_URL', getenv('API_BASE_URL') ?: 'https://minutoaminuto-1.onrender.com');
+define('API_BASE_URL', getenv('API_BASE_URL') ?: 'https://minutoamimuto.oral-plus.com');
 
 function apiRequest($method, $path, $body = null) {
     $url = rtrim(API_BASE_URL, '/') . '/' . ltrim($path, '/');

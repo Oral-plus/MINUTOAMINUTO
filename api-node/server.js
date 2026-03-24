@@ -537,6 +537,7 @@ app.get("/health", (_req, res) => {
   res.json({
     success: true,
     status: "ok",
+    version: "7.0",
     uptimeSeconds: Math.round(process.uptime()),
     host: os.hostname(),
     timestamp: new Date().toISOString(),
@@ -1042,8 +1043,6 @@ app.post("/admin/login", (req, res) => {
 app.patch("/admin/supervisores/:id", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const fields = [];
-    const binds = (r) => { r.input("id", id); };
     const b = req.body;
     const sets = [];
     if (b.nombre !== undefined)   sets.push({ col: "nombre",   val: b.nombre });
@@ -1053,11 +1052,11 @@ app.patch("/admin/supervisores/:id", requireAdmin, async (req, res) => {
     if (b.zona !== undefined)     sets.push({ col: "zona",     val: b.zona });
     if (b.telefono !== undefined) sets.push({ col: "telefono", val: b.telefono });
     if (!sets.length) return res.status(400).json({ success: false, error: "No hay campos para actualizar" });
-
     const setParts = sets.map((s, i) => `${s.col}=@v${i}`);
-    const request = localPool.request().input("id", id);
-    sets.forEach((s, i) => request.input(`v${i}`, s.val));
-    await request.query(`UPDATE supervisores SET ${setParts.join(",")} WHERE id=@id`);
+    await runExecute(`UPDATE ${TABLES.supervisores} SET ${setParts.join(",")} WHERE id=@id`, (r) => {
+      r.input("id", id);
+      sets.forEach((s, i) => r.input(`v${i}`, s.val));
+    });
     return res.json({ success: true, message: "Supervisor actualizado" });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
@@ -1067,7 +1066,7 @@ app.patch("/admin/supervisores/:id", requireAdmin, async (req, res) => {
 // DELETE /admin/supervisores/:id — eliminar supervisor
 app.delete("/admin/supervisores/:id", requireAdmin, async (req, res) => {
   try {
-    await localPool.request().input("id", req.params.id).query("DELETE FROM supervisores WHERE id=@id");
+    await runExecute(`DELETE FROM ${TABLES.supervisores} WHERE id=@id`, (r) => r.input("id", req.params.id));
     return res.json({ success: true, message: "Supervisor eliminado" });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
@@ -1087,11 +1086,11 @@ app.patch("/admin/vendedores/:id", requireAdmin, async (req, res) => {
     if (b.telefono !== undefined) sets.push({ col: "telefono", val: b.telefono });
     if (b.coachId !== undefined)  sets.push({ col: "coachId",  val: b.coachId });
     if (!sets.length) return res.status(400).json({ success: false, error: "No hay campos para actualizar" });
-
     const setParts = sets.map((s, i) => `${s.col}=@v${i}`);
-    const request = localPool.request().input("id", id);
-    sets.forEach((s, i) => request.input(`v${i}`, s.val));
-    await request.query(`UPDATE vendedores SET ${setParts.join(",")} WHERE id=@id`);
+    await runExecute(`UPDATE ${TABLES.vendedores} SET ${setParts.join(",")} WHERE id=@id`, (r) => {
+      r.input("id", id);
+      sets.forEach((s, i) => r.input(`v${i}`, s.val));
+    });
     return res.json({ success: true, message: "Vendedor actualizado" });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
@@ -1101,50 +1100,14 @@ app.patch("/admin/vendedores/:id", requireAdmin, async (req, res) => {
 // DELETE /admin/vendedores/:id — eliminar vendedor
 app.delete("/admin/vendedores/:id", requireAdmin, async (req, res) => {
   try {
-    await localPool.request().input("id", req.params.id).query("DELETE FROM vendedores WHERE id=@id");
+    await runExecute(`DELETE FROM ${TABLES.vendedores} WHERE id=@id`, (r) => r.input("id", req.params.id));
     return res.json({ success: true, message: "Vendedor eliminado" });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// PATCH /supervisores/:id — actualizar telefono/alias (sin admin, para la app)
-app.patch("/supervisores/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const b = req.body;
-    const sets = [];
-    if (b.telefono !== undefined) sets.push({ col: "telefono", val: b.telefono });
-    if (b.alias !== undefined)    sets.push({ col: "alias",    val: b.alias });
-    if (!sets.length) return res.status(400).json({ success: false, error: "No hay campos" });
-    const setParts = sets.map((s, i) => `${s.col}=@v${i}`);
-    const request = localPool.request().input("id", id);
-    sets.forEach((s, i) => request.input(`v${i}`, s.val));
-    await request.query(`UPDATE supervisores SET ${setParts.join(",")} WHERE id=@id`);
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// PATCH /vendedores/:id — actualizar telefono/alias (sin admin, para la app)
-app.patch("/vendedores/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const b = req.body;
-    const sets = [];
-    if (b.telefono !== undefined) sets.push({ col: "telefono", val: b.telefono });
-    if (b.alias !== undefined)    sets.push({ col: "alias",    val: b.alias });
-    if (!sets.length) return res.status(400).json({ success: false, error: "No hay campos" });
-    const setParts = sets.map((s, i) => `${s.col}=@v${i}`);
-    const request = localPool.request().input("id", id);
-    sets.forEach((s, i) => request.input(`v${i}`, s.val));
-    await request.query(`UPDATE vendedores SET ${setParts.join(",")} WHERE id=@id`);
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
+// PATCH /supervisores/:id y /vendedores/:id — implementados más abajo (usan getPool correctamente)
 
 /**
  * GET /sap/sync-users
@@ -1784,10 +1747,39 @@ app.post("/llamadas", async (req, res) => {
             return diffMs <= 600000;
           });
           if (list.length > 0) {
+            const mergeId = list[0].id;
+            // Patch missing fields onto the merged record from Point B data
+            try {
+              const patchParts = [];
+              const patchInputs = {};
+              if (body.latitud != null && body.latitud !== 0) {
+                patchParts.push("[latitud] = CASE WHEN [latitud] IS NULL OR [latitud] = 0 THEN @pLat ELSE [latitud] END");
+                patchInputs.pLat = asDouble(body.latitud, 0);
+              }
+              if (body.longitud != null && body.longitud !== 0) {
+                patchParts.push("[longitud] = CASE WHEN [longitud] IS NULL OR [longitud] = 0 THEN @pLng ELSE [longitud] END");
+                patchInputs.pLng = asDouble(body.longitud, 0);
+              }
+              if (body.transcripcionTexto) {
+                patchParts.push("[transcripcionTexto] = CASE WHEN [transcripcionTexto] IS NULL OR [transcripcionTexto] = '' THEN @pTxt ELSE [transcripcionTexto] END");
+                patchInputs.pTxt = body.transcripcionTexto;
+              }
+              if (patchParts.length > 0) {
+                await runExecute(
+                  `UPDATE ${TABLES.llamadas} SET ${patchParts.join(", ")} WHERE id = @mid`,
+                  (request) => {
+                    request.input("mid", mergeId);
+                    for (const [k, v] of Object.entries(patchInputs)) request.input(k, v);
+                  }
+                );
+              }
+            } catch (patchErr) {
+              console.warn('[POST /llamadas] Error patching merge target:', patchErr.message);
+            }
             return res.json({
               success: true,
-              mergeTarget: list[0].id,
-              id: list[0].id,
+              mergeTarget: mergeId,
+              id: mergeId,
             });
           }
         } catch (dbErr) {
@@ -1932,6 +1924,65 @@ app.post("/llamadas/:id/audio", async (req, res) => {
     return res.json({ success: true, id, rutaGrabacion: rutaRelativa, audioUrl: rutaRelativa });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+// Obtener audio por ID (resuelve extensiones y hace streaming para bypass de proxy)
+app.get("/audio-play/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id || !SAFE_ID.test(id)) return res.status(400).send("ID inválido");
+    
+    const exts = ["m4a", "mp4", "wav", "amr", "mp3", "aac"];
+    let foundPath = null;
+    let foundExt = null;
+    for (const ext of exts) {
+      const p = path.join(UPLOADS_DIR, `${id}.${ext}`);
+      if (fs.existsSync(p)) {
+        foundPath = p;
+        foundExt = ext;
+        break;
+      }
+    }
+    
+    // Si no está por ID, buscar la ruta en DB
+    if (!foundPath) {
+      const row = await runQueryOne(`SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`, (request) => {
+        request.input("id", id);
+      });
+      if (row) {
+        const ruta = row.rutaGrabacion || row.rutaGrabacionPuntoB || "";
+        if (ruta.startsWith("/audio/")) {
+          const filename = ruta.replace("/audio/", "");
+          const p = path.join(UPLOADS_DIR, filename);
+          if (fs.existsSync(p)) {
+            foundPath = p;
+            foundExt = filename.split(".").pop();
+          }
+        }
+      }
+    }
+
+    if (foundPath) {
+      const mimeMap = {
+        "m4a": "audio/mp4", "mp4": "audio/mp4",
+        "wav": "audio/wav", "amr": "audio/amr",
+        "mp3": "audio/mpeg", "aac": "audio/aac"
+      };
+      const mimeType = mimeMap[foundExt] || "audio/mpeg";
+      
+      const stat = fs.statSync(foundPath);
+      res.writeHead(200, {
+        "Content-Type": mimeType,
+        "Content-Length": stat.size,
+        "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Origin": "*"
+      });
+      return fs.createReadStream(foundPath).pipe(res);
+    }
+
+    return res.status(404).send("Archivo no encontrado");
+  } catch (error) {
+    return res.status(500).send(error.message);
   }
 });
 
@@ -2119,10 +2170,14 @@ app.post("/rvc", async (req, res) => {
 app.get("/alertas", async (req, res) => {
   try {
     const resuelta = asInt(req.query.resuelta, 0);
-    const result = await runQuery(
-      `SELECT * FROM ${TABLES.alertas} WHERE resuelta = @resuelta ORDER BY fecha DESC`,
-      (request) => request.input("resuelta", resuelta),
-    );
+    const supervisorId = asNullableString(req.query.supervisorId);
+    let sqlText = `SELECT * FROM ${TABLES.alertas} WHERE resuelta = @resuelta`;
+    if (supervisorId) sqlText += ` AND supervisorId = @supervisorId`;
+    sqlText += ` ORDER BY fecha DESC`;
+    const result = await runQuery(sqlText, (request) => {
+      request.input("resuelta", resuelta);
+      if (supervisorId) request.input("supervisorId", supervisorId);
+    });
     return res.json(normalizeRowsForJson(result.recordset));
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -2443,21 +2498,28 @@ function initCronJobs() {
 
       const nombresQueLlamaron = new Set(llamaronHoy.recordset.map(r => r.nombreLider));
 
+      // Mapa nombre de coach → id en supervisores
+      const supsResult = await pool.request().query(`SELECT id, nombre FROM ${TABLES.supervisores}`);
+      const coachIdMap = {};
+      supsResult.recordset.forEach(s => { coachIdMap[s.nombre] = s.id; });
+
       for (const v of vendsSap.recordset) {
         if (!nombresQueLlamaron.has(v.nombre)) {
-          const msg = `Vendedor ${v.nombre} no ha realizado llamadas antes de las 8:20 AM`;
+          const msg = `${v.nombre} no ha hecho ninguna llamada antes de las 8:20`;
+          const supervisorId = coachIdMap[v.coach] || null;
           await pool.request()
             .input("id", crypto.randomUUID())
-            .input("tipo", "SIN_LLAMADAS_820")
+            .input("tipo", "vendedorSinLlamada8am")
             .input("mensaje", msg)
-            .input("vendedor", v.nombre)
-            .input("coach", v.coach)
-            .input("kam", v.kam)
+            .input("supervisorId", supervisorId)
+            .input("vendedorId", null)
+            .input("zona", "")
+            .input("resuelta", 0)
             .input("fecha", hoy)
             .query(`
-              IF NOT EXISTS (SELECT 1 FROM alertas WHERE mensaje = @mensaje AND fecha = @fecha)
-              INSERT INTO alertas (id, tipo, mensaje, vendedor, coach, kam, fecha, estado)
-              VALUES (@id, @tipo, @mensaje, @vendedor, @coach, @kam, @fecha, 'PENDIENTE')
+              IF NOT EXISTS (SELECT 1 FROM ${TABLES.alertas} WHERE mensaje = @mensaje AND fecha = @fecha)
+              INSERT INTO ${TABLES.alertas} (id, tipo, mensaje, vendedorId, supervisorId, zona, resuelta, fecha)
+              VALUES (@id, @tipo, @mensaje, @vendedorId, @supervisorId, @zona, @resuelta, @fecha)
             `);
         }
       }

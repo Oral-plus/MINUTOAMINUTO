@@ -37,8 +37,8 @@ android {
         applicationId = "com.minutoaminuto.minuto_a_minuto"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
-        versionCode = 101
-        versionName = "2.1.101"
+        versionCode = localProperties.getProperty("flutter.versionCode")?.toInt() ?: 100
+        versionName = localProperties.getProperty("flutter.versionName") ?: "2.1.100"
 
         val gmapsKey = project.findProperty("GOOGLE_MAPS_API_KEY")?.toString()
             ?: System.getenv("GOOGLE_MAPS_API_KEY")

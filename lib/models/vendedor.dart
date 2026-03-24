@@ -26,7 +26,7 @@ class Vendedor {
   });
 
   Map<String, dynamic> toMap() => {
-        'id': id,
+        'id': id.toString(),
         'nombre': nombre,
         'codigo': codigo,
         'zona': zona,
@@ -40,7 +40,7 @@ class Vendedor {
       };
 
   factory Vendedor.fromMap(Map<String, dynamic> map) => Vendedor(
-        id: map['id'] as String,
+        id: map['id'].toString(),
         nombre: map['nombre'] as String,
         codigo: map['codigo'] as String,
         zona: map['zona'] as String,
@@ -53,5 +53,31 @@ class Vendedor {
         presupuestoMensual: (map['presupuestoMensual'] ?? 0).toDouble(),
         presupuestoDiario: (map['presupuestoDiario'] ?? 0).toDouble(),
         alias: map['alias'] as String?,
+      );
+  Vendedor copyWith({
+    String? id,
+    String? nombre,
+    String? codigo,
+    String? zona,
+    String? coachId,
+    String? telefono,
+    bool? geolocalizacionActiva,
+    DateTime? horaInicioJornada,
+    double? presupuestoMensual,
+    double? presupuestoDiario,
+    String? alias,
+  }) =>
+      Vendedor(
+        id: id ?? this.id,
+        nombre: nombre ?? this.nombre,
+        codigo: codigo ?? this.codigo,
+        zona: zona ?? this.zona,
+        coachId: coachId ?? this.coachId,
+        telefono: telefono ?? this.telefono,
+        geolocalizacionActiva: geolocalizacionActiva ?? this.geolocalizacionActiva,
+        horaInicioJornada: horaInicioJornada ?? this.horaInicioJornada,
+        presupuestoMensual: presupuestoMensual ?? this.presupuestoMensual,
+        presupuestoDiario: presupuestoDiario ?? this.presupuestoDiario,
+        alias: alias ?? this.alias,
       );
 }

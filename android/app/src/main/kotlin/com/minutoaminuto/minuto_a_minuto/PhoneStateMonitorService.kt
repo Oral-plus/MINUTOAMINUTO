@@ -65,23 +65,32 @@ class PhoneStateMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // SIEMPRE llamar a startForeground PRIMERO para evitar ForeverServiceDidNotStartInTimeException
+        createNotificationChannel()
+        startForegroundNotification()
+        
         try {
             isRunning = true
             serviceStartTime = System.currentTimeMillis()
             
-            // V19: Inicializar estado real antes de registrar listener
+            // V19: Inicializar estado real de forma segura sin crashear onCreate
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-            lastState = tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
+            lastState = try {
+                tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Sin permiso inicial READ_PHONE_STATE")
+                TelephonyManager.CALL_STATE_IDLE
+            }
             
-            createNotificationChannel()
-            startForegroundNotification()
             unregisterTelephonyListener() 
             registerTelephonyListener()
             
             scheduleKeepAlive()
             Log.d(TAG, "Servicio iniciado - Estado inicial: $lastState")
         } catch (e: Exception) {
-            Log.e(TAG, "onCreate error: ${e.message}")
+            Log.e(TAG, "onCreate logic error: ${e.message}")
+            // Si falló algo más, al menos ya llamamos a startForegroundNotification()
+            // así que stopSelf() no crasheará el sistema
             stopSelf()
         }
     }

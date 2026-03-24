@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'data_service.dart';
 
 class LocationService {
@@ -10,8 +11,42 @@ class LocationService {
   static Position? get lastKnown => _lastKnown;
 
   /// Llama esto desde el listener del stream para mantener la posición actualizada.
+  /// También persiste en SharedPreferences para que otros isolates puedan leerla.
   static void updateFromStream(Position pos) {
     _lastKnown = pos;
+    _persistToPrefs(pos.latitude, pos.longitude);
+  }
+
+  static void _persistToPrefs(double lat, double lng) {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble('gps_last_lat', lat);
+      prefs.setDouble('gps_last_lng', lng);
+    }).catchError((_) {});
+  }
+
+  /// Lee la última posición guardada en SharedPreferences.
+  /// Funciona en cualquier isolate, incluido el isolate de background de FlutterForegroundTask.
+  static Future<Position?> getFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lat = prefs.getDouble('gps_last_lat');
+      final lng = prefs.getDouble('gps_last_lng');
+      if (lat == null || lng == null) return null;
+      return Position(
+        latitude: lat,
+        longitude: lng,
+        timestamp: DateTime.now(),
+        accuracy: 5000,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<bool> requestPermission() async {

@@ -29,6 +29,7 @@ class RegistroLlamada {
   final String? transcripcionTexto;
   final double? latitud;
   final double? longitud;
+  final int sincronizado; // 0: No, 1: Sí
 
   RegistroLlamada({
     required this.id,
@@ -58,6 +59,7 @@ class RegistroLlamada {
     this.transcripcionTexto,
     this.latitud,
     this.longitud,
+    this.sincronizado = 0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -88,6 +90,7 @@ class RegistroLlamada {
         'transcripcionTexto': transcripcionTexto,
         'latitud': latitud,
         'longitud': longitud,
+        'sincronizado': sincronizado,
       };
 
   factory RegistroLlamada.fromMap(Map<String, dynamic> map) => RegistroLlamada(
@@ -124,5 +127,6 @@ class RegistroLlamada {
         transcripcionTexto: map['transcripcionTexto'] as String?,
         latitud: (map['latitud'] as num?)?.toDouble(),
         longitud: (map['longitud'] as num?)?.toDouble(),
+        sincronizado: map['sincronizado'] as int? ?? 0,
       );
 }

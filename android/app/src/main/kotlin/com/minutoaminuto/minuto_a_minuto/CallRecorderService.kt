@@ -95,8 +95,12 @@ class CallRecorderService : Service() {
         super.onCreate()
         mainHandler  = Handler(Looper.getMainLooper())
         audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        
+        // V22: SIEMPRE llamar a startForeground primero para evitar crasheos de tiempo
         createNotificationChannel()
-        // Limpiar mutex al crear el servicio por si qued├│ sucio de una sesi├│n anterior
+        startForegroundNotification()
+        
+        // Limpiar mutex al crear el servicio por si quedó sucio de una sesión anterior
         if (!isRecording.get()) {
             try {
                 getSharedPreferences(SHARED_PREFS, Context.MODE_PRIVATE)
@@ -106,22 +110,24 @@ class CallRecorderService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Asegurar notificación activa en re-entradas y evitar crasheos de tiempo
+        startForegroundNotification()
+        
         when (intent?.action) {
             ACTION_START -> {
                 val number = intent.getStringExtra(EXTRA_CALL_NUMBER) ?: ""
                 val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
                 val callState = tm?.callState ?: TelephonyManager.CALL_STATE_IDLE
                 if (callState == TelephonyManager.CALL_STATE_IDLE) {
-                    Log.w(TAG, "ACTION_START recibido pero tel├®fono en IDLE ÔÇö ignorando")
+                    Log.w(TAG, "ACTION_START recibido pero teléfono en IDLE — ignorando")
                     stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
                     return START_NOT_STICKY
                 }
                 if (isRecording.getAndSet(true)) {
-                    Log.w(TAG, "Ya hay una grabaci├│n activa ÔÇö ignorando")
+                    Log.w(TAG, "Ya hay una grabación activa — ignorando")
                     stopSelf(); return START_NOT_STICKY
                 }
                 acquireWakeLock()
-                startForegroundNotification()
                 startRecording(number)
             }
             ACTION_STOP -> {

@@ -38,7 +38,7 @@ Future<String?> uploadAudioFileImpl(String registroId, String rutaAudio, {bool i
       }),
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'MinutoAMinuto/2.2.1 (Android)',
+        'User-Agent': 'MinutoAMinuto/1.4.0 (Android; CRM)',
       },
     ).timeout(const Duration(seconds: 90));
     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -78,7 +78,7 @@ Future<void> uploadAudioPuntoBImpl(String registroId, String rutaAudio) async {
     body: jsonEncode(body),
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': 'MinutoAMinuto/2.2.1 (Android)',
+      'User-Agent': 'MinutoAMinuto/1.4.0 (Android; CRM)',
     },
   ).timeout(ApiService.writeRequestTimeout);
   if (res.statusCode < 200 || res.statusCode >= 300) {

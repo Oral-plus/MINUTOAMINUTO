@@ -14,12 +14,20 @@ class TranscriptionManager extends ChangeNotifier {
   final Map<String, double> _progress = {};
   // IDs completados exitosamente en esta sesión
   final Set<String> _done = {};
+  // Caché del texto de transcripción para acceso inmediato sin recargar de la BD
+  final Map<String, String> _texts = {};
 
   bool isPending(String id) => _progress.containsKey(id) && (_progress[id]! >= 0);
   bool isDone(String id) => _done.contains(id);
   bool isError(String id) => (_progress[id] ?? 0) < 0;
   double getProgress(String id) => (_progress[id] ?? 0).clamp(0.0, 1.0);
   int get pendingCount => _progress.values.where((v) => v >= 0).length;
+
+  /// Devuelve el texto de transcripción cacheado en memoria (si existe).
+  String? getText(String id) {
+    final t = _texts[id];
+    return (t != null && t.isNotEmpty) ? t : null;
+  }
 
   /// Encola una transcripción. No hace nada si ya está en cola o completada.
   void enqueue(String registroId, String rutaAudio) {
@@ -32,6 +40,8 @@ class TranscriptionManager extends ChangeNotifier {
   /// Vuelve a intentar un registro que falló.
   void retry(String registroId, String rutaAudio) {
     _progress.remove(registroId);
+    _done.remove(registroId);
+    _texts.remove(registroId);
     enqueue(registroId, rutaAudio);
   }
 
@@ -47,16 +57,39 @@ class TranscriptionManager extends ChangeNotifier {
         }
       });
 
-      await TranscriptionService.transcribeAndSave(
-        registroId: registroId,
-        rutaAudio: rutaAudio,
-      );
+      String? text;
+      // Reintentar hasta 3 veces con delays crecientes
+      for (var attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          debugPrint('TranscriptionManager: reintento $attempt para $registroId');
+          await Future.delayed(Duration(seconds: 5 + attempt * 10));
+        }
+        try {
+          text = await TranscriptionService.transcribeAndSave(
+            registroId: registroId,
+            rutaAudio: rutaAudio,
+          );
+          if (text != null && text.isNotEmpty) break;
+          debugPrint('TranscriptionManager: intento $attempt devolvió null/vacío para $registroId');
+        } catch (e) {
+          debugPrint('TranscriptionManager: error intento $attempt para $registroId: $e');
+          if (attempt == 2) rethrow;
+        }
+      }
 
       timer.cancel();
-      _progress.remove(registroId);
-      _done.add(registroId);
+      if (text != null && text.isNotEmpty) {
+        _progress.remove(registroId);
+        _done.add(registroId);
+        _texts[registroId] = text;
+        debugPrint('TranscriptionManager: ✅ transcripción guardada para $registroId (${text.length} chars)');
+      } else {
+        debugPrint('TranscriptionManager: ❌ sin resultado tras 3 intentos para $registroId');
+        _progress[registroId] = -1.0;
+      }
       notifyListeners();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('TranscriptionManager: ❌ error fatal para $registroId: $e');
       timer?.cancel();
       _progress[registroId] = -1.0;
       notifyListeners();

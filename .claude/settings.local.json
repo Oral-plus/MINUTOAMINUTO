@@ -43,7 +43,22 @@
       "Bash(powershell -NoProfile -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1; if \\($LASTEXITCODE -eq 0\\) { & ''.\\\\flutter\\\\bin\\\\flutter.bat'' install -d R5CY90FYVJH 2>&1 }\")",
       "Bash(powershell -NoProfile -Command \"Start-Process ''ms-settings:developers''\")",
       "Bash(powershell -NoProfile -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' install -d R5CY90FYVJH 2>&1\")",
-      "Bash(flutterbinflutter.bat build:*)"
+      "Bash(flutterbinflutter.bat build:*)",
+      "Bash(netstat -ano)",
+      "Bash(grep :5[0-9][0-9][0-9][0-9])",
+      "Bash(start cmd:*)",
+      "Bash(where php:*)",
+      "Read(//c/xampp/php/**)",
+      "Read(//c/wamp64/bin/**)",
+      "Read(//c//**)",
+      "Bash(dart analyze:*)",
+      "Bash(flutter install:*)",
+      "Read(//c/Users/skyen/Desktop/MINUTOAMINUTO_NUEVO/$LOCALAPPDATA/Android/Sdk/**)",
+      "Read(//c/Users/skyen/Desktop/MINUTOAMINUTO_NUEVO/$HOME/AppData/Local/Android/Sdk/**)",
+      "Bash(\"$HOME/AppData/Local/Android/Sdk/platform-tools/adb.exe\" devices:*)",
+      "Bash(ADB=\"$HOME/AppData/Local/Android/Sdk/platform-tools/adb.exe\")",
+      "Bash(\"$ADB\" uninstall:*)",
+      "Bash(\"$HOME/AppData/Local/Android/Sdk/platform-tools/adb.exe\" install:*)"
     ]
   }
 }

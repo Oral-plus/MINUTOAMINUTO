@@ -40,7 +40,7 @@ class Supervisor {
       };
 
   factory Supervisor.fromMap(Map<String, dynamic> map) => Supervisor(
-        id: map['id'] as String,
+        id: map['id'].toString(),
         nombre: map['nombre'] as String,
         codigo: map['codigo'] as String,
         zona: map['zona'] as String,
@@ -56,5 +56,27 @@ class Supervisor {
                 .toList() ??
             [],
         alias: map['alias'] as String?,
+      );
+  Supervisor copyWith({
+    String? id,
+    String? nombre,
+    String? codigo,
+    String? zona,
+    NivelCargo? cargo,
+    String? telefono,
+    String? superiorId,
+    List<String>? subordinadosIds,
+    String? alias,
+  }) =>
+      Supervisor(
+        id: id ?? this.id,
+        nombre: nombre ?? this.nombre,
+        codigo: codigo ?? this.codigo,
+        zona: zona ?? this.zona,
+        cargo: cargo ?? this.cargo,
+        telefono: telefono ?? this.telefono,
+        superiorId: superiorId ?? this.superiorId,
+        subordinadosIds: subordinadosIds ?? this.subordinadosIds,
+        alias: alias ?? this.alias,
       );
 }

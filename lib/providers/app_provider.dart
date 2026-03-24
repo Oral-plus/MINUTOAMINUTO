@@ -289,8 +289,8 @@ class AppProvider with ChangeNotifier {
           _usuarioActual!.telefono!.trim(),
         );
       }
-      // Calentar GPS para que el monitor de llamadas tenga coordenadas disponibles
-      unawaited(_warmupGps());
+      // Calentar GPS y arrancar stream para que el monitor tenga coordenadas frescas
+      unawaited(iniciarGeolocalizacion());
     }
     notifyListeners();
     // NOTA: EL WIZARD SE LLAMARÁ EXPLÍCITAMENTE EN LA PANTALLA DE LOGIN
@@ -312,7 +312,9 @@ class AppProvider with ChangeNotifier {
           'numero_telefono_propietario',
           _vendedorActual!.telefono!.trim(),
         );
-      }
+        // Calentar GPS y arrancar stream
+      unawaited(iniciarGeolocalizacion());
+    }
     }
     notifyListeners();
     // NOTA: EL WIZARD SE LLAMARÁ EXPLÍCITAMENTE EN LA PANTALLA DE LOGIN
@@ -340,6 +342,41 @@ class AppProvider with ChangeNotifier {
       await SamsungSetupWizard.checkAndShow(context);
     }
     await _asegurarMonitorActivo();
+  }
+
+  Future<void> actualizarTelefonoActual(String numero) async {
+    final prefs = await SharedPreferences.getInstance();
+    final numLimpio = numero.trim();
+    
+    // 1. Guardar en SharedPreferences para la lógica de correlación nativa
+    if (numLimpio.isEmpty) {
+      await prefs.remove('numero_telefono_propietario');
+    } else {
+      await prefs.setString('numero_telefono_propietario', numLimpio);
+    }
+
+    // 2. Actualizar en memoria y sincronizar teléfono con servidor
+    if (_usuarioActual != null) {
+      _usuarioActual = _usuarioActual!.copyWith(telefono: numLimpio);
+      // PATCH directo (servidor con fix desplegado)
+      unawaited(ApiService.updateTelefono(_usuarioActual!.id, numLimpio, isSupervisor: true));
+      // POST upsert como garantía (funciona con cualquier versión del servidor)
+      try {
+        await DataService.insertSupervisor(_usuarioActual!);
+      } catch (e) {
+        debugPrint('actualizarTelefonoActual: error upsert supervisor: $e');
+      }
+    } else if (_vendedorActual != null) {
+      _vendedorActual = _vendedorActual!.copyWith(telefono: numLimpio);
+      unawaited(ApiService.updateTelefono(_vendedorActual!.id, numLimpio, isSupervisor: false));
+      try {
+        await DataService.insertVendedor(_vendedorActual!);
+      } catch (e) {
+        debugPrint('actualizarTelefonoActual: error upsert vendedor: $e');
+      }
+    }
+    
+    notifyListeners();
   }
 
   Future<void> logout() async {
@@ -403,7 +440,9 @@ class AppProvider with ChangeNotifier {
         debugPrint('recargarDashboard verificarAlertas: $e');
       }
     }
-    _alertas = await DataService.getAlertasPendientes();
+    // Coaches ven solo sus alertas; jefe/KAM ven todas
+    final String? filtroSupervisor = esCoach ? _usuarioActual?.id : null;
+    _alertas = await DataService.getAlertasPendientes(supervisorId: filtroSupervisor);
     if (!DataService.useDemoData) {
       await _notificarCoachAlertas8am();
     }
@@ -574,13 +613,17 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<void> iniciarGeolocalizacion() async {
-    if (_vendedorActual == null) return;
     _geolocalizacionActiva = await LocationService.requestPermission();
     if (_geolocalizacionActiva) {
-      await LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
+      if (_vendedorActual != null) {
+         await LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
+      }
+      _locationSub?.cancel();
       _locationSub = LocationService.positionStream.listen((pos) {
         LocationService.updateFromStream(pos);
-        LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
+        if (_vendedorActual != null) {
+          LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
+        }
       });
     }
     notifyListeners();

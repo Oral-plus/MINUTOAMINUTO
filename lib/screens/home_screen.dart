@@ -1,10 +1,8 @@
 import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
 import '../utils/constants.dart';
-import 'admin_screen.dart';
 import 'dashboard_screen.dart';
 import 'login_screen.dart';
 import 'mis_llamadas_screen.dart';
@@ -23,9 +21,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
   }
 
-  Future<void> _mostrarDialogoMiNumero(BuildContext context, AppProvider provider) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actual = prefs.getString('numero_telefono_propietario') ??
+  Future<void> _mostrarDialogoMiNumero(
+    BuildContext context,
+    AppProvider provider,
+  ) async {
+    final actual =
         provider.usuarioActual?.telefono ??
         provider.vendedorActual?.telefono ??
         '';
@@ -44,7 +44,11 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 'Si ambos tienen la app, cuando llamen entre sí cada uno graba solo su propio audio. '
                 'El sistema une ambos audios en un solo registro.',
-                style: TextStyle(fontSize: 13, color: context.ac.fg, height: 1.4),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.ac.fg,
+                  height: 1.4,
+                ),
               ),
               SizedBox(height: 16),
               TextField(
@@ -68,11 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
           FilledButton(
             onPressed: () async {
               final num = ctrl.text.trim();
-              if (num.isEmpty) {
-                await prefs.remove('numero_telefono_propietario');
-              } else {
-                await prefs.setString('numero_telefono_propietario', num);
-              }
+              await provider.actualizarTelefonoActual(num);
               if (ctx.mounted) Navigator.pop(ctx);
             },
             style: FilledButton.styleFrom(
@@ -95,7 +95,9 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final nombre =
-            provider.usuarioActual?.nombre ?? provider.vendedorActual?.nombre ?? 'Usuario';
+            provider.usuarioActual?.nombre ??
+            provider.vendedorActual?.nombre ??
+            'Usuario';
         final cargo = provider.usuarioActual?.cargo.displayName ?? 'Vendedor';
         final isSupervisor = provider.usuarioActual != null;
         final acciones = <_AccionHome>[
@@ -111,29 +113,17 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-          _AccionHome(
-            icono: Icons.insights_rounded,
-            titulo: 'Dashboard',
-            subtitulo: 'Indicadores en vivo',
-            color: context.ac.fg,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const DashboardScreen()),
-              );
-            },
-          ),
           if (isSupervisor)
             _AccionHome(
-              icono: Icons.manage_accounts_rounded,
-              titulo: 'Administración',
-              subtitulo: 'Equipo comercial',
+              icono: Icons.insights_rounded,
+              titulo: 'Dashboard',
+              subtitulo: 'Indicadores en vivo',
               color: context.ac.fg,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AdminScreen()),
-                ).then((_) => provider.cargarEquipo());
+                  MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                );
               },
             ),
         ];
@@ -149,10 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 38,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.schedule_rounded,
-                    color: context.ac.fg,
-                  ),
+                  errorBuilder: (context, error, stackTrace) =>
+                      Icon(Icons.schedule_rounded, color: context.ac.fg),
                 ),
                 SizedBox(width: 8),
                 Text(
@@ -171,24 +159,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               IconButton(
                 icon: Icon(
-                  provider.themeMode == ThemeMode.light 
-                      ? Icons.light_mode_rounded 
+                  provider.themeMode == ThemeMode.light
+                      ? Icons.light_mode_rounded
                       : Icons.dark_mode_rounded,
                 ),
                 tooltip: 'Cambiar Modo Claro/Oscuro',
                 onPressed: () => provider.toggleTheme(),
               ),
-              if (isSupervisor)
-                IconButton(
-                  icon: Icon(Icons.manage_accounts_outlined),
-                  tooltip: 'Administrar equipo',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AdminScreen()),
-                    ).then((_) => provider.cargarEquipo());
-                  },
-                ),
               IconButton(
                 icon: Icon(Icons.logout_rounded),
                 tooltip: 'Cerrar sesión',
@@ -328,6 +305,21 @@ class _HomeHeaderCard extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (context.watch<AppProvider>().usuarioActual?.telefono !=
+                        null ||
+                    context.watch<AppProvider>().vendedorActual?.telefono !=
+                        null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Tel: ${context.watch<AppProvider>().usuarioActual?.telefono ?? context.watch<AppProvider>().vendedorActual?.telefono ?? ""}',
+                      style: TextStyle(
+                        color: context.ac.fg.withOpacity(0.5),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -352,9 +344,7 @@ class _MonitorStatusBadge extends StatelessWidget {
             : context.ac.surfaceAlt,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: activo
-              ? context.ac.fgSubtle
-              : const Color(0xFFE0E0E0),
+          color: activo ? context.ac.fgSubtle : const Color(0xFFE0E0E0),
         ),
       ),
       child: Row(
@@ -373,9 +363,7 @@ class _MonitorStatusBadge extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
-                color: activo
-                    ? context.ac.fg
-                    : context.ac.fgSubtle,
+                color: activo ? context.ac.fg : context.ac.fgSubtle,
               ),
             ),
           ),
@@ -415,7 +403,8 @@ class _AccionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Ink(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: context.ac.surface,
+          decoration: BoxDecoration(
+            color: context.ac.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: context.ac.border),
           ),
@@ -443,10 +432,7 @@ class _AccionTile extends StatelessWidget {
               SizedBox(height: 2),
               Text(
                 item.subtitulo,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.ac.fgSubtle,
-                ),
+                style: TextStyle(fontSize: 12, color: context.ac.fgSubtle),
               ),
             ],
           ),

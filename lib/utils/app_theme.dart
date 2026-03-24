@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 // ─── Token de colores por tema ───────────────────────────────────────────────
 @immutable
@@ -35,7 +36,7 @@ class AppColors extends ThemeExtension<AppColors> {
     bg: Color(0xFFF0F0F0),
     surface: Color(0xFFFFFFFF),
     surfaceAlt: Color(0xFFF7F7F7),
-    appBarBg: Color(0xFF0D0D0D), // AppBar always dark (brand identity)
+    appBarBg: Color(0xFFF0F0F0),
     fg: Color(0xFF0D0D0D),
     fgSubtle: Color(0xFF6B7280),
     border: Color(0xFFE5E7EB),
@@ -109,7 +110,14 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 4,
         backgroundColor: colors.appBarBg,
-        foregroundColor: const Color(0xFFFFFFFF),
+        foregroundColor: isDark ? const Color(0xFFFFFFFF) : const Color(0xFF0D0D0D),
+        systemOverlayStyle: isDark
+            ? SystemUiOverlayStyle.light.copyWith(
+                statusBarColor: Colors.transparent,
+              )
+            : SystemUiOverlayStyle.dark.copyWith(
+                statusBarColor: Colors.transparent,
+              ),
       ),
       cardTheme: CardThemeData(
         elevation: 0,

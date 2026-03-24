@@ -13,7 +13,11 @@ import '../models/vendedor.dart';
 import '../models/tipo_llamada.dart';
 import '../models/nivel_cargo.dart';
 import 'data_service.dart';
+import 'database_service.dart';
 import 'api_service.dart';
+import 'package:flutter/material.dart';
+import '../utils/constants.dart' show AppKeys;
+import '../screens/mis_llamadas_screen.dart';
 import 'ip_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,7 +25,7 @@ import 'location_service.dart';
 import 'call_saving_progress_service.dart';
 import 'post_call_notification_service.dart';
 import 'call_diagnostic_service.dart';
-import 'transcription_service.dart';
+import 'transcription_manager.dart';
 
 @pragma('vm:entry-point')
 void callMonitorForegroundStartCallback() {
@@ -442,6 +446,14 @@ class CallMonitorService {
 
     await Future.delayed(const Duration(seconds: _delayBeforeStartServiceSec));
     if (!await isEnabled()) return;
+    // Solicitar permiso de ubicación ANTES de iniciar el servicio en primer plano
+    // Android 14+ exige que el permiso esté concedido antes de arrancar con foregroundServiceType=location
+    try {
+      if (!await Permission.locationWhenInUse.isGranted) {
+        await Permission.locationWhenInUse.request();
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    } catch (_) {}
     final ok = await _ensureForegroundServiceRunning(forceNotificationRefresh: true);
     if (!ok) return;
     await startNativePhoneMonitor();
@@ -839,6 +851,18 @@ class CallMonitorService {
     // Alerta de éxito clara al usuario
     CallSavingProgressService.notifyListo(cruce: merged);
 
+    // Traer la app al frente y navegar a Mis Llamadas para el formulario
+    try {
+      FlutterForegroundTask.launchApp();
+      await Future.delayed(const Duration(milliseconds: 800));
+      final nav = AppKeys.navigatorKey.currentState;
+      if (nav != null) {
+        nav.push(MaterialPageRoute(builder: (_) => const MisLlamadasScreen()));
+      }
+    } catch (e) {
+      debugPrint('CallMonitor: no se pudo traer la app al frente: $e');
+    }
+
     // Subir audio al servidor en background (no bloquea la UI)
     if (audioPath != null && audioPath.isNotEmpty) {
       unawaited(_uploadAudioBackground(finalId, audioPath, isPuntoB: merged));
@@ -847,28 +871,14 @@ class CallMonitorService {
     }
   }
 
-  /// Transcribe automáticamente el audio después de una llamada
+  /// Transcribe automáticamente el audio después de una llamada (unido a la cola del manager)
   static Future<void> _autoTranscribe(String registroId, String audioPath) async {
     try {
-      // Esperar un poco para que el audio se termine de escribir al archivo
-      await Future.delayed(const Duration(seconds: 3));
-      CallSavingProgressService.notifyTranscribiendo();
-      final text = await TranscriptionService.transcribeAndSave(
-        registroId: registroId,
-        rutaAudio: audioPath,
-      );
-      if (text != null && text.isNotEmpty) {
-        debugPrint('CallMonitor: transcripción automática completada (${text.length} chars)');
-      } else {
-        debugPrint('CallMonitor: transcripción automática no disponible');
-      }
+      // Esperar un poco para que el audio se termine de escribir al archivo antes de encolar
+      await Future.delayed(const Duration(seconds: 4));
+      TranscriptionManager.instance.enqueue(registroId, audioPath);
     } catch (e) {
       debugPrint('CallMonitor: error en auto-transcripción: $e');
-    } finally {
-      // Cerrar el diálogo de progreso sin importar el resultado
-      Future.delayed(const Duration(seconds: 1), () {
-         CallSavingProgressService.reset();
-      });
     }
   }
 
@@ -877,8 +887,14 @@ class CallMonitorService {
     try {
       final audioUrl = await ApiService.uploadAudioFile(registroId, audioPath, isPuntoB: isPuntoB);
       if (audioUrl != null && audioUrl.isNotEmpty) {
-        // Guardar la URL en el campo correspondiente para que el panel web la pueda reproducir
+        // Guardar la URL en el servidor
         await ApiService.updateRegistroLlamadaRutaGrabacion(registroId, audioUrl, isPuntoB: isPuntoB);
+        // También actualizar la URL en la base de datos local para mantener sincronía
+        try {
+          if (!isPuntoB) {
+            await DatabaseService.updateRegistroLlamadaRutaGrabacion(registroId, audioUrl);
+          }
+        } catch (_) {}
         debugPrint('CallMonitor: audio URL (${isPuntoB ? "Punto B" : "Principal"}) guardada: $audioUrl');
       }
     } catch (e) {
@@ -926,6 +942,10 @@ class CallMonitorService {
     Position? pos = LocationService.lastKnown;
     if (pos == null) {
       try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
+    }
+    // Leer de SharedPreferences (funciona en todos los isolates)
+    if (pos == null) {
+      try { pos = await LocationService.getFromPrefs(); } catch (_) {}
     }
     if (pos == null) {
       try {

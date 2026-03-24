@@ -5,9 +5,7 @@ import '../utils/app_theme.dart';
 
 import '../widgets/bloque_alertas.dart';
 import '../widgets/bloque_contactos_cartera.dart';
-import '../widgets/bloque_control_jerarquico.dart';
 import '../widgets/bloque_disciplina.dart';
-import '../widgets/bloque_ppvc_rvc.dart';
 import '../widgets/bloque_ranking.dart';
 import '../widgets/bloque_vendedores_sap.dart';
 import '../widgets/bloque_equipo_jerarquico.dart';
@@ -78,7 +76,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
               children: [
-                _DemoBanner(provider: provider),
                 const _BatteryShieldBanner(),
                 SizedBox(height: 12),
                 _DashboardHeader(
@@ -124,11 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SizedBox(height: 16),
                 const BloqueDisciplina(),
                 SizedBox(height: 16),
-                const BloquePpvcRvc(),
-                SizedBox(height: 16),
                 const BloqueEquipoJerarquico(),
-                SizedBox(height: 16),
-                const BloqueControlJerarquico(),
                 SizedBox(height: 16),
                 const BloqueAlertas(),
                 SizedBox(height: 16),
@@ -146,64 +139,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _DemoBanner extends StatelessWidget {
-  final AppProvider provider;
-
-  const _DemoBanner({required this.provider});
-
-  @override
-  Widget build(BuildContext context) {
-    final enDemo = provider.modoDemoActivo;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: enDemo ? const Color(0xFF1A1500) : const Color(0xFF0A1520),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: enDemo ? Colors.amber.withOpacity(0.3) : Colors.blue.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            enDemo ? Icons.science_rounded : Icons.rocket_launch_rounded,
-            color: enDemo ? Colors.amber : Colors.blue.shade300,
-            size: 20,
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              enDemo
-                  ? 'Modo demo activo — datos de prueba'
-                  : '¿Presentación? Carga datos demo',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: enDemo ? Colors.amber.shade300 : Colors.blue.shade300,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (enDemo) {
-                await provider.salirModoDemo();
-              } else {
-                await provider.cargarDatosDemo();
-              }
-            },
-            child: Text(
-              enDemo ? 'Salir' : 'Cargar',
-              style: TextStyle(
-                color: enDemo ? Colors.amber : Colors.blue.shade300,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _DashboardHeader extends StatelessWidget {
   final String nombre;
@@ -404,7 +339,7 @@ class _BatteryShieldBanner extends StatelessWidget {
           margin: const EdgeInsets.only(top: 12),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A0A0A),
+            color: Colors.red.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
           ),

@@ -25,13 +25,17 @@ class MisLlamadasScreen extends StatefulWidget {
 }
 
 class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
-  DateTime? _selectedDate; // null = últimos 30 días (todas)
+  DateTime? _selectedDate;
   List<RegistroLlamada> _llamadas = [];
   bool _loading = false;
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    // Arrancar siempre en "hoy"
+    _selectedDate = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _cargarLlamadas();
       if (mounted) _checkPendingCumplioMeta();
@@ -143,7 +147,7 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
       final provider = context.read<AppProvider>();
       final nombre = provider.usuarioActual?.nombre ?? provider.vendedorActual?.nombre;
       final hoy = DateTime.now();
-      final desde = _selectedDate ?? hoy.subtract(const Duration(days: 90));
+      final desde = _selectedDate ?? hoy;
       final hasta = _selectedDate ?? hoy;
       var lista = await DataService.getRegistroLlamadas(
         desde: desde,
@@ -152,11 +156,11 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
       if (nombre != null) {
         lista = lista.where((l) => l.nombreLider == nombre).toList();
       }
-      // Filtro client-side por día exacto cuando se selecciona una fecha
+      // Filtro client-side por día exacto
       if (_selectedDate != null) {
         final sel = _selectedDate!;
         lista = lista.where((l) {
-          final d = l.horaInicio;
+          final d = l.fecha;
           return d.year == sel.year && d.month == sel.month && d.day == sel.day;
         }).toList();
       }
@@ -257,8 +261,24 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
   }
 
   @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<RegistroLlamada> get _filteredLlamadas {
+    if (_searchQuery.isEmpty) return _llamadas;
+    final q = _searchQuery.toLowerCase();
+    return _llamadas.where((l) {
+      return l.nombreContactado.toLowerCase().contains(q) ||
+          (l.numeroContacto ?? '').contains(q) ||
+          l.nombreLider.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final llamadas = _llamadas;
+    final llamadas = _filteredLlamadas;
     final totalMinutos = llamadas.fold<int>(0, (acc, l) => acc + l.duracionMinutos);
     final llamadasConAudio = llamadas.where((l) => _isConAudio(l)).length;
     final llamadasConTranscripcion = llamadas.where((l) => _isConTranscripcion(l)).length;
@@ -272,15 +292,44 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
         centerTitle: true,
         elevation: 0,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: _buildDateBar(),
+          preferredSize: const Size.fromHeight(100),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _buildDateBar(),
+            // Barra de búsqueda
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: SizedBox(
+                height: 38,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: TextStyle(fontSize: 13, color: context.ac.fg),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar nombre o número...',
+                    hintStyle: TextStyle(fontSize: 12, color: context.ac.fg.withOpacity(0.3)),
+                    prefixIcon: Icon(Icons.search, size: 18, color: context.ac.fg.withOpacity(0.3)),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); },
+                            child: Icon(Icons.close, size: 16, color: context.ac.fg.withOpacity(0.4)),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: context.ac.fg.withOpacity(0.06),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                ),
+              ),
+            ),
+          ]),
         ),
       ),
       body: _loading
           ? Center(child: CircularProgressIndicator(color: context.ac.fg))
           : RefreshIndicator(
               onRefresh: _cargarLlamadas,
-              backgroundColor: const Color(0xFF1A1A1A),
+              backgroundColor: context.ac.surface,
               color: context.ac.fg,
               child: Consumer<AppProvider>(
                 builder: (context, provider, _) {
@@ -328,7 +377,7 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
   }
 
   static bool _isConTranscripcion(RegistroLlamada l) {
-    final texto = l.transcripcionTexto;
+    final texto = l.transcripcionTexto ?? TranscriptionManager.instance.getText(l.id);
     return texto != null && texto.trim().isNotEmpty;
   }
 
@@ -727,29 +776,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                                 ]),
                                 SizedBox(height: 14),
                               ],
-                              // Observaciones
-                              if (l.observaciones.isNotEmpty) ...[
-                                _sectionLabel('Observaciones'),
-                                SizedBox(height: 8),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: context.ac.fg.withOpacity(0.03),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: context.ac.fg.withOpacity(0.07)),
-                                  ),
-                                  child: Text(
-                                    _limpiarObservaciones(l.observaciones),
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        height: 1.6,
-                                        color: context.ac.fg.withOpacity(0.65)),
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-                              ],
+                              // Observaciones ocultas por diseño
                               // Mapa
                               if (coords != null) ...[
                                 _sectionLabel('Ubicación de la llamada'),
@@ -801,7 +828,9 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                                 _AudioPlayerWidget(
                                   url: l.rutaGrabacion!,
                                   registroId: l.id,
-                                  transcripcion: l.transcripcionTexto,
+                                  // Usar texto de la BD o del caché en memoria (sin esperar recarga de la API)
+                                  transcripcion: l.transcripcionTexto ??
+                                      TranscriptionManager.instance.getText(l.id),
                                   onTranscripcionGuardada:
                                       widget.onTranscripcionGuardada,
                                 ),
@@ -822,15 +851,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
     );
   }
 
-  static String _limpiarObservaciones(String obs) {
-    final lines = obs.split('. ').where((s) {
-      final lower = s.toLowerCase();
-      return !lower.startsWith('ip:') &&
-          !lower.startsWith('ubicación:') &&
-          !lower.startsWith('audio:');
-    }).toList();
-    return lines.join('. ').trim();
-  }
+
 }
 
 class _ResumenLlamadasCard extends StatelessWidget {

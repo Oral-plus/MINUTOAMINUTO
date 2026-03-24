@@ -133,7 +133,7 @@ class _BloqueEquipoJerarquicoState extends State<BloqueEquipoJerarquico> {
         child: DropdownButton<String>(
           value: value,
           hint: Text('Seleccionar $label', style: TextStyle(color: context.ac.fgSubtle, fontSize: 14)),
-          dropdownColor: const Color(0xFF1A1A1A),
+          dropdownColor: context.ac.surface,
           isExpanded: true,
           icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.ac.fgSubtle),
           items: items.map((e) => DropdownMenuItem(

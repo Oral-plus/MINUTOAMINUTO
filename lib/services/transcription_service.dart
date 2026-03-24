@@ -8,14 +8,24 @@ import 'api_service.dart';
 import 'data_service.dart';
 
 class TranscriptionService {
-  // Modelos Gemini válidos (v1 API)
+  // Modelos Gemini válidos (v1beta API — requerido para 2.0)
   static const List<String> _models = [
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro',
   ];
+
+  /// Determina el MIME type a partir de la extensión del archivo.
+  static String _mimeFromExt(String ext) {
+    return switch (ext.toLowerCase()) {
+      'wav'  => 'audio/wav',
+      'mp3'  => 'audio/mpeg',
+      'aac'  => 'audio/aac',
+      'ogg'  => 'audio/ogg',
+      'flac' => 'audio/flac',
+      'amr'  => 'audio/amr',
+      _      => 'audio/mp4',
+    };
+  }
 
   /// Resuelve la ruta real del archivo de audio, buscando en múltiples ubicaciones
   static Future<String?> _resolveAudioPath(String originalPath) async {
@@ -74,33 +84,60 @@ class TranscriptionService {
   }) async {
     if (kIsWeb || !Platform.isAndroid) return null;
     try {
-      final resolvedPath = await _resolveAudioPath(rutaAudio);
-      if (resolvedPath == null) {
-        debugPrint('TranscriptionService: no encontrado: $rutaAudio');
-        return null;
+      List<int> bytes;
+      String mime;
+      String displayName;
+
+      final isHttpUrl = rutaAudio.startsWith('http://') || rutaAudio.startsWith('https://');
+
+      if (isHttpUrl) {
+        // Audio ya subido al servidor: descargar directamente por HTTP
+        debugPrint('TranscriptionService: descargando audio desde URL: $rutaAudio');
+        try {
+          final response = await http.get(Uri.parse(rutaAudio))
+              .timeout(const Duration(seconds: 90));
+          if (response.statusCode != 200) {
+            debugPrint('TranscriptionService: HTTP ${response.statusCode} al descargar audio');
+            return null;
+          }
+          bytes = response.bodyBytes;
+          if (bytes.isEmpty) {
+            debugPrint('TranscriptionService: audio descargado vacío');
+            return null;
+          }
+          // Determinar MIME desde la extensión de la URL (ignorar query params)
+          final urlPath = rutaAudio.split('?').first;
+          final ext = urlPath.split('.').last.toLowerCase();
+          mime = _mimeFromExt(ext);
+          displayName = urlPath.split('/').last;
+        } catch (e) {
+          debugPrint('TranscriptionService: error descargando audio desde URL: $e');
+          return null;
+        }
+        debugPrint('TranscriptionService: ${(bytes.length / 1024).toStringAsFixed(0)} KB descargados, mime=$mime');
+      } else {
+        // Audio local: usar lógica de resolución de ruta existente
+        final resolvedPath = await _resolveAudioPath(rutaAudio);
+        if (resolvedPath == null) {
+          debugPrint('TranscriptionService: no encontrado: $rutaAudio');
+          return null;
+        }
+
+        final file = File(resolvedPath);
+        final size = await file.length();
+        if (size <= 0) {
+          debugPrint('TranscriptionService: archivo vacío');
+          return null;
+        }
+
+        final ext = resolvedPath.toLowerCase().split('.').last;
+        mime = _mimeFromExt(ext);
+        displayName = resolvedPath.split('/').last;
+        debugPrint('TranscriptionService: ${(size / 1024).toStringAsFixed(0)} KB, mime=$mime');
+        bytes = await file.readAsBytes();
       }
 
-      final file = File(resolvedPath);
-      final size = await file.length();
-      if (size <= 0) {
-        debugPrint('TranscriptionService: archivo vacío');
-        return null;
-      }
-
-      final ext = resolvedPath.toLowerCase().split('.').last;
-      final mime = switch (ext) {
-        'wav'  => 'audio/wav',
-        'mp3'  => 'audio/mpeg',
-        'aac'  => 'audio/aac',
-        'ogg'  => 'audio/ogg',
-        'flac' => 'audio/flac',
-        'amr'  => 'audio/amr',
-        _      => 'audio/mp4',
-      };
-
-      debugPrint('TranscriptionService: ${(size / 1024).toStringAsFixed(0)} KB, mime=$mime');
-
-      final bytes = await file.readAsBytes();
+      final size = bytes.length;
       String? text;
       Exception? lastEx;
       final key = ApiConfig.geminiApiKey;
@@ -114,7 +151,7 @@ class TranscriptionService {
               text = await _callGeminiFileApi(
                 apiKey: key, model: model,
                 audioBytes: bytes, mimeType: mime,
-                displayName: resolvedPath.split('/').last,
+                displayName: displayName,
               );
               if (text != null && text.isNotEmpty) { lastEx = null; break; }
             } catch (e) {
@@ -220,7 +257,7 @@ class TranscriptionService {
 
     // 4. Generar contenido usando la URI del archivo
     final genUrl =
-        'https://generativelanguage.googleapis.com/v1/models/$model:generateContent?key=$apiKey';
+        'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
 
     final genBody = {
       'contents': [
@@ -270,7 +307,7 @@ class TranscriptionService {
     required String mimeType,
   }) async {
     final url =
-        'https://generativelanguage.googleapis.com/v1/models/$model:generateContent?key=$apiKey';
+        'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
 
     final body = {
       'contents': [

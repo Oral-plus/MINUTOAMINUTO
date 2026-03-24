@@ -273,55 +273,36 @@ class ApiService {
   /// Transcribe audio usando el endpoint /transcribe del servidor (Gemini).
   /// Reintenta una vez en errores 5xx o timeout (fallos transitorios de la API).
   static Future<String?> transcribeAudio(String audioBase64, String mimeType) async {
-    http.Response? lastResponse;
-    Object? lastError;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        final r = await _requestWithRetry(
-          (base) => http.post(
-            Uri.parse('$base/transcribe'),
-            body: jsonEncode({'audioBase64': audioBase64, 'mimeType': mimeType}),
-            headers: {'Content-Type': 'application/json'},
-          ).timeout(const Duration(seconds: 120)),
-          timeout: const Duration(seconds: 125),
-        );
-        lastResponse = r;
-        if (r.statusCode == 200) break;
-        if (r.statusCode >= 500 && r.statusCode < 600 && attempt == 0) {
-          await Future.delayed(const Duration(seconds: 2));
-          continue;
-        }
-        break;
-      } catch (e) {
-        lastError = e;
-        if (attempt == 0) {
-          await Future.delayed(const Duration(seconds: 2));
-          continue;
-        }
-        debugPrint('ApiService transcribe exception: $e');
-        throw Exception('Error al transcribir: $e');
+    try {
+      final r = await _post('/transcribe', {
+        'audioBase64': audioBase64,
+        'mimeType': mimeType
+      });
+      if (r.statusCode == 200) {
+        final data = jsonDecode(r.body) as Map<String, dynamic>;
+        return data['text'] as String?;
       }
+      return null;
+    } catch (_) {
+      return null;
     }
-    final r = lastResponse;
-    if (r == null || r.statusCode != 200) {
-      final detail = r != null && r.body.length > 200 ? '${r.body.substring(0, 200)}...' : (r?.body ?? lastError?.toString() ?? 'Error desconocido');
-      debugPrint('ApiService transcribe: HTTP ${r?.statusCode} — $detail');
-      
-      // Parsear error JSON si es posible para mostrar "No Gemini Key", etc.
-      String userMessage = 'Error del servidor (${r?.statusCode})';
-      try {
-        final j = jsonDecode(r!.body);
-        if (j is Map && j['error'] != null) userMessage = j['error'].toString();
-      } catch (_) {}
-      
-      throw Exception(userMessage);
+  }
+
+  /// Actualiza el telefono del perfil en el servidor (para correlación dual).
+  /// [isSupervisor] determina si se patchea /supervisores/:id o /vendedores/:id.
+  static Future<void> updateTelefono(String userId, String telefono, {bool isSupervisor = true}) async {
+    final endpoint = isSupervisor ? '/supervisores/$userId' : '/vendedores/$userId';
+    try {
+      final res = await _patch(endpoint, {'telefono': telefono});
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        DebugAlertService.success('Teléfono sincronizado en servidor: $telefono');
+      } else {
+        DebugAlertService.warning('No se pudo sincronizar teléfono: ${res.statusCode} - ${res.body}');
+      }
+    } catch (e) {
+      DebugAlertService.error('Error sincronizando teléfono: $e');
+      rethrow;
     }
-    final data = jsonDecode(r.body) as Map<String, dynamic>?;
-    if (data == null || (data['success'] != true)) {
-       throw Exception(data?['error']?.toString() ?? 'Respuesta inválida de la API');
-    }
-    final text = data['text'] as String?;
-    return (text != null && text.trim().isNotEmpty) ? text.trim() : null;
   }
 
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
@@ -431,29 +412,6 @@ class ApiService {
     final map = Map<String, dynamic>.from(m);
     map['geolocalizacionActiva'] = 0;
     return RegistroLlamada.fromMap(map);
-  }
-
-  /// Actualiza el telefono del perfil en el servidor (para correlación dual).
-  /// [isSupervisor] determina si se patchea /supervisores/:id o /vendedores/:id.
-  static Future<void> updateTelefono(String userId, String telefono, {bool isSupervisor = true}) async {
-    final endpoint = isSupervisor ? '/supervisores/$userId' : '/vendedores/$userId';
-    try {
-      final res = await _requestWithRetry(
-        (base) => http.patch(
-          Uri.parse('$base$endpoint'),
-          body: jsonEncode({'telefono': telefono}),
-          headers: {'Content-Type': 'application/json'},
-        ),
-        timeout: _writeRequestTimeout,
-      );
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        DebugAlertService.success('Teléfono sincronizado en servidor: $telefono');
-      } else {
-        DebugAlertService.warning('No se pudo sincronizar teléfono: ${res.body}');
-      }
-    } catch (e) {
-      DebugAlertService.warning('Error sincronizando teléfono: $e');
-    }
   }
 
   /// Convierte DateTime a formato ISO-8601 compatible con JavaScript/Node.js
@@ -636,8 +594,11 @@ class ApiService {
     _checkResponse(r);
   }
 
-  static Future<List<Alerta>> getAlertasPendientes() async {
-    final r = await _get('/alertas?resuelta=0');
+  static Future<List<Alerta>> getAlertasPendientes({String? supervisorId}) async {
+    final qs = supervisorId != null && supervisorId.isNotEmpty
+        ? '/alertas?resuelta=0&supervisorId=${Uri.encodeComponent(supervisorId)}'
+        : '/alertas?resuelta=0';
+    final r = await _get(qs);
     _checkResponse(r);
     final list = jsonDecode(r.body) as List;
     return list.map((m) {

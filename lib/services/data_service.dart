@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/vendedor.dart';
 import '../models/supervisor.dart';
 import '../models/registro_llamada.dart';
@@ -103,26 +104,87 @@ class DataService {
     // Intentar API primero, luego combinar con local
     List<RegistroLlamada> apiList = [];
     List<RegistroLlamada> localList = [];
+    bool apiSuccess = false;
+    
     if (_useApi) {
       try {
         apiList = await ApiService.getRegistroLlamadas(
-          desde: desde, hasta: hasta, zona: zona, nombreContactado: nombreContactado,
+          desde: desde,
+          hasta: hasta,
+          zona: zona,
+          nombreContactado: nombreContactado,
         );
-      } catch (_) {
-        // API no disponible, continuar con local
+        apiSuccess = true;
+      } catch (e) {
+        debugPrint('DataService: Error al cargar llamadas de API: $e');
+        apiSuccess = false;
       }
     }
-    // Siempre intentar cargar locales
+    
+    // Siempre cargar locales
     try {
       localList = await DatabaseService.getRegistroLlamadas(
-        desde: desde, hasta: hasta, zona: zona, nombreContactado: nombreContactado,
+        desde: desde,
+        hasta: hasta,
+        zona: zona,
+        nombreContactado: nombreContactado,
       );
     } catch (_) {}
-    // Combinar sin duplicados (por id)
-    final ids = apiList.map((e) => e.id).toSet();
-    final merged = [...apiList, ...localList.where((e) => !ids.contains(e.id))];
-    merged.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
-    return merged;
+    
+    if (apiSuccess) {
+      // SI LA API FUNCIONA, ELLA ES LA FUENTE DE VERDAD.
+      // 1. Tomamos todo lo de la API (son las sincronizadas)
+      //    — pero si el registro API no tiene transcripción y la local sí, la fusionamos.
+      // 2. Agregamos de local SOLO las que no están sincronizadas aún (sincronizado == 0)
+      //    Esto permite ver las llamadas recién hechas "fuera de línea" pero oculta
+      //    caché vieja que ya no existe en el servidor.
+      final localById = { for (final e in localList) e.id: e };
+      final idsApi = apiList.map((e) => e.id).toSet();
+      final merged = [
+        ...apiList.map((a) {
+          final local = localById[a.id];
+          if (local == null) return a;
+          // Fusionar campos que la local puede tener y la API no
+          final m = a.toMap();
+          bool changed = false;
+          // Transcripción
+          if ((a.transcripcionTexto == null || a.transcripcionTexto!.isEmpty) &&
+              local.transcripcionTexto != null && local.transcripcionTexto!.isNotEmpty) {
+            m['transcripcionTexto'] = local.transcripcionTexto;
+            changed = true;
+          }
+          // Coordenadas GPS
+          if ((a.latitud == null || a.latitud == 0) && local.latitud != null && local.latitud != 0) {
+            m['latitud'] = local.latitud;
+            m['longitud'] = local.longitud;
+            changed = true;
+          }
+          // Ruta de grabación (la local puede tener la ruta de archivo mientras
+          // la API aún no recibió el upload o solo tiene la URL del servidor)
+          if ((a.rutaGrabacion == null || a.rutaGrabacion!.isEmpty) &&
+              local.rutaGrabacion != null && local.rutaGrabacion!.isNotEmpty) {
+            m['rutaGrabacion'] = local.rutaGrabacion;
+            changed = true;
+          }
+          // Ruta punto B
+          if ((a.rutaGrabacionPuntoB == null || a.rutaGrabacionPuntoB!.isEmpty) &&
+              local.rutaGrabacionPuntoB != null && local.rutaGrabacionPuntoB!.isNotEmpty) {
+            m['rutaGrabacionPuntoB'] = local.rutaGrabacionPuntoB;
+            changed = true;
+          }
+          return changed ? RegistroLlamada.fromMap(m) : a;
+        }),
+        ...localList.where((e) => e.sincronizado == 0 && !idsApi.contains(e.id)),
+      ];
+      merged.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
+      return merged;
+    } else {
+      // Si la API falla, mostramos todo lo local (mejor ver algo a nada)
+      final ids = apiList.map((e) => e.id).toSet();
+      final merged = [...apiList, ...localList.where((e) => !ids.contains(e.id))];
+      merged.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
+      return merged;
+    }
   }
 
   static Future<({String savedTo, String registroId, bool hasGps, bool retrying})> insertRegistroLlamada(RegistroLlamada r) async {
@@ -164,8 +226,25 @@ class DataService {
     }
     try {
       final result = await ApiService.insertRegistroLlamadaWithCorrelation(r);
-      // Guardar localmente como sincronizado
-      await DatabaseService.insertRegistroLlamada(r, sincronizado: 1);
+      // Guardar localmente como sincronizado.
+      // CLAVE: si hubo merge, guardar con el ID del merge target para que
+      // las actualizaciones posteriores (transcripción, audio URL) lo encuentren.
+      final localRecord = result.merged
+          ? RegistroLlamada.fromMap({...r.toMap(), 'id': result.registroId})
+          : r;
+      try {
+        await DatabaseService.insertRegistroLlamada(localRecord, sincronizado: 1);
+      } catch (_) {
+        // Si ya existe (ej: el punto A ya lo guardó), actualizar campos clave
+        try {
+          if (r.latitud != null && r.latitud != 0) {
+            final db = await DatabaseService.database;
+            await db.update('registro_llamadas',
+              {'latitud': r.latitud, 'longitud': r.longitud, 'rutaGrabacion': r.rutaGrabacion},
+              where: 'id = ?', whereArgs: [result.registroId]);
+          }
+        } catch (_) {}
+      }
       
       if (result.merged && r.rutaGrabacion != null && r.rutaGrabacion!.isNotEmpty) {
         try {
@@ -205,16 +284,36 @@ class DataService {
 
   static Future<void> updateRegistroLlamadaTranscripcion(
       String id, String transcripcionTexto) async {
-    await (_useApi
-        ? ApiService.updateRegistroLlamadaTranscripcion(id, transcripcionTexto)
-        : DatabaseService.updateRegistroLlamadaTranscripcion(id, transcripcionTexto));
+    // Always save locally for offline access and fast reload
+    try {
+      await DatabaseService.updateRegistroLlamadaTranscripcion(id, transcripcionTexto);
+    } catch (e) {
+      debugPrint('DataService: error guardando transcripcion en DB local: $e');
+    }
+    if (_useApi) {
+      try {
+        await ApiService.updateRegistroLlamadaTranscripcion(id, transcripcionTexto);
+      } catch (e) {
+        debugPrint('DataService: error guardando transcripcion en API: $e');
+      }
+    }
   }
 
   static Future<void> updateRegistroLlamadaRutaGrabacion(
       String id, String rutaGrabacion) async {
-    await (_useApi
-        ? ApiService.updateRegistroLlamadaRutaGrabacion(id, rutaGrabacion)
-        : DatabaseService.updateRegistroLlamadaRutaGrabacion(id, rutaGrabacion));
+    // Always save locally for offline playback
+    try {
+      await DatabaseService.updateRegistroLlamadaRutaGrabacion(id, rutaGrabacion);
+    } catch (e) {
+      debugPrint('DataService: error guardando rutaGrabacion en DB local: $e');
+    }
+    if (_useApi) {
+      try {
+        await ApiService.updateRegistroLlamadaRutaGrabacion(id, rutaGrabacion);
+      } catch (e) {
+        debugPrint('DataService: error guardando rutaGrabacion en API: $e');
+      }
+    }
   }
 
   static Future<void> updateRegistroLlamadaCumplioMeta(
@@ -233,9 +332,11 @@ class DataService {
     return _useApi ? ApiService.getRvcByFecha(fecha) : DatabaseService.getRvcByFecha(fecha);
   }
 
-  static Future<List<Alerta>> getAlertasPendientes() async {
+  static Future<List<Alerta>> getAlertasPendientes({String? supervisorId}) async {
     if (useDemoData) return DemoDataService.getAlertasPendientes();
-    return _useApi ? ApiService.getAlertasPendientes() : DatabaseService.getAlertasPendientes();
+    return _useApi
+        ? ApiService.getAlertasPendientes(supervisorId: supervisorId)
+        : DatabaseService.getAlertasPendientes();
   }
 
   static Future<void> insertAlerta(Alerta a) =>

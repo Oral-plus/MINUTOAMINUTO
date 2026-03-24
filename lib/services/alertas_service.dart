@@ -13,7 +13,7 @@ class AlertasService {
     final ahora = DateTime.now();
     final hoy = DateTime(ahora.year, ahora.month, ahora.day);
     
-    // Cargamos alertas pendientes una sola vez para filtrar en memoria
+    // Cargamos alertas pendientes una sola vez para filtrar en memoria (sin filtro de supervisor para la verificación)
     final alertasPendientes = await DataService.getAlertasPendientes();
 
     // Si pasaron las 8:20 y vendedor no ha hecho llamada → alerta al coach
