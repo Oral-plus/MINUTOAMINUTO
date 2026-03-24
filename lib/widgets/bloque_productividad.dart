@@ -27,24 +27,20 @@ class BloqueProductividad extends StatelessWidget {
                 SizedBox(width: 12),
                 Text(
                   'BLOQUE 2 – PRODUCTIVIDAD DEL DÍA',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             SizedBox(height: 8),
             Text(
               '¿Estamos produciendo?',
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey[700], fontSize: 14),
             ),
             SizedBox(height: 20),
             FutureBuilder<Map<String, dynamic>>(
-              future: context.read<AppProvider>().obtenerMetricasProductividad(),
+              future: context
+                  .read<AppProvider>()
+                  .obtenerMetricasProductividad(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return Padding(
@@ -78,8 +74,8 @@ class BloqueProductividad extends StatelessWidget {
                       color: pctPresup >= 100
                           ? AppConstants.verdeMeta
                           : pctPresup >= 80
-                              ? AppConstants.amarilloAdvertencia
-                              : AppConstants.rojoCritico,
+                          ? AppConstants.amarilloAdvertencia
+                          : AppConstants.rojoCritico,
                     ),
                     SizedBox(height: 12),
                     _Metrica(
@@ -90,13 +86,13 @@ class BloqueProductividad extends StatelessWidget {
                     SizedBox(height: 12),
                     _Metrica(
                       label: 'Ticket promedio',
-                      valor: '\$${NumberFormat('#,##0').format(ticketPromedio)}',
+                      valor:
+                          '\$${NumberFormat('#,##0').format(ticketPromedio)}',
                     ),
                     SizedBox(height: 12),
                     _Metrica(
                       label: 'Clientes visitados vs programados',
-                      valor:
-                          '$clientesVisitados / $clientesProgramados',
+                      valor: '$clientesVisitados / $clientesProgramados',
                     ),
                   ],
                 );
@@ -114,30 +110,20 @@ class _Metrica extends StatelessWidget {
   final String valor;
   final Color? color;
 
-  const _Metrica({
-    required this.label,
-    required this.valor,
-    this.color,
-  });
+  const _Metrica({required this.label, required this.valor, this.color});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[700],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
         Text(
           valor,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: color ?? context.ac.fg,
+            color: color,
           ),
         ),
       ],

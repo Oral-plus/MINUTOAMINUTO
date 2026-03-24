@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'data_service.dart';
 
 class LocationService {
@@ -14,8 +16,7 @@ class LocationService {
 
   static Future<bool> requestPermission() async {
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return false;
+      // No bloqueamos por isLocationServiceEnabled — aún podemos tener caché
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -80,4 +81,43 @@ class LocationService {
           distanceFilter: 10,
         ),
       );
+
+  /// Último recurso: Google Geolocation REST API.
+  /// Funciona solo con IP cuando GPS y red están desactivados.
+  static const String _mapsApiKey = 'AIzaSyAkQv8RTOs510d2ag3Kkk0eIYjLj2DbfPQ';
+
+  static Future<Position?> getGoogleGeolocationFallback() async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse(
+              'https://www.googleapis.com/geolocation/v1/geolocate?key=$_mapsApiKey',
+            ),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'considerIp': true}),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final loc = data['location'] as Map<String, dynamic>?;
+        final lat = (loc?['lat'] as num?)?.toDouble();
+        final lng = (loc?['lng'] as num?)?.toDouble();
+        if (lat != null && lng != null) {
+          return Position(
+            latitude: lat,
+            longitude: lng,
+            timestamp: DateTime.now(),
+            accuracy: (data['accuracy'] as num?)?.toDouble() ?? 5000,
+            altitude: 0,
+            altitudeAccuracy: 0,
+            heading: 0,
+            headingAccuracy: 0,
+            speed: 0,
+            speedAccuracy: 0,
+          );
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
 }

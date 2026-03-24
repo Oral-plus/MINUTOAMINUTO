@@ -18,7 +18,32 @@
       "Bash(powershell -Command \"& ''C:\\\\Users\\\\steve\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' -s R5CY90FYVJH logcat -d -s flutter 2>&1 | Select-String -Pattern ''audio|subiendo|Audio|upload|URL|url|transcri|latitud|longitud|GPS|ubicacion|location|lastKnown|getCurrentPos'' | Select-Object -Last 40\")",
       "Bash(powershell -Command \"& ''C:\\\\Users\\\\steve\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' -s R5CY90FYVJH logcat -d -s flutter 2>&1 | Select-String -Pattern ''API OK|guardad|inserted|insert|Audio sub|subido|Fallback|llamada_17741|07:4[3-9]|08:'' | Select-Object -Last 50\")",
       "Bash(powershell -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1 | Select-Object -Last 6\")",
-      "Bash(powershell -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1 | Select-Object -Last 5\")"
+      "Bash(powershell -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1 | Select-Object -Last 5\")",
+      "Bash(powershell -Command \"& ''C:\\\\Users\\\\steve\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' -s R5CY90FYVJH logcat -d -s flutter 2>&1 | Select-String -Pattern ''latitud|longitud|GPS|ubicac|lastKnown|getLastKnown|getCurrentPos|location|lat=|lng=|pos='' | Select-Object -Last 30\")",
+      "Bash(powershell -Command \"& ''C:\\\\Users\\\\steve\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' -s R5CY90FYVJH logcat -d 2>&1 | Select-String -Pattern ''location|geolocator|LocationPermission|ACCESS.*LOCATION|lat|lng'' | Select-Object -Last 20\")",
+      "Bash(.flutterbinflutter.bat build:*)",
+      "Bash(./flutter/bin/flutter build:*)",
+      "Bash(C:/Users/steve/AppData/Local/Android/Sdk/platform-tools/adb.exe -s R5CY90FYVJH install -r \"/c/Users/steve/OneDrive/Escritorio/MINUTOAMINUTO/build/app/outputs/flutter-apk/app-debug.apk\")",
+      "Bash(powershell -Command \"Get-ChildItem ''C:\\\\Program Files\\\\Android'' -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem ''C:\\\\Program Files\\\\Google'' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-ChildItem ''C:\\\\Program Files\\\\Android\\\\Android Studio'' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-ChildItem ''C:\\\\Program Files\\\\Android\\\\Android Studio\\\\plugins'' -ErrorAction SilentlyContinue | Where-Object { $_Name -like ''*flutter*'' } | Select-Object Name\")",
+      "Bash(powershell -Command \"$plugins = Get-ChildItem ''C:\\\\Program Files\\\\Android\\\\Android Studio\\\\plugins'' -ErrorAction SilentlyContinue; $plugins | Where-Object { $_Name -match ''flutter'' } | Select-Object Name\")",
+      "Bash(powershell -NoProfile -Command \"dir ''C:\\\\Program Files\\\\Android\\\\Android Studio\\\\plugins'' | Select-String flutter\")",
+      "Bash(powershell -NoProfile -Command \"dir ''C:\\\\Users\\\\steve\\\\AppData\\\\Roaming\\\\Google'' -ErrorAction SilentlyContinue; dir ''C:\\\\Users\\\\steve\\\\.android'' -ErrorAction SilentlyContinue | Select-Object -First 5 Name\")",
+      "Bash(powershell -NoProfile -Command \"dir ''C:\\\\Users\\\\steve\\\\AppData\\\\Roaming\\\\Google\\\\AndroidStudio2025.3.1'' | Select-Object Name\")",
+      "Bash(powershell -NoProfile -Command \"Get-ChildItem ''C:\\\\Users\\\\steve\\\\AppData\\\\Local'' -Filter ''*flutter*'' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(powershell -NoProfile -Command \"Get-ChildItem ''C:\\\\Users\\\\steve\\\\AppData\\\\Roaming\\\\Pub\\\\Cache\\\\bin'' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(powershell -NoProfile -Command \"Get-ChildItem ''C:\\\\Users\\\\steve'' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(powershell -NoProfile -Command \"dir ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO\\\\.fvm'' -ErrorAction SilentlyContinue; dir ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO\\\\android\\\\local.properties'' -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -NoProfile -Command \"dir ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO\\\\flutter\\\\bin'' -ErrorAction SilentlyContinue | Select-Object Name\")",
+      "Bash(powershell -NoProfile -Command \"& ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO\\\\flutter\\\\bin\\\\flutter.bat'' devices\")",
+      "Bash(powershell -NoProfile -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' install -d R5CY90FYVJH 2>&1\")",
+      "Bash(powershell -NoProfile -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' clean 2>&1; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' install -d R5CY90FYVJH 2>&1\")",
+      "Bash(powershell -NoProfile -Command \"Start-Process ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO\\\\web_admin\\\\index.html''\")",
+      "Bash(powershell -NoProfile -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1; if \\($LASTEXITCODE -eq 0\\) { & ''.\\\\flutter\\\\bin\\\\flutter.bat'' install -d R5CY90FYVJH 2>&1 }\")",
+      "Bash(powershell -NoProfile -Command \"Start-Process ''ms-settings:developers''\")",
+      "Bash(powershell -NoProfile -Command \"Set-Location ''C:\\\\Users\\\\steve\\\\OneDrive\\\\Escritorio\\\\MINUTOAMINUTO''; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' build apk --release 2>&1; & ''.\\\\flutter\\\\bin\\\\flutter.bat'' install -d R5CY90FYVJH 2>&1\")",
+      "Bash(flutterbinflutter.bat build:*)"
     ]
   }
 }

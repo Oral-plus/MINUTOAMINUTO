@@ -59,6 +59,7 @@ class CallMonitorService {
   static const _keyEnabled = 'call_monitor_enabled';
   static const _keyLastProcessedId = 'call_monitor_last_id';
   static const _keyLastRegistroId = 'call_monitor_last_registro_id';
+  static const keyCumplioMetaPending = 'cumplioMeta_pending_id';
   static const _keyNativeSignal = 'native_call_state_signal';
   static const _keyNativeSignalTs = 'native_call_state_ts';
   static const _keyNativeSignalNumber = 'native_call_state_number';
@@ -822,6 +823,7 @@ class CallMonitorService {
     }
     
     await prefs.setString(_keyLastProcessedId, entry.id ?? entry.timestamp.toString());
+    await prefs.setString(keyCumplioMetaPending, finalId);
     await _notifyUser(finalId, r.nombreContactado, r.duracionMinutos, merged, 'API');
     
     // Registrar diagnóstico para mostrar en la UI
@@ -920,7 +922,7 @@ class CallMonitorService {
     final supId = prefs.getString('supervisor_id');
     final venId = prefs.getString('vendedor_id');
     
-    // Ubicación: lastKnown del stream → última conocida de Android → GPS fresco
+    // Ubicación: lastKnown del stream → última conocida de Android → GPS fresco → fallback IP
     Position? pos = LocationService.lastKnown;
     if (pos == null) {
       try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
@@ -931,6 +933,9 @@ class CallMonitorService {
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.reduced, timeLimit: Duration(seconds: 6)),
         ).timeout(const Duration(seconds: 7));
       } catch (_) {}
+    }
+    if (pos == null) {
+      try { pos = await LocationService.getGoogleGeolocationFallback(); } catch (_) {}
     }
 
     final results = await Future.wait([

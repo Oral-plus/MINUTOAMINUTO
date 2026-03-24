@@ -265,6 +265,11 @@ class ApiService {
     _checkResponse(r);
   }
 
+  static Future<void> updateRegistroLlamadaCumplioMeta(String id, bool cumplioMeta) async {
+    final r = await _patch('/llamadas/$id', {'cumplioMeta': cumplioMeta ? 1 : 0});
+    _checkResponse(r);
+  }
+
   /// Transcribe audio usando el endpoint /transcribe del servidor (Gemini).
   /// Reintenta una vez en errores 5xx o timeout (fallos transitorios de la API).
   static Future<String?> transcribeAudio(String audioBase64, String mimeType) async {

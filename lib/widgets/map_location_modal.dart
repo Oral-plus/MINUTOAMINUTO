@@ -35,63 +35,60 @@ class MapLocationModal extends StatefulWidget {
     );
   }
 
-  /// Mini mapa estático siempre visible para las grillas/listas (usa OpenStreetMap para evitar la clave revocada).
+  /// Mini mapa estático (placeholder) — toca para abrir el mapa completo.
   static Widget miniMap({
     required double latitude,
     required double longitude,
     double width = 400,
     double height = 160,
   }) {
-    final lat = latitude.toStringAsFixed(6);
-    final lng = longitude.toStringAsFixed(6);
-    final w = width.toInt().clamp(100, 640);
-    final h = height.toInt().clamp(80, 640);
-
-    final url = 'https://staticmap.openstreetmap.de/staticmap.php'
-        '?center=$lat,$lng&zoom=15&size=${w}x$h'
-        '&markers=$lat,$lng,ol-marker';
-
+    final lat = latitude.toStringAsFixed(5);
+    final lng = longitude.toStringAsFixed(5);
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        url,
+      child: Container(
         width: double.infinity,
         height: height,
-        fit: BoxFit.cover,
-        loadingBuilder: (ctx, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: height,
-            color: const Color(0xFF1A2A3A),
-            child: const Center(child: CircularProgressIndicator(color: Colors.white54)),
-          );
-        },
-        errorBuilder: (ctx, err, _) => _mapFallbackWidget(lat, lng, height),
-      ),
-    );
-  }
-
-  static Widget _mapFallbackWidget(String lat, String lng, double height) {
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A2A3A),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1C2B3A),
+        ),
+        child: Stack(
           children: [
-            const Icon(Icons.location_on_rounded, color: Color(0xFF4ADE80), size: 24),
-            const SizedBox(height: 4),
-            Text('$lat, $lng', style: const TextStyle(fontSize: 10, color: Colors.white70)),
+            // Fondo estilo mapa
+            Positioned.fill(
+              child: CustomPaint(painter: _MapGridPainter()),
+            ),
+            // Pin central
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$lat, $lng',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Icon(Icons.location_on, color: Colors.red, size: 36),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-// _staticMapsKey y fallback removidos a favor del widget real de GoogleMap.
 
   @override
   State<MapLocationModal> createState() => _MapLocationModalState();
@@ -244,7 +241,8 @@ class _MapLocationModalState extends State<MapLocationModal> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                    subdomains: const ['0', '1', '2', '3'],
                     userAgentPackageName: 'com.minutoaminuto.app',
                   ),
                   MarkerLayer(
@@ -310,4 +308,23 @@ class _MapLocationModalState extends State<MapLocationModal> {
       ),
     );
   }
+}
+
+class _MapGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF263545)
+      ..strokeWidth = 1;
+    const step = 24.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MapGridPainter oldDelegate) => false;
 }

@@ -6,11 +6,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
 import '../models/registro_llamada.dart';
 import '../services/data_service.dart';
-import '../services/post_call_notification_service.dart';
-import '../services/transcription_service.dart';
+import '../services/call_monitor_service.dart';
+import '../services/transcription_manager.dart';
 import '../utils/constants.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/map_location_modal.dart';
@@ -24,160 +25,300 @@ class MisLlamadasScreen extends StatefulWidget {
 }
 
 class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
+  DateTime? _selectedDate; // null = últimos 30 días (todas)
+  List<RegistroLlamada> _llamadas = [];
+  bool _loading = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _verificarEdicionPendiente();
-      if (mounted) {
-        await context.read<AppProvider>().cargarDatosHoy();
-      }
+      await _cargarLlamadas();
+      if (mounted) _checkPendingCumplioMeta();
     });
   }
 
-  Future<void> _verificarEdicionPendiente() async {
-    final id = await PostCallNotificationService.getPendingEditRegistroId();
-    if (id == null || !mounted) return;
-    final r = await DataService.getRegistroLlamada(id);
-    if (r != null && mounted) _mostrarDialogoEditarObservaciones(context, r);
+  Future<void> _checkPendingCumplioMeta() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString(CallMonitorService.keyCumplioMetaPending);
+      if (id == null || id.isEmpty) return;
+      await prefs.remove(CallMonitorService.keyCumplioMetaPending);
+      if (!mounted) return;
+      await _showCumplioMetaSheet(id);
+    } catch (_) {}
   }
 
-  static Future<void> _mostrarDialogoEditarObservaciones(
-    BuildContext context,
-    RegistroLlamada r,
-  ) async {
-    final controller = TextEditingController(text: r.observaciones);
-    final provider = context.read<AppProvider>();
-    final guardado = await showDialog<bool>(
+  Future<void> _showCumplioMetaSheet(String registroId) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: Text('Editar observaciones', style: TextStyle(color: context.ac.fg, fontWeight: FontWeight.w900, fontSize: 18)),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          style: TextStyle(color: context.ac.fg, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: 'Escriba aquí...',
-            hintStyle: TextStyle(color: context.ac.fg.withOpacity(0.2)),
-            filled: true,
-            fillColor: context.ac.fg,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          ),
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: context.ac.surfaceAlt,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: context.ac.fg.withOpacity(0.08)),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancelar', style: TextStyle(color: context.ac.fgSubtle)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: context.ac.bg,
-              foregroundColor: context.ac.fg,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: context.ac.fg.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            child: Text('Guardar', style: TextStyle(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 20),
+            Icon(Icons.check_circle_outline_rounded,
+                size: 40, color: context.ac.fg.withOpacity(0.5)),
+            const SizedBox(height: 14),
+            Text(
+              '¿Cumplió la meta del día?',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: context.ac.fg,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Registra el resultado de esta llamada',
+              style: TextStyle(
+                fontSize: 13,
+                color: context.ac.fg.withOpacity(0.45),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    label: const Text('No', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: const Text('Sí', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppConstants.verdeMeta,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    try {
+      await DataService.updateRegistroLlamadaCumplioMeta(registroId, result);
+      if (mounted) _cargarLlamadas();
+    } catch (_) {}
+  }
+
+  Future<void> _cargarLlamadas() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    try {
+      final provider = context.read<AppProvider>();
+      final nombre = provider.usuarioActual?.nombre ?? provider.vendedorActual?.nombre;
+      final hoy = DateTime.now();
+      final desde = _selectedDate ?? hoy.subtract(const Duration(days: 90));
+      final hasta = _selectedDate ?? hoy;
+      var lista = await DataService.getRegistroLlamadas(
+        desde: desde,
+        hasta: hasta,
+      );
+      if (nombre != null) {
+        lista = lista.where((l) => l.nombreLider == nombre).toList();
+      }
+      // Filtro client-side por día exacto cuando se selecciona una fecha
+      if (_selectedDate != null) {
+        final sel = _selectedDate!;
+        lista = lista.where((l) {
+          final d = l.horaInicio;
+          return d.year == sel.year && d.month == sel.month && d.day == sel.day;
+        }).toList();
+      }
+      lista.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
+      if (mounted) setState(() { _llamadas = lista; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _changeDate(DateTime d) {
+    final hoy = DateTime.now();
+    if (d.isAfter(DateTime(hoy.year, hoy.month, hoy.day))) return;
+    setState(() => _selectedDate = d);
+    _cargarLlamadas();
+  }
+
+
+  String _labelFecha() {
+    final d = _selectedDate;
+    if (d == null) return 'TODAS';
+    final hoy = DateTime.now();
+    if (d.year == hoy.year && d.month == hoy.month && d.day == hoy.day) return 'HOY';
+    final ayer = hoy.subtract(const Duration(days: 1));
+    if (d.year == ayer.year && d.month == ayer.month && d.day == ayer.day) return 'AYER';
+    return DateFormat('dd MMM yyyy', 'es').format(d).toUpperCase();
+  }
+
+  Widget _buildDateBar() {
+    final hoy = DateTime.now();
+    final sel = _selectedDate;
+    final esHoy = sel != null &&
+        sel.year == hoy.year &&
+        sel.month == hoy.month &&
+        sel.day == hoy.day;
+    return Container(
+      color: context.ac.appBarBg,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: sel == null ? null : () => _changeDate(sel.subtract(const Duration(days: 1))),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: sel ?? hoy,
+                  firstDate: DateTime(2024),
+                  lastDate: hoy,
+                );
+                if (picked != null) _changeDate(picked);
+              },
+              child: Center(
+                child: Text(
+                  _labelFecha(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    color: context.ac.fg,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: (sel == null || esHoy) ? null : () => _changeDate(sel.add(const Duration(days: 1))),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          if (!esHoy)
+            TextButton(
+              onPressed: () => _changeDate(hoy),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+              ),
+              child: Text('Hoy', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.ac.fg)),
+            ),
+          if (sel != null)
+            TextButton(
+              onPressed: () { setState(() => _selectedDate = null); _cargarLlamadas(); },
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+              ),
+              child: Text('Todas', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.ac.fg)),
+            ),
         ],
       ),
     );
-    if (guardado == true && controller.text != r.observaciones) {
-      await DataService.updateRegistroLlamadaObservaciones(
-        r.id,
-        controller.text,
-      );
-      if (context.mounted) {
-        provider.cargarDatosHoy();
-        AppFeedback.success(context, 'Observaciones actualizadas');
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final llamadas = _llamadas;
+    final totalMinutos = llamadas.fold<int>(0, (acc, l) => acc + l.duracionMinutos);
+    final llamadasConAudio = llamadas.where((l) => _isConAudio(l)).length;
+    final llamadasConTranscripcion = llamadas.where((l) => _isConTranscripcion(l)).length;
+
     return Scaffold(
       backgroundColor: context.ac.bg,
       appBar: AppBar(
-        title: Text('REGISTRO DE HOY', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2.5)),
+        title: Text('MIS LLAMADAS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2.5)),
         backgroundColor: context.ac.appBarBg,
         foregroundColor: context.ac.fg,
         centerTitle: true,
         elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: _buildDateBar(),
+        ),
       ),
-      body: Consumer<AppProvider>(
-        builder: (context, provider, _) {
-          final nombreUsuario = provider.usuarioActual?.nombre ??
-              provider.vendedorActual?.nombre;
-          List<RegistroLlamada> llamadas = provider.llamadas;
-          if (nombreUsuario != null) {
-            llamadas = llamadas
-                .where((l) => l.nombreLider == nombreUsuario)
-                .toList();
-          }
-
-          llamadas.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
-          final totalMinutos = llamadas.fold<int>(
-            0,
-            (acc, l) => acc + l.duracionMinutos,
-          );
-          final llamadasConAudio =
-              llamadas.where((l) => _isConAudio(l)).length;
-          final llamadasConTranscripcion =
-              llamadas.where((l) => _isConTranscripcion(l)).length;
-
-          return RefreshIndicator(
-            onRefresh: () => provider.cargarDatosHoy(),
-            backgroundColor: const Color(0xFF1A1A1A),
-            color: context.ac.fg,
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              itemCount: llamadas.isEmpty ? 2 : llamadas.length + 1,
-              separatorBuilder: (_, _) => SizedBox(height: 14),
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Column(
-                    children: [
-                      const ActiveCallIndicator(),
-                      _ResumenLlamadasCard(
-                        totalLlamadas: llamadas.length,
-                        totalMinutos: totalMinutos,
-                        conAudio: llamadasConAudio,
-                        conTranscripcion: llamadasConTranscripcion,
-                      ),
-                    ],
+      body: _loading
+          ? Center(child: CircularProgressIndicator(color: context.ac.fg))
+          : RefreshIndicator(
+              onRefresh: _cargarLlamadas,
+              backgroundColor: const Color(0xFF1A1A1A),
+              color: context.ac.fg,
+              child: Consumer<AppProvider>(
+                builder: (context, provider, _) {
+                  return ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                    itemCount: llamadas.isEmpty ? 2 : llamadas.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(height: 14),
+                    itemBuilder: (context, i) {
+                      if (i == 0) {
+                        return Column(
+                          children: [
+                            const ActiveCallIndicator(),
+                            _ResumenLlamadasCard(
+                              totalLlamadas: llamadas.length,
+                              totalMinutos: totalMinutos,
+                              conAudio: llamadasConAudio,
+                              conTranscripcion: llamadasConTranscripcion,
+                            ),
+                          ],
+                        );
+                      }
+                      if (llamadas.isEmpty) return const _EstadoVacioLlamadasCard();
+                      final l = llamadas[i - 1];
+                      return _LlamadaCard(
+                        llamada: l,
+                        contacto: provider.usuarioActual != null ? l.nombreContactado : 'De: ${l.nombreLider}',
+                        tipoColor: _colorTipo(l.tipoLlamada),
+                        tieneAudio: _isConAudio(l),
+                        tieneTranscripcion: _isConTranscripcion(l),
+                        esUsuarioActual: provider.usuarioActual != null,
+                        onTranscripcionGuardada: _cargarLlamadas,
+                      );
+                    },
                   );
-                }
-
-                if (llamadas.isEmpty) {
-                  return const _EstadoVacioLlamadasCard();
-                }
-
-                final l = llamadas[i - 1];
-                final tipoColor = _colorTipo(l.tipoLlamada);
-                final tieneAudio = _isConAudio(l);
-                final tieneTranscripcion = _isConTranscripcion(l);
-                final contacto = provider.usuarioActual != null
-                    ? l.nombreContactado
-                    : 'De: ${l.nombreLider}';
-
-                return _LlamadaCard(
-                  llamada: l,
-                  contacto: contacto,
-                  tipoColor: tipoColor,
-                  tieneAudio: tieneAudio,
-                  tieneTranscripcion: tieneTranscripcion,
-                  esUsuarioActual: provider.usuarioActual != null,
-                  onEditarObservaciones: () =>
-                      _mostrarDialogoEditarObservaciones(context, l),
-                  onTranscripcionGuardada: () => provider.cargarDatosHoy(),
-                );
-              },
+                },
+              ),
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -218,7 +359,6 @@ class _LlamadaCard extends StatefulWidget {
   final bool tieneAudio;
   final bool tieneTranscripcion;
   final bool esUsuarioActual;
-  final VoidCallback onEditarObservaciones;
   final VoidCallback onTranscripcionGuardada;
 
   const _LlamadaCard({
@@ -228,7 +368,6 @@ class _LlamadaCard extends StatefulWidget {
     required this.tieneAudio,
     required this.tieneTranscripcion,
     required this.esUsuarioActual,
-    required this.onEditarObservaciones,
     required this.onTranscripcionGuardada,
   });
 
@@ -238,6 +377,29 @@ class _LlamadaCard extends StatefulWidget {
 
 class _LlamadaCardState extends State<_LlamadaCard> {
   bool _expandido = false;
+  bool _transcripcionRefrescada = false;
+
+  @override
+  void initState() {
+    super.initState();
+    TranscriptionManager.instance.addListener(_onTranscriptionUpdate);
+  }
+
+  @override
+  void dispose() {
+    TranscriptionManager.instance.removeListener(_onTranscriptionUpdate);
+    super.dispose();
+  }
+
+  void _onTranscriptionUpdate() {
+    if (!mounted) return;
+    final id = widget.llamada.id;
+    if (TranscriptionManager.instance.isDone(id) && !_transcripcionRefrescada) {
+      _transcripcionRefrescada = true;
+      widget.onTranscripcionGuardada();
+    }
+    setState(() {});
+  }
 
   static ({double lat, double lng})? _parseCoords(RegistroLlamada l) {
     // Primero usar campos directos (más precisos)
@@ -258,307 +420,409 @@ class _LlamadaCardState extends State<_LlamadaCard> {
     return (lat: lat, lng: lng);
   }
 
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'hace ${diff.inSeconds}s';
-    if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
-    if (diff.inHours < 24) return 'hace ${diff.inHours}h';
-    return 'hace ${diff.inDays}d';
-  }
+  // ── Helpers visuales ──────────────────────────────────────────────────────
 
-  Widget _chip(IconData icon, String text, Color color, {Color? bg}) {
+  Widget _statusTag(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: bg ?? color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.15)),
+        color: context.ac.fg.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: color),
-        SizedBox(width: 5),
-        Text(text,
+        Icon(icon, size: 11, color: context.ac.fg.withOpacity(0.45)),
+        SizedBox(width: 4),
+        Text(label,
             style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: context.ac.fg.withOpacity(0.45),
+                letterSpacing: 0.2)),
       ]),
     );
+  }
+
+  Widget _metricTile(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.ac.fg.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.ac.fg.withOpacity(0.06)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: context.ac.fg.withOpacity(0.3),
+                letterSpacing: 1.2)),
+        SizedBox(height: 4),
+        Text(value,
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: context.ac.fg,
+                letterSpacing: -0.5)),
+      ]),
+    );
+  }
+
+  Widget _sectionLabel(String label) {
+    return Text(label.toUpperCase(),
+        style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w900,
+            color: context.ac.fg.withOpacity(0.28),
+            letterSpacing: 1.8));
   }
 
   @override
   Widget build(BuildContext context) {
     final l = widget.llamada;
     final coords = _parseCoords(l);
+    final inicio = l.horaInicio.toLocal();
+    final fin = l.horaFin.toLocal();
     final horaStr =
-        '${DateFormat('HH:mm').format(l.horaInicio)} – ${DateFormat('HH:mm').format(l.horaFin)}';
-    final agoStr = _timeAgo(l.horaFin);
+        '${DateFormat('HH:mm').format(inicio)} – ${DateFormat('HH:mm').format(fin)}';
+    final hoy = DateTime.now();
+    final esHoy = inicio.year == hoy.year &&
+        inicio.month == hoy.month &&
+        inicio.day == hoy.day;
+    final ayer = hoy.subtract(const Duration(days: 1));
+    final esAyer = inicio.year == ayer.year &&
+        inicio.month == ayer.month &&
+        inicio.day == ayer.day;
+    final fechaLabel = esHoy
+        ? 'HOY'
+        : esAyer
+        ? 'AYER'
+        : '${l.horaInicio.day.toString().padLeft(2, '0')}/${l.horaInicio.month.toString().padLeft(2, '0')}';
     final durStr = l.duracionMinutos > 0 ? '${l.duracionMinutos} min' : '< 1 min';
+    final words = widget.contacto.trim().split(' ');
+    final initials = words.take(2).map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').join();
+    final transcPending = TranscriptionManager.instance.isPending(widget.llamada.id);
+    final transcError = TranscriptionManager.instance.isError(widget.llamada.id);
+    final transcPct = TranscriptionManager.instance.getProgress(widget.llamada.id);
 
     return GestureDetector(
       onTap: () => setState(() => _expandido = !_expandido),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 260),
         curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.only(bottom: 2),
         decoration: BoxDecoration(
           color: context.ac.surfaceAlt,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: _expandido
-                ? context.ac.fg.withOpacity(0.12)
-                : context.ac.fg.withOpacity(0.04),
-            width: 0.5,
+            color: context.ac.fg.withOpacity(_expandido ? 0.1 : 0.05),
           ),
           boxShadow: [
             BoxShadow(
-              color: context.ac.fg.withOpacity(_expandido ? 0.08 : 0.03),
-              blurRadius: _expandido ? 24 : 12,
-              offset: Offset(0, _expandido ? 8 : 4),
+              color: context.ac.fg.withOpacity(_expandido ? 0.06 : 0.025),
+              blurRadius: _expandido ? 28 : 10,
+              offset: Offset(0, _expandido ? 10 : 3),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Cabecera siempre visible ──────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: context.ac.fg.withOpacity(0.02),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.ac.fg.withOpacity(0.06), width: 0.5),
-                    ),
-                    child: Icon(Icons.phone_in_talk_rounded,
-                        color: context.ac.fg.withOpacity(0.6), size: 20),
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.contacto,
-                            style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Georgia',
-                                color: context.ac.fg.withOpacity(0.9),
-                                letterSpacing: 0.2)),
-                        SizedBox(height: 4),
-                        Text('$horaStr  ·  $agoStr',
-                            style: TextStyle(
-                                fontSize: 12, color: context.ac.fg.withOpacity(0.4), fontWeight: FontWeight.w400, letterSpacing: 0.5)),
-                      ],
-                    ),
-                  ),
-                  _chip(Icons.schedule_rounded, durStr,
-                      context.ac.fg.withOpacity(0.38),
-                      bg: context.ac.fg.withOpacity(0.04)),
-                  SizedBox(width: 10),
-                  // Flecha expandir
-                  AnimatedRotation(
-                    turns: _expandido ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 250),
-                    child: Icon(Icons.keyboard_arrow_down_rounded,
-                        color: context.ac.fg.withOpacity(0.2), size: 22),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Chips de estado ───────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-              child: Wrap(spacing: 7, runSpacing: 7, children: [
-                _chip(Icons.label_rounded, l.tipoLlamada.displayName,
-                    context.ac.fg.withOpacity(0.54)),
-                if (l.rutaGrabacionPuntoB != null &&
-                    l.rutaGrabacionPuntoB!.isNotEmpty)
-                  _chip(Icons.call_merge_rounded, 'Cruce A+B',
-                      const Color(0xFF60A5FA)),
-                if (widget.tieneAudio)
-                  _chip(Icons.mic_rounded, 'Audio guardado',
-                      const Color(0xFF4ADE80)),
-                if (widget.tieneTranscripcion)
-                  _chip(Icons.auto_awesome_rounded, 'Transcripción',
-                      const Color(0xFFFBBF24)),
-                if (coords != null)
-                  GestureDetector(
-                    onTap: () => MapLocationModal.show(
-                      context,
-                      latitude: coords.lat,
-                      longitude: coords.lng,
-                      contactName: l.nombreContactado,
-                    ),
-                    child: _chip(Icons.location_on_rounded, 'Ver en mapa',
-                        const Color(0xFF60A5FA),
-                        bg: const Color(0xFF60A5FA).withOpacity(0.12)),
-                  ),
-              ]),
-            ),
-
-            // ── Contenido expandido ───────────────────────────────────────
-            if (_expandido) ...[
-              Divider(height: 1, color: context.ac.fg.withOpacity(0.06)),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Venta / Recaudo
-                    if (l.ventaDia > 0 || l.recaudoDia > 0) ...[
-                      Row(children: [
-                        if (l.ventaDia > 0)
-                          _InfoPill(
-                              icon: Icons.trending_up_rounded,
-                              label: 'Venta',
-                              value:
-                                  '\$${NumberFormat('#,##0').format(l.ventaDia)}',
-                              color: AppConstants.verdeMeta),
-                        if (l.ventaDia > 0 && l.recaudoDia > 0)
-                          SizedBox(width: 8),
-                        if (l.recaudoDia > 0)
-                          _InfoPill(
-                              icon: Icons.payments_rounded,
-                              label: 'Recaudo',
-                              value:
-                                  '\$${NumberFormat('#,##0').format(l.recaudoDia)}',
-                              color: AppConstants.azulCorporativo),
-                      ]),
-                      SizedBox(height: 12),
-                    ],
-
-                    // Observaciones limpias (sin la metadata técnica)
-                    if (l.observaciones.isNotEmpty) ...[
-                      _SectionLabel(
-                          icon: Icons.notes_rounded, label: 'Observaciones'),
-                      SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: context.ac.fg.withOpacity(0.04),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: context.ac.fg.withOpacity(0.08)),
-                        ),
-                        child: Text(
-                          _limpiarObservaciones(l.observaciones),
-                          style: TextStyle(
-                              fontSize: 13,
-                              height: 1.55,
-                              color: context.ac.fg.withOpacity(0.7)),
-                        ),
-                      ),
-                      SizedBox(height: 16),
-                    ],
-
-                    // Mapa de ubicación (siempre visible si hay coords)
-                    if (coords != null) ...[
-                      _SectionLabel(
-                          icon: Icons.location_on_rounded,
-                          label: 'Ubicación de la llamada'),
-                      SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: SizedBox(
-                          height: MediaQuery.of(context).size.shortestSide * 0.42,
-                          child: GestureDetector(
-                            onTap: () => MapLocationModal.show(
-                              context,
-                              latitude: coords.lat,
-                              longitude: coords.lng,
-                              contactName: l.nombreContactado,
-                            ),
-                            child: Stack(children: [
-                              MapLocationModal.miniMap(
-                                latitude: coords.lat,
-                                longitude: coords.lng,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Acento lateral de color según tipo ──────────────────
+                Container(width: 3, color: widget.tipoColor),
+                // ── Cuerpo ───────────────────────────────────────────────
+                Expanded(
+                  child: Column(
+                    children: [
+                      // Cabecera
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 17, 14, 15),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Avatar con iniciales
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: context.ac.fg.withOpacity(0.07),
+                                shape: BoxShape.circle,
                               ),
-                              Positioned(
-                                right: 8,
-                                bottom: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: AppConstants.azulCorporativo,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.open_in_full_rounded,
-                                          size: 13, color: context.ac.fg),
-                                      SizedBox(width: 4),
-                                      Text('Ver mapa',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: context.ac.fg,
-                                              fontWeight: FontWeight.w600)),
-                                    ],
+                              child: Center(
+                                child: Text(
+                                  initials.isEmpty ? '?' : initials,
+                                  style: TextStyle(
+                                    fontSize: initials.length > 1 ? 13 : 16,
+                                    fontWeight: FontWeight.w900,
+                                    color: context.ac.fg.withOpacity(0.6),
+                                    letterSpacing: -0.5,
                                   ),
                                 ),
                               ),
-                            ]),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 12),
-                    ],
-
-                    // Audio
-                    if (widget.tieneAudio) ...[
-                      _SectionLabel(
-                          icon: Icons.mic_rounded,
-                          label: 'Grabación de llamada'),
-                      SizedBox(height: 6),
-                      _AudioPlayerWidget(
-                        url: l.rutaGrabacion!,
-                        registroId: l.id,
-                        transcripcion: l.transcripcionTexto,
-                        onTranscripcionGuardada: widget.onTranscripcionGuardada,
-                      ),
-                      SizedBox(height: 12),
-                    ],
-
-                    // Transcripción (Eliminado de aquí, ahora está integrado en el AudioPlayer)
-
-
-                    // Acciones
-                    Row(children: [
-                      if (widget.esUsuarioActual)
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: widget.onEditarObservaciones,
-                            icon: Icon(Icons.edit_outlined, size: 16, color: context.ac.fg.withOpacity(0.5)),
-                            label: Text('Editar', style: TextStyle(color: context.ac.fg.withOpacity(0.5))),
-                            style: OutlinedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(color: context.ac.fg.withOpacity(0.1)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
+                            SizedBox(width: 12),
+                            // Nombre + meta
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.contacto,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: context.ac.fg,
+                                      letterSpacing: -0.3,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    '$fechaLabel  ·  $horaStr  ·  ${l.tipoLlamada.displayName.toUpperCase()}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.ac.fg.withOpacity(0.32),
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                  SizedBox(height: 9),
+                                  // Tags de estado
+                                  Wrap(
+                                    spacing: 5,
+                                    runSpacing: 4,
+                                    children: [
+                                      _statusTag(Icons.schedule_rounded, durStr),
+                                      if (!widget.tieneAudio)
+                                        _statusTag(Icons.phone_missed_rounded, 'Perdida'),
+                                      if (widget.tieneAudio)
+                                        _statusTag(Icons.mic_rounded, 'Audio'),
+                                      if (widget.tieneTranscripcion)
+                                        _statusTag(Icons.auto_awesome_rounded, 'IA'),
+                                      if (transcPending)
+                                        _statusTag(Icons.hourglass_top_rounded,
+                                            'IA ${(transcPct * 100).round()}%'),
+                                      if (transcError)
+                                        _statusTag(Icons.error_outline_rounded, 'Error'),
+                                      if (coords != null)
+                                        GestureDetector(
+                                          onTap: () => MapLocationModal.show(context,
+                                              latitude: coords.lat,
+                                              longitude: coords.lng,
+                                              contactName: l.nombreContactado),
+                                          child: _statusTag(Icons.location_on_rounded, 'GPS'),
+                                        ),
+                                      if (l.rutaGrabacionPuntoB != null &&
+                                          l.rutaGrabacionPuntoB!.isNotEmpty)
+                                        _statusTag(Icons.call_merge_rounded, 'A+B'),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Chevron
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: AnimatedRotation(
+                                turns: _expandido ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 250),
+                                child: Icon(Icons.keyboard_arrow_down_rounded,
+                                    color: context.ac.fg.withOpacity(0.2),
+                                    size: 22),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Contenido expandido ──────────────────────────────
+                      if (_expandido) ...[
+                        Divider(height: 1, color: context.ac.fg.withOpacity(0.06)),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Métricas en grid 2×2
+                              if (l.ventaDia > 0 ||
+                                  l.recaudoDia > 0 ||
+                                  l.clientesProgramados > 0 ||
+                                  l.clientesVisitados > 0) ...[
+                                GridView.count(
+                                  crossAxisCount: 2,
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 8,
+                                  childAspectRatio: 2.8,
+                                  children: [
+                                    if (l.ventaDia > 0)
+                                      _metricTile('VENTA DÍA',
+                                          '\$${NumberFormat('#,##0').format(l.ventaDia)}'),
+                                    if (l.recaudoDia > 0)
+                                      _metricTile('RECAUDO',
+                                          '\$${NumberFormat('#,##0').format(l.recaudoDia)}'),
+                                    if (l.clientesProgramados > 0)
+                                      _metricTile('PROGRAMADOS',
+                                          '${l.clientesProgramados}'),
+                                    if (l.clientesVisitados > 0)
+                                      _metricTile('VISITADOS',
+                                          '${l.clientesVisitados}'),
+                                    if (l.conversion60 > 0)
+                                      _metricTile('CONV. 60', '${l.conversion60}'),
+                                    if (l.recuperacionPerdidos > 0)
+                                      _metricTile('RECUP. PERDIDOS',
+                                          '${l.recuperacionPerdidos}'),
+                                  ],
+                                ),
+                                SizedBox(height: 14),
+                              ],
+                              // Indicadores booleanos
+                              if (l.cumplioMeta || l.coincidenciaPpvcRvc) ...[
+                                Wrap(spacing: 8, children: [
+                                  if (l.cumplioMeta)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: context.ac.fg.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                            color: context.ac.fg.withOpacity(0.1)),
+                                      ),
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Icon(Icons.check_circle_rounded,
+                                            size: 12, color: context.ac.fg.withOpacity(0.5)),
+                                        SizedBox(width: 5),
+                                        Text('Cumplió meta',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: context.ac.fg.withOpacity(0.55))),
+                                      ]),
+                                    ),
+                                  if (l.coincidenciaPpvcRvc)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: context.ac.fg.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                            color: context.ac.fg.withOpacity(0.1)),
+                                      ),
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Icon(Icons.link_rounded,
+                                            size: 12, color: context.ac.fg.withOpacity(0.5)),
+                                        SizedBox(width: 5),
+                                        Text('PPVC-RVC',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: context.ac.fg.withOpacity(0.55))),
+                                      ]),
+                                    ),
+                                ]),
+                                SizedBox(height: 14),
+                              ],
+                              // Observaciones
+                              if (l.observaciones.isNotEmpty) ...[
+                                _sectionLabel('Observaciones'),
+                                SizedBox(height: 8),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: context.ac.fg.withOpacity(0.03),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                        color: context.ac.fg.withOpacity(0.07)),
+                                  ),
+                                  child: Text(
+                                    _limpiarObservaciones(l.observaciones),
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.6,
+                                        color: context.ac.fg.withOpacity(0.65)),
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                              ],
+                              // Mapa
+                              if (coords != null) ...[
+                                _sectionLabel('Ubicación de la llamada'),
+                                SizedBox(height: 8),
+                                GestureDetector(
+                                  onTap: () => MapLocationModal.show(context,
+                                      latitude: coords.lat,
+                                      longitude: coords.lng,
+                                      contactName: l.nombreContactado),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Stack(children: [
+                                      MapLocationModal.miniMap(
+                                        latitude: coords.lat,
+                                        longitude: coords.lng,
+                                        height: MediaQuery.of(context).size.shortestSide * 0.38,
+                                      ),
+                                      Positioned(
+                                        right: 8,
+                                        bottom: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.65),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                            Icon(Icons.open_in_full_rounded,
+                                                size: 12, color: Colors.white),
+                                            SizedBox(width: 5),
+                                            Text('Ver mapa',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w700)),
+                                          ]),
+                                        ),
+                                      ),
+                                    ]),
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                              ],
+                              // Audio
+                              if (widget.tieneAudio) ...[
+                                _sectionLabel('Grabación'),
+                                SizedBox(height: 8),
+                                _AudioPlayerWidget(
+                                  url: l.rutaGrabacion!,
+                                  registroId: l.id,
+                                  transcripcion: l.transcripcionTexto,
+                                  onTranscripcionGuardada:
+                                      widget.onTranscripcionGuardada,
+                                ),
+                                SizedBox(height: 14),
+                              ],
+                            ],
                           ),
                         ),
-                    ]),
-                  ],
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  /// Elimina la metadata técnica de las observaciones para mostrar solo
-  /// lo que el usuario escribió o la info relevante.
   static String _limpiarObservaciones(String obs) {
-    // Quitar líneas de metadata técnica
     final lines = obs.split('. ').where((s) {
       final lower = s.toLowerCase();
       return !lower.startsWith('ip:') &&
@@ -566,66 +830,6 @@ class _LlamadaCardState extends State<_LlamadaCard> {
           !lower.startsWith('audio:');
     }).toList();
     return lines.join('. ').trim();
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-  const _InfoPill(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 15, color: color),
-        SizedBox(width: 6),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: color.withOpacity(0.8),
-                  fontWeight: FontWeight.w500)),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: color,
-                  fontWeight: FontWeight.w700)),
-        ]),
-      ]),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _SectionLabel({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Icon(icon, size: 15, color: context.ac.fg.withOpacity(0.35)),
-      SizedBox(width: 8),
-      Text(label.toUpperCase(),
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: context.ac.fg.withOpacity(0.35),
-              letterSpacing: 1.5)),
-    ]);
   }
 }
 
@@ -646,120 +850,77 @@ class _ResumenLlamadasCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
       decoration: BoxDecoration(
         color: context.ac.surfaceAlt,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: context.ac.fg.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: context.ac.fg.withOpacity(0.4),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: context.ac.fg.withOpacity(0.07)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            'RESUMEN DEL DÍA',
-            style: TextStyle(
-              color: context.ac.fg.withOpacity(0.3),
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2.5,
-            ),
-          ),
-          SizedBox(height: 10),
-          Text(
-            '$totalLlamadas registradas',
-            style: TextStyle(
-              color: context.ac.fg,
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          SizedBox(height: 20),
-          Row(
+          // Número grande
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _ResumenMetrica(
-                  icono: Icons.schedule_rounded,
-                  valor: '$totalMinutos',
-                  etiqueta: 'MINUTOS',
+              Text(
+                '$totalLlamadas',
+                style: TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w900,
+                  color: context.ac.fg,
+                  height: 1,
+                  letterSpacing: -2,
                 ),
               ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _ResumenMetrica(
-                  icono: Icons.mic_rounded,
-                  valor: '$conAudio',
-                  etiqueta: 'AUDIOS',
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _ResumenMetrica(
-                  icono: Icons.auto_awesome_rounded,
-                  valor: '$conTranscripcion',
-                  etiqueta: 'IA',
+              Text(
+                'LLAMADAS',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: context.ac.fg.withOpacity(0.28),
+                  letterSpacing: 2.2,
                 ),
               ),
             ],
+          ),
+          // Separador vertical
+          Container(
+            width: 1,
+            height: 48,
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            color: context.ac.fg.withOpacity(0.08),
+          ),
+          // Stats
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _statRow(context, Icons.schedule_rounded, '$totalMinutos min'),
+                SizedBox(height: 7),
+                _statRow(context, Icons.mic_rounded, '$conAudio audios'),
+                SizedBox(height: 7),
+                _statRow(context, Icons.auto_awesome_rounded, '$conTranscripcion transcritas'),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-}
 
-class _ResumenMetrica extends StatelessWidget {
-  final IconData icono;
-  final String valor;
-  final String etiqueta;
-
-  const _ResumenMetrica({
-    required this.icono,
-    required this.valor,
-    required this.etiqueta,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.ac.fg.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.ac.fg.withOpacity(0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icono, size: 14, color: context.ac.fg.withOpacity(0.3)),
-          SizedBox(height: 10),
-          Text(
-            valor,
-            style: TextStyle(
-              color: context.ac.fg,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          SizedBox(height: 2),
-          Text(
-            etiqueta,
-            style: TextStyle(
-              color: context.ac.fg.withOpacity(0.2),
-              fontSize: 8,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _statRow(BuildContext context, IconData icon, String label) {
+    return Row(children: [
+      Icon(icon, size: 13, color: context.ac.fg.withOpacity(0.3)),
+      SizedBox(width: 7),
+      Text(label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: context.ac.fg.withOpacity(0.5),
+          )),
+    ]);
   }
 }
 
@@ -833,7 +994,6 @@ class _AudioPlayerWidget extends StatefulWidget {
 class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   AudioPlayer? _player;
   bool _playing = false;
-  bool _transcribiendo = false;
   bool _cargandoAudio = false;
   String? _transcripcionLocal;
   Duration _duracionTotal = Duration.zero;
@@ -916,8 +1076,14 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   void initState() {
     super.initState();
-    // El player se inicializa perezosamente al tocar "Play" 
-    // para evitar colapsar el MediaServer (límite de 32 tracks de Android)
+    // Auto-transcribir si tiene audio pero no transcripción todavía
+    final tieneTranscripcion =
+        widget.transcripcion != null && widget.transcripcion!.isNotEmpty;
+    if (!tieneTranscripcion) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        TranscriptionManager.instance.enqueue(widget.registroId, widget.url);
+      });
+    }
   }
 
   @override
@@ -992,32 +1158,8 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
     return '$minutes:$seconds';
   }
 
-  Future<void> _transcribirConIA() async {
-    if (_transcribiendo) return;
-    setState(() => _transcribiendo = true);
-    try {
-      final text = await TranscriptionService.transcribeAndSave(
-        registroId: widget.registroId,
-        rutaAudio: widget.url,
-      );
-      if (mounted) {
-        setState(() {
-          _transcribiendo = false;
-          if (text != null) _transcripcionLocal = text;
-        });
-        widget.onTranscripcionGuardada?.call();
-        if (text != null && mounted) {
-          AppFeedback.success(context, 'Transcripción guardada');
-        } else if (mounted) {
-          AppFeedback.warning(context, 'No se pudo transcribir. Verifique la conexión con la API.');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _transcribiendo = false);
-        AppFeedback.error(context, 'Error en transcripción: $e');
-      }
-    }
+  void _reintentarTranscripcion() {
+    TranscriptionManager.instance.retry(widget.registroId, widget.url);
   }
 
   @override
@@ -1108,38 +1250,44 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                   ],
                 ),
               ),
-              if (!tieneTranscripcion)
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.25)),
-                    color: const Color(0xFFFBBF24).withOpacity(0.08),
-                  ),
-                  child: InkWell(
-                    onTap: _transcribiendo ? null : _transcribirConIA,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _transcribiendo
-                              ? SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFFFBBF24),
-                                  ),
-                                )
-                              : Icon(Icons.auto_awesome, size: 15, color: Color(0xFFFBBF24)),
-                          SizedBox(width: 6),
-                          Text(
-                            _transcribiendo ? 'IA...' : 'Transcribir',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFBBF24)),
-                          ),
-                        ],
+              if (!tieneTranscripcion &&
+                  TranscriptionManager.instance.isPending(widget.registroId))
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: TranscriptionManager.instance.getProgress(widget.registroId),
+                          color: context.ac.fg.withOpacity(0.6),
+                        ),
                       ),
+                      SizedBox(width: 6),
+                      Text(
+                        'IA ${(TranscriptionManager.instance.getProgress(widget.registroId) * 100).round()}%',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.ac.fg.withOpacity(0.6)),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!tieneTranscripcion &&
+                  TranscriptionManager.instance.isError(widget.registroId))
+                InkWell(
+                  onTap: _reintentarTranscripcion,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 15, color: context.ac.fg.withOpacity(0.5)),
+                        SizedBox(width: 6),
+                        Text('Reintentar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.ac.fg.withOpacity(0.5))),
+                      ],
                     ),
                   ),
                 ),

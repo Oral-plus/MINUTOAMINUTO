@@ -217,6 +217,12 @@ class DataService {
         : DatabaseService.updateRegistroLlamadaRutaGrabacion(id, rutaGrabacion));
   }
 
+  static Future<void> updateRegistroLlamadaCumplioMeta(
+      String id, bool cumplioMeta) async {
+    if (!_useApi) return;
+    await ApiService.updateRegistroLlamadaCumplioMeta(id, cumplioMeta);
+  }
+
   static Future<List<Ppvc>> getPpvcByFecha(DateTime fecha) async {
     if (useDemoData) return DemoDataService.getPpvcByFecha(fecha);
     return _useApi ? ApiService.getPpvcByFecha(fecha) : DatabaseService.getPpvcByFecha(fecha);

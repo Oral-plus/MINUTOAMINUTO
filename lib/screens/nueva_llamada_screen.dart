@@ -31,7 +31,6 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
   bool _coincidenciaPpvcRvc = false;
   int _conversion60 = 0;
   int _recuperacionPerdidos = 0;
-  String _observaciones = '';
   bool _confirmacionVeracidad = false;
 
   Position? _cachedPosition;
@@ -45,8 +44,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
 
   Future<void> _prefetchLocation() async {
     try {
-      final hasPermission = await LocationService.requestPermission();
-      if (!hasPermission) return;
+      await LocationService.requestPermission();
       Position? pos = LocationService.lastKnown;
       if (pos == null) {
         try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
@@ -56,10 +54,13 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
           pos = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
               accuracy: LocationAccuracy.reduced,
-              timeLimit: Duration(seconds: 15),
             ),
-          ).timeout(const Duration(seconds: 17));
+          ).timeout(const Duration(seconds: 20));
         } catch (_) {}
+      }
+      // Último recurso: Google Geolocation API (funciona solo con IP)
+      if (pos == null) {
+        try { pos = await LocationService.getGoogleGeolocationFallback(); } catch (_) {}
       }
       if (pos != null && mounted) {
         LocationService.updateFromStream(pos);
@@ -301,16 +302,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
                     ],
                   ),
                   SizedBox(height: 16),
-                  TextFormField(
-                    decoration: InputDecoration(
-                      labelText: 'Observaciones',
-                      border: OutlineInputBorder(),
-                      alignLabelWithHint: true,
-                    ),
-                    maxLines: 3,
-                    onSaved: (v) => _observaciones = v ?? '',
-                  ),
-                  SizedBox(height: 24),
+                  SizedBox(height: 8),
                   Card(
                     color: _confirmacionVeracidad
                         ? AppConstants.verdeMeta.withOpacity(0.1)
@@ -386,6 +378,10 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
           ).timeout(const Duration(seconds: 12));
         } catch (_) {}
       }
+      // Último recurso: Google Geolocation API
+      if (pos == null) {
+        try { pos = await LocationService.getGoogleGeolocationFallback(); } catch (_) {}
+      }
       lat = pos?.latitude;
       lng = pos?.longitude;
     } catch (_) {}
@@ -409,7 +405,7 @@ class _NuevaLlamadaScreenState extends State<NuevaLlamadaScreen> {
       coincidenciaPpvcRvc: _coincidenciaPpvcRvc,
       conversion60: _conversion60,
       recuperacionPerdidos: _recuperacionPerdidos,
-      observaciones: _observaciones,
+      observaciones: '',
       confirmacionVeracidad: _confirmacionVeracidad,
       latitud: lat,
       longitud: lng,

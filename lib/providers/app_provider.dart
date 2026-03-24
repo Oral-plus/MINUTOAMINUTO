@@ -22,6 +22,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/samsung_setup_wizard.dart';
+
 class AppProvider with ChangeNotifier {
   List<Vendedor> _vendedores = [];
   List<Supervisor> _supervisores = [];
@@ -69,10 +70,15 @@ class AppProvider with ChangeNotifier {
   bool get esVendedor => _vendedorActual != null;
 
   Future<void> toggleTheme() async {
-    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    _themeMode = _themeMode == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('app_theme_mode', _themeMode == ThemeMode.dark ? 'dark' : 'light');
+    await prefs.setString(
+      'app_theme_mode',
+      _themeMode == ThemeMode.dark ? 'dark' : 'light',
+    );
   }
 
   Future<void> init({bool force = false}) async {
@@ -91,52 +97,58 @@ class AppProvider with ChangeNotifier {
       _vendedorActual = null;
       notifyListeners();
     }
-    await runZonedGuarded(() async {
-      try {
-        DebugAlertService.info('Inicializando app...');
-        await DataService.init().timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {},
-        );
-        SyncService.init();
-        await _readStoredSessionIds().timeout(
-          const Duration(seconds: 6),
-          onTimeout: () {
+    await runZonedGuarded(
+      () async {
+        try {
+          DebugAlertService.info('Inicializando app...');
+          await DataService.init().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {},
+          );
+          SyncService.init();
+          await _readStoredSessionIds().timeout(
+            const Duration(seconds: 6),
+            onTimeout: () {
+              _storedSupervisorId = null;
+              _storedVendedorId = null;
+            },
+          );
+          DebugAlertService.success('Inicio instantáneo completado');
+        } catch (e, st) {
+          debugPrint('Error init Minuto a Minuto: $e\n$st');
+          if (e is TimeoutException ||
+              e.toString().contains('Tiempo de espera')) {
             _storedSupervisorId = null;
             _storedVendedorId = null;
-          },
-        );
-        DebugAlertService.success('Inicio instantáneo completado');
-      } catch (e, st) {
-        debugPrint('Error init Minuto a Minuto: $e\n$st');
-        if (e is TimeoutException || e.toString().contains('Tiempo de espera')) {
-          _storedSupervisorId = null;
-          _storedVendedorId = null;
-          _initError = null;
-        } else {
-          DebugAlertService.error('Error al iniciar: $e');
-          _initError = 'Error al cargar: $e';
-          if (!ApiConfig.useRemoteApi) _initError = '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
+            _initError = null;
+          } else {
+            DebugAlertService.error('Error al iniciar: $e');
+            _initError = 'Error al cargar: $e';
+            if (!ApiConfig.useRemoteApi)
+              _initError =
+                  '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
+          }
+        } finally {
+          _isInitialized = true;
+          // Si no hay sesión guardada localmente, mostrar login de inmediato
+          if (_storedSupervisorId == null && _storedVendedorId == null) {
+            _sessionResolved = true;
+            notifyListeners();
+          } else {
+            notifyListeners();
+          }
         }
-      } finally {
+        // Resolver sesión en red y cargar datos (puede tardar, pero con timeout corto)
+        unawaited(_warmUpPostInit());
+      },
+      (error, stack) {
+        debugPrint('AppProvider zone: $error\n$stack');
+        _initError = 'Error inesperado: $error';
         _isInitialized = true;
-        // Si no hay sesión guardada localmente, mostrar login de inmediato
-        if (_storedSupervisorId == null && _storedVendedorId == null) {
-          _sessionResolved = true;
-          notifyListeners();
-        } else {
-          notifyListeners();
-        }
-      }
-      // Resolver sesión en red y cargar datos (puede tardar, pero con timeout corto)
-      unawaited(_warmUpPostInit());
-    }, (error, stack) {
-      debugPrint('AppProvider zone: $error\n$stack');
-      _initError = 'Error inesperado: $error';
-      _isInitialized = true;
-      _sessionResolved = true;
-      notifyListeners();
-    });
+        _sessionResolved = true;
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> _warmUpPostInit() async {
@@ -181,9 +193,9 @@ class AppProvider with ChangeNotifier {
 
   Future<List<T>> _loadListOrEmpty<T>(
     Future<List<T>> Function() loader,
-    String label,
-    {Duration? timeout}
-  ) async {
+    String label, {
+    Duration? timeout,
+  }) async {
     try {
       return await _withTimeout(loader(), label, timeout: timeout);
     } catch (e) {
@@ -194,9 +206,9 @@ class AppProvider with ChangeNotifier {
 
   Future<void> _runInitStep(
     String label,
-    Future<void> Function() action,
-    {Duration? timeout}
-  ) async {
+    Future<void> Function() action, {
+    Duration? timeout,
+  }) async {
     try {
       await _withTimeout(action(), label, timeout: timeout);
     } catch (e) {
@@ -270,8 +282,12 @@ class AppProvider with ChangeNotifier {
       await prefs.remove('vendedor_id');
       _storedSupervisorId = id;
       _storedVendedorId = null;
-      if (_usuarioActual!.telefono != null && _usuarioActual!.telefono!.trim().isNotEmpty) {
-        await prefs.setString('numero_telefono_propietario', _usuarioActual!.telefono!.trim());
+      if (_usuarioActual!.telefono != null &&
+          _usuarioActual!.telefono!.trim().isNotEmpty) {
+        await prefs.setString(
+          'numero_telefono_propietario',
+          _usuarioActual!.telefono!.trim(),
+        );
       }
       // Calentar GPS para que el monitor de llamadas tenga coordenadas disponibles
       unawaited(_warmupGps());
@@ -290,8 +306,12 @@ class AppProvider with ChangeNotifier {
       await prefs.remove('supervisor_id');
       _storedVendedorId = id;
       _storedSupervisorId = null;
-      if (_vendedorActual!.telefono != null && _vendedorActual!.telefono!.trim().isNotEmpty) {
-        await prefs.setString('numero_telefono_propietario', _vendedorActual!.telefono!.trim());
+      if (_vendedorActual!.telefono != null &&
+          _vendedorActual!.telefono!.trim().isNotEmpty) {
+        await prefs.setString(
+          'numero_telefono_propietario',
+          _vendedorActual!.telefono!.trim(),
+        );
       }
     }
     notifyListeners();
@@ -369,19 +389,13 @@ class AppProvider with ChangeNotifier {
 
   Future<void> cargarDatosHoy() async {
     final hoy = DateTime.now();
-    _llamadas = await DataService.getRegistroLlamadas(
-      desde: hoy,
-      hasta: hoy,
-    );
+    _llamadas = await DataService.getRegistroLlamadas(desde: hoy, hasta: hoy);
     notifyListeners();
   }
 
   Future<void> recargarDashboard() async {
     final hoy = DateTime.now();
-    _llamadas = await DataService.getRegistroLlamadas(
-      desde: hoy,
-      hasta: hoy,
-    );
+    _llamadas = await DataService.getRegistroLlamadas(desde: hoy, hasta: hoy);
     if (!DataService.useDemoData) {
       try {
         await AlertasService.verificarAlertasDiarias();
@@ -434,7 +448,9 @@ class AppProvider with ChangeNotifier {
     }
     try {
       // Cargar jerarquía para cualquier supervisor (JEFE, KAM, COACH)
-      if (cargoSap == 'JEFE DE VENTAS' || cargoSap == 'KAM' || cargoSap == 'COACH') {
+      if (cargoSap == 'JEFE DE VENTAS' ||
+          cargoSap == 'KAM' ||
+          cargoSap == 'COACH') {
         _equipoJerarquico = await ApiService.getEquipoJerarquico();
       } else {
         _equipoJerarquico = [];
@@ -473,7 +489,8 @@ class AppProvider with ChangeNotifier {
     if (_usuarioActual == null || !esCoach) return;
     final coachId = _usuarioActual!.id;
     final hoy = DateTime.now();
-    final claveHoy = '${hoy.year}${hoy.month.toString().padLeft(2, '0')}${hoy.day.toString().padLeft(2, '0')}';
+    final claveHoy =
+        '${hoy.year}${hoy.month.toString().padLeft(2, '0')}${hoy.day.toString().padLeft(2, '0')}';
     final prefs = await SharedPreferences.getInstance();
     for (final a in _alertas) {
       if (a.tipo != TipoAlerta.vendedorSinLlamada8am ||
@@ -483,7 +500,10 @@ class AppProvider with ChangeNotifier {
       }
       final key = 'notified_8am_${a.vendedorId}_$claveHoy';
       if (prefs.getBool(key) == true) continue;
-      final nombre = a.mensaje.replaceAll(' no ha hecho ninguna llamada antes de las 8:20', '');
+      final nombre = a.mensaje.replaceAll(
+        ' no ha hecho ninguna llamada antes de las 8:20',
+        '',
+      );
       await PostCallNotificationService.showAlertaVendedorSinLlamada8am(nombre);
       await prefs.setBool(key, true);
     }
@@ -497,10 +517,12 @@ class AppProvider with ChangeNotifier {
     return _llamadas.where((l) => l.nombreContactado == nombre).toList();
   }
 
-  Future<({String savedTo, String registroId, bool hasGps, bool retrying})> registrarLlamada(RegistroLlamada r) async {
+  Future<({String savedTo, String registroId, bool hasGps, bool retrying})>
+  registrarLlamada(RegistroLlamada r) async {
     if (r.duracionMinutos < AppConstants.duracionMinimaLlamada) {
       throw Exception(
-          'La duración mínima debe ser ${AppConstants.duracionMinimaLlamada} minutos');
+        'La duración mínima debe ser ${AppConstants.duracionMinimaLlamada} minutos',
+      );
     }
     if (!r.confirmacionVeracidad) {
       throw Exception('Debe confirmar la veracidad del registro');
@@ -513,39 +535,39 @@ class AppProvider with ChangeNotifier {
 
   /// Revisa y solicita todos los permisos requeridos por la app en cada arranque.
   Future<void> _requestAllPermissions() async {
-    try {
-      final permisos = [
-        Permission.location,
-        Permission.phone,
-        Permission.contacts,
-        Permission.microphone,
-        Permission.notification,
-        Permission.storage,
-      ];
-      for (final p in permisos) {
+    final permisos = [
+      Permission.location,
+      Permission.locationAlways,
+      Permission.phone,
+      Permission.contacts,
+      Permission.microphone,
+      Permission.notification,
+      Permission.storage,
+      Permission.manageExternalStorage,
+    ];
+    for (final p in permisos) {
+      try {
         final status = await p.status;
-        if (status.isDenied) {
-          await p.request();
-        }
-      }
-    } catch (_) {}
+        if (!status.isGranted) await p.request();
+      } catch (_) {}
+    }
   }
 
   /// Solicita permiso de ubicación y obtiene una posición inicial en background.
-  /// Se llama al login (supervisores y vendedores) para que el monitor de llamadas
-  /// tenga coordenadas disponibles desde el primer momento.
   Future<void> _warmupGps() async {
     try {
-      final ok = await LocationService.requestPermission();
-      if (!ok) return;
-      Position? pos = await Geolocator.getLastKnownPosition();
+      await LocationService.requestPermission();
+      // Intentar caché primero (funciona aunque el GPS esté apagado)
+      Position? pos;
+      try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
       if (pos == null) {
-        pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.reduced,
-            timeLimit: Duration(seconds: 15),
-          ),
-        ).timeout(const Duration(seconds: 17));
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.reduced,
+            ),
+          ).timeout(const Duration(seconds: 20));
+        } catch (_) {}
       }
       if (pos != null) LocationService.updateFromStream(pos);
     } catch (_) {}
@@ -729,11 +751,16 @@ class AppProvider with ChangeNotifier {
         'clientesVisitados': r.clientesVisitados,
         'pctPresupuesto': pctPresup,
         'llamadasRecibidas': llamadasCount,
-        'score': pctPresup * 0.4 + (llamadasCount >= 2 ? 30 : 0) + (r.clientesVisitados * 2),
+        'score':
+            pctPresup * 0.4 +
+            (llamadasCount >= 2 ? 30 : 0) +
+            (r.clientesVisitados * 2),
       });
     }
 
-    resultados.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
+    resultados.sort(
+      (a, b) => (b['score'] as double).compareTo(a['score'] as double),
+    );
     return resultados;
   }
 }
