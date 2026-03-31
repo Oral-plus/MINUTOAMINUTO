@@ -17,6 +17,7 @@ import '../services/battery_optimization_service.dart';
 import '../services/sync_service.dart';
 import '../utils/kpi_calculator.dart';
 import '../utils/constants.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -37,8 +38,14 @@ class AppProvider with ChangeNotifier {
   String? _storedVendedorId;
   bool _geolocalizacionActiva = false;
   bool _monitorLlamadasActivo = false;
+  double? _lastGpsLat;
+  double? _lastGpsLng;
+  DateTime? _lastGpsEnvio;
+  String? _lastGpsError;
   bool _batteryOptimizationDisabled = true;
   StreamSubscription? _locationSub;
+  Timer? _permCheckTimer;
+  Timer? _gpsBackgroundTimer;
   bool _isInitialized = false;
   bool _sessionResolved = false; // true cuando sabemos si hay sesión o no
   String? _initError;
@@ -59,6 +66,10 @@ class AppProvider with ChangeNotifier {
       _storedSupervisorId != null || _storedVendedorId != null;
   bool get geolocalizacionActiva => _geolocalizacionActiva;
   bool get monitorLlamadasActivo => _monitorLlamadasActivo;
+  double? get lastGpsLat => _lastGpsLat;
+  double? get lastGpsLng => _lastGpsLng;
+  DateTime? get lastGpsEnvio => _lastGpsEnvio;
+  String? get lastGpsError => _lastGpsError;
   bool get batteryOptimizationDisabled => _batteryOptimizationDisabled;
 
   ThemeMode _themeMode = ThemeMode.dark;
@@ -124,9 +135,10 @@ class AppProvider with ChangeNotifier {
           } else {
             DebugAlertService.error('Error al iniciar: $e');
             _initError = 'Error al cargar: $e';
-            if (!ApiConfig.useRemoteApi)
+            if (!ApiConfig.useRemoteApi) {
               _initError =
                   '$_initError\n\n¿Ejecutando en Web? Use Android/iOS.';
+            }
           }
         } finally {
           _isInitialized = true;
@@ -152,8 +164,7 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<void> _warmUpPostInit() async {
-    // Resolver usuario guardado con timeout máximo de 5s
-    // Si tarda más, mostrar login para evitar pantalla cargando infinita
+    // Resolver usuario guardado con timeout máximo de 12s
     try {
       await Future.any([
         _runInitStep(
@@ -164,30 +175,37 @@ class AppProvider with ChangeNotifier {
         Future.delayed(const Duration(seconds: 12)),
       ]);
     } catch (_) {}
+
     // Siempre marcar como resuelto para no bloquear la app
     if (!_sessionResolved) {
       _sessionResolved = true;
       notifyListeners();
     }
+
     // Pedir permisos necesarios en cada arranque (si no están concedidos)
     unawaited(_requestAllPermissions());
     // Calentar GPS en cada arranque
     unawaited(_warmupGps());
-    // Cargar listas en paralelo en segundo plano
-    final results = await Future.wait([
-      _loadListOrEmpty<Vendedor>(
+
+    // Cargar listas EN SECUENCIA con un pequeño delay para evitar 429
+    try {
+      _vendedores = await _loadListOrEmpty<Vendedor>(
         DataService.getVendedores,
         'vendedores (background)',
         timeout: _initTimeout,
-      ),
-      _loadListOrEmpty<Supervisor>(
+      );
+
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      _supervisores = await _loadListOrEmpty<Supervisor>(
         DataService.getSupervisores,
         'supervisores (background)',
         timeout: _initTimeout,
-      ),
-    ]);
-    _vendedores = results[0] as List<Vendedor>;
-    _supervisores = results[1] as List<Supervisor>;
+      );
+    } catch (e) {
+      debugPrint('_warmUpPostInit error cargando listas: $e');
+    }
+
     notifyListeners();
   }
 
@@ -270,6 +288,8 @@ class AppProvider with ChangeNotifier {
     if (s != null || v != null) {
       // Sin context, se salta el wizard visual.
       unawaited(asegurarMonitorConWizardOpcional(null));
+      // Arrancar GPS en restauración de sesión
+      unawaited(iniciarGeolocalizacion());
     }
   }
 
@@ -304,6 +324,7 @@ class AppProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('vendedor_id', id);
       await prefs.remove('supervisor_id');
+      await prefs.setString('user_cargo', 'VENDEDOR');
       _storedVendedorId = id;
       _storedSupervisorId = null;
       if (_vendedorActual!.telefono != null &&
@@ -312,9 +333,9 @@ class AppProvider with ChangeNotifier {
           'numero_telefono_propietario',
           _vendedorActual!.telefono!.trim(),
         );
-        // Calentar GPS y arrancar stream
+      }
+      // Calentar GPS y arrancar stream (siempre, independiente del telefono)
       unawaited(iniciarGeolocalizacion());
-    }
     }
     notifyListeners();
     // NOTA: EL WIZARD SE LLAMARÁ EXPLÍCITAMENTE EN LA PANTALLA DE LOGIN
@@ -347,7 +368,7 @@ class AppProvider with ChangeNotifier {
   Future<void> actualizarTelefonoActual(String numero) async {
     final prefs = await SharedPreferences.getInstance();
     final numLimpio = numero.trim();
-    
+
     // 1. Guardar en SharedPreferences para la lógica de correlación nativa
     if (numLimpio.isEmpty) {
       await prefs.remove('numero_telefono_propietario');
@@ -359,7 +380,16 @@ class AppProvider with ChangeNotifier {
     if (_usuarioActual != null) {
       _usuarioActual = _usuarioActual!.copyWith(telefono: numLimpio);
       // PATCH directo (servidor con fix desplegado)
-      unawaited(ApiService.updateTelefono(_usuarioActual!.id, numLimpio, isSupervisor: true));
+      unawaited(
+        ApiService.updateTelefono(
+          _usuarioActual!.id,
+          numLimpio,
+          isSupervisor: true,
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 200));
+
       // POST upsert como garantía (funciona con cualquier versión del servidor)
       try {
         await DataService.insertSupervisor(_usuarioActual!);
@@ -368,14 +398,23 @@ class AppProvider with ChangeNotifier {
       }
     } else if (_vendedorActual != null) {
       _vendedorActual = _vendedorActual!.copyWith(telefono: numLimpio);
-      unawaited(ApiService.updateTelefono(_vendedorActual!.id, numLimpio, isSupervisor: false));
+      unawaited(
+        ApiService.updateTelefono(
+          _vendedorActual!.id,
+          numLimpio,
+          isSupervisor: false,
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 200));
+
       try {
         await DataService.insertVendedor(_vendedorActual!);
       } catch (e) {
         debugPrint('actualizarTelefonoActual: error upsert vendedor: $e');
       }
     }
-    
+
     notifyListeners();
   }
 
@@ -433,6 +472,10 @@ class AppProvider with ChangeNotifier {
   Future<void> recargarDashboard() async {
     final hoy = DateTime.now();
     _llamadas = await DataService.getRegistroLlamadas(desde: hoy, hasta: hoy);
+
+    // Pequeño retardo para evitar ráfagas que disparen el error 429 en el servidor/proxy
+    await Future.delayed(const Duration(milliseconds: 100));
+
     if (!DataService.useDemoData) {
       try {
         await AlertasService.verificarAlertasDiarias();
@@ -440,12 +483,20 @@ class AppProvider with ChangeNotifier {
         debugPrint('recargarDashboard verificarAlertas: $e');
       }
     }
+
+    await Future.delayed(const Duration(milliseconds: 100));
+
     // Coaches ven solo sus alertas; jefe/KAM ven todas
     final String? filtroSupervisor = esCoach ? _usuarioActual?.id : null;
-    _alertas = await DataService.getAlertasPendientes(supervisorId: filtroSupervisor);
+    _alertas = await DataService.getAlertasPendientes(
+      supervisorId: filtroSupervisor,
+    );
+
     if (!DataService.useDemoData) {
       await _notificarCoachAlertas8am();
     }
+
+    await Future.delayed(const Duration(milliseconds: 100));
     await _cargarDatosSapParaDashboard();
     notifyListeners();
   }
@@ -476,6 +527,9 @@ class AppProvider with ChangeNotifier {
     } catch (_) {
       _contactosCartera = [];
     }
+
+    await Future.delayed(const Duration(milliseconds: 150));
+
     try {
       if (cargoSap == 'COACH' || cargoSap == 'KAM') {
         _vendedoresSap = await ApiService.getVendedoresSap(cargoSap, nombre);
@@ -485,6 +539,9 @@ class AppProvider with ChangeNotifier {
     } catch (_) {
       _vendedoresSap = [];
     }
+
+    await Future.delayed(const Duration(milliseconds: 150));
+
     try {
       // Cargar jerarquía para cualquier supervisor (JEFE, KAM, COACH)
       if (cargoSap == 'JEFE DE VENTAS' ||
@@ -522,28 +579,37 @@ class AppProvider with ChangeNotifier {
 
   bool get modoDemoActivo => DataService.useDemoData;
 
-  /// Si el usuario es coach, muestra notificación local en el celular por cada
-  /// vendedor asignado sin llamada antes de las 8:20 (evita duplicados por día).
+  /// Muestra notificaciones locales para todas las alertas pendientes del usuario.
+  /// Evita duplicados usando claves por alerta + día.
   Future<void> _notificarCoachAlertas8am() async {
-    if (_usuarioActual == null || !esCoach) return;
+    if (_usuarioActual == null) return;
     final coachId = _usuarioActual!.id;
     final hoy = DateTime.now();
     final claveHoy =
         '${hoy.year}${hoy.month.toString().padLeft(2, '0')}${hoy.day.toString().padLeft(2, '0')}';
     final prefs = await SharedPreferences.getInstance();
+
     for (final a in _alertas) {
-      if (a.tipo != TipoAlerta.vendedorSinLlamada8am ||
-          a.supervisorId != coachId ||
-          a.vendedorId == null) {
-        continue;
-      }
-      final key = 'notified_8am_${a.vendedorId}_$claveHoy';
+      // Solo alertas del coach actual (o sin filtro de supervisor para JEFE/KAM)
+      if (a.supervisorId != null && a.supervisorId != coachId) continue;
+
+      final key = 'notif_${a.id}_$claveHoy';
       if (prefs.getBool(key) == true) continue;
-      final nombre = a.mensaje.replaceAll(
-        ' no ha hecho ninguna llamada antes de las 8:20',
-        '',
-      );
-      await PostCallNotificationService.showAlertaVendedorSinLlamada8am(nombre);
+
+      // Usar el servicio específico para 8am o el genérico para el resto
+      if (a.tipo == TipoAlerta.vendedorSinLlamada8am && a.vendedorId != null) {
+        final nombre = a.mensaje.replaceAll(
+          ' no ha hecho ninguna llamada antes de las 8:20',
+          '',
+        );
+        await PostCallNotificationService.showAlertaVendedorSinLlamada8am(nombre);
+      } else {
+        await PostCallNotificationService.showAlertaGeneral(
+          titulo: a.titulo,
+          cuerpo: a.mensaje,
+          claveUnica: '${a.id}_$claveHoy',
+        );
+      }
       await prefs.setBool(key, true);
     }
   }
@@ -590,6 +656,49 @@ class AppProvider with ChangeNotifier {
         if (!status.isGranted) await p.request();
       } catch (_) {}
     }
+    // Iniciar loop de verificación persistente
+    _startPermissionCheckLoop();
+  }
+
+  /// Inicia el loop que verifica permisos cada 5 minutos y muestra notificación persistente si faltan.
+  void _startPermissionCheckLoop() {
+    _permCheckTimer?.cancel();
+    // Verificar de inmediato, luego repetir cada 5 minutos
+    unawaited(_checkAndNotifyPermissions());
+    _permCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      unawaited(_checkAndNotifyPermissions());
+    });
+  }
+
+  /// Comprueba qué permisos faltan y muestra/cancela la notificación persistente.
+  Future<void> _checkAndNotifyPermissions() async {
+    if (kIsWeb) return;
+    try {
+      final missing = await _getMissingPermissions();
+      if (missing.isEmpty) {
+        await PostCallNotificationService.cancelPermissosFaltantes();
+      } else {
+        await PostCallNotificationService.showPermissosFaltantes(missing);
+      }
+    } catch (_) {}
+  }
+
+  /// Devuelve la lista de nombres de permisos críticos que no están concedidos.
+  Future<List<String>> _getMissingPermissions() async {
+    final missing = <String>[];
+    try {
+      if (!await Permission.phone.isGranted) missing.add('Teléfono');
+      if (!await Permission.microphone.isGranted) missing.add('Micrófono');
+      if (!await Permission.notification.isGranted) missing.add('Notificaciones');
+      final locOk = await Permission.locationAlways.isGranted ||
+          await Permission.locationWhenInUse.isGranted;
+      if (!locOk) missing.add('Ubicación');
+      if (!await Permission.manageExternalStorage.isGranted &&
+          !await Permission.storage.isGranted) {
+        missing.add('Almacenamiento');
+      }
+    } catch (_) {}
+    return missing;
   }
 
   /// Solicita permiso de ubicación y obtiene una posición inicial en background.
@@ -598,7 +707,9 @@ class AppProvider with ChangeNotifier {
       await LocationService.requestPermission();
       // Intentar caché primero (funciona aunque el GPS esté apagado)
       Position? pos;
-      try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
+      try {
+        pos = await Geolocator.getLastKnownPosition();
+      } catch (_) {}
       if (pos == null) {
         try {
           pos = await Geolocator.getCurrentPosition(
@@ -615,22 +726,68 @@ class AppProvider with ChangeNotifier {
   Future<void> iniciarGeolocalizacion() async {
     _geolocalizacionActiva = await LocationService.requestPermission();
     if (_geolocalizacionActiva) {
-      if (_vendedorActual != null) {
-         await LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
-      }
       _locationSub?.cancel();
       _locationSub = LocationService.positionStream.listen((pos) {
         LocationService.updateFromStream(pos);
-        if (_vendedorActual != null) {
-          LocationService.registrarUbicacionVendedor(_vendedorActual!.id);
-        }
+        _lastGpsLat = pos.latitude;
+        _lastGpsLng = pos.longitude;
+        notifyListeners();
+        _enviarUbicacionActual(pos).catchError((_) {});
       });
+      _gpsBackgroundTimer?.cancel();
+      _gpsBackgroundTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        final pos = LocationService.lastKnown;
+        if (pos != null) _enviarUbicacionActual(pos).catchError((_) {});
+      });
+      // Primer envío inmediato con lastKnown si ya hay posición
+      final posInicial = LocationService.lastKnown;
+      if (posInicial != null) {
+        _lastGpsLat = posInicial.latitude;
+        _lastGpsLng = posInicial.longitude;
+        notifyListeners();
+        _enviarUbicacionActual(posInicial).catchError((_) {});
+      } else {
+        // Sin lastKnown: esperar primera señal del stream
+        LocationService.getCurrentPosition().then((pos) {
+          if (pos != null) {
+            _lastGpsLat = pos.latitude;
+            _lastGpsLng = pos.longitude;
+            notifyListeners();
+            _enviarUbicacionActual(pos).catchError((_) {});
+          }
+        }).catchError((_) {});
+      }
     }
     notifyListeners();
   }
 
+  /// Envía la posición dada al servidor para el usuario activo.
+  Future<void> _enviarUbicacionActual(Position pos) async {
+    try {
+      final userId = _vendedorActual?.id ?? _usuarioActual?.id;
+      final nombre = _vendedorActual?.nombre ?? _usuarioActual?.nombre ?? '';
+      final cargo = _vendedorActual != null ? 'VENDEDOR' : (_usuarioActual?.cargo.valor ?? '');
+      if (userId == null) return;
+      await DataService.guardarUbicacion(
+        vendedorId: userId,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        nombre: nombre,
+        cargo: cargo,
+      );
+      _lastGpsEnvio = DateTime.now();
+      _lastGpsError = null;
+      notifyListeners();
+    } catch (e) {
+      _lastGpsError = e.toString();
+      notifyListeners();
+    }
+  }
+
   Future<void> detenerGeolocalizacion() async {
     _locationSub?.cancel();
+    _gpsBackgroundTimer?.cancel();
+    _gpsBackgroundTimer = null;
     _geolocalizacionActiva = false;
     notifyListeners();
   }

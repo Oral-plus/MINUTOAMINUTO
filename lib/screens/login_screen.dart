@@ -2,6 +2,7 @@ import '../utils/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:art_sweetalert_new/art_sweetalert_new.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_provider.dart';
 import '../models/supervisor.dart';
 import '../models/vendedor.dart';
@@ -71,11 +72,13 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _verificarConexionApi() async {
     try {
       final ok = await ApiService.testConnection();
-      if (mounted)
+      if (mounted) {
         setState(
-          () => _conexion =
-              ok ? _ConexionEstado.conectado : _ConexionEstado.error,
+          () => _conexion = ok
+              ? _ConexionEstado.conectado
+              : _ConexionEstado.error,
         );
+      }
     } catch (_) {
       if (mounted) setState(() => _conexion = _ConexionEstado.error);
     }
@@ -277,19 +280,17 @@ class _LoginScreenState extends State<LoginScreen>
                                       width: 42,
                                       height: 42,
                                       decoration: BoxDecoration(
-                                        color:
-                                            context.ac.fg.withOpacity(0.06),
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        color: context.ac.fg.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: context.ac.fg
-                                              .withOpacity(0.08),
+                                          color: context.ac.fg.withOpacity(
+                                            0.08,
+                                          ),
                                         ),
                                       ),
                                       child: Icon(
                                         Icons.lock_outline_rounded,
-                                        color:
-                                            context.ac.fg.withOpacity(0.7),
+                                        color: context.ac.fg.withOpacity(0.7),
                                         size: 20,
                                       ),
                                     ),
@@ -310,8 +311,9 @@ class _LoginScreenState extends State<LoginScreen>
                                           'Ingresa tu nombre y código',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: context.ac.fg
-                                                .withOpacity(0.35),
+                                            color: context.ac.fg.withOpacity(
+                                              0.35,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -330,8 +332,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       (v == null || v.trim().isEmpty)
                                       ? 'Ingresa tu nombre'
                                       : null,
-                                  textCapitalization:
-                                      TextCapitalization.words,
+                                  textCapitalization: TextCapitalization.words,
                                 ),
                                 SizedBox(height: 14),
 
@@ -380,9 +381,24 @@ class _LoginScreenState extends State<LoginScreen>
                                   child: Text(
                                     'Configurar equipo →',
                                     style: TextStyle(
-                                      color:
-                                          context.ac.fg.withOpacity(0.28),
+                                      color: context.ac.fg.withOpacity(0.28),
                                       fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: () => launchUrl(
+                                    Uri.parse('https://oral-plus.com/Minutoaminuto1/privacidad.html'),
+                                    mode: LaunchMode.externalApplication,
+                                  ),
+                                  child: Text(
+                                    'Política de Privacidad',
+                                    style: TextStyle(
+                                      color: context.ac.fg.withOpacity(0.22),
+                                      fontSize: 11,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: context.ac.fg.withOpacity(0.22),
                                     ),
                                   ),
                                 ),

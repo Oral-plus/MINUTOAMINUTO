@@ -23,9 +23,20 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const app = express();
 const port = Number(process.env.PORT || 3005);
 
-app.use(cors());
+app.use(cors({
+  exposedHeaders: ["Content-Range", "Accept-Ranges", "Content-Length"],
+  allowedHeaders: ["Range", "Content-Type", "Authorization", "x-admin-key"]
+}));
 app.use(express.json({ limit: "30mb" }));
-app.use("/audio", express.static(UPLOADS_DIR));
+app.use("/audio", (req, res, next) => {
+  const ext = path.extname(req.path).toLowerCase();
+  const mimes = { ".m4a": "audio/mp4", ".mp4": "audio/mp4", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".aac": "audio/aac", ".amr": "audio/amr" };
+  if (mimes[ext]) res.setHeader("Content-Type", mimes[ext]);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+  next();
+}, express.static(UPLOADS_DIR, { acceptRanges: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 function parseBool(value, fallback) {
@@ -63,11 +74,11 @@ const dbConfig = {
   },
 };
 
-// Modelos Gemini: gemini-2.5-flash (principal), gemini-2.5-flash-lite (fallback), gemini-2.0-flash (compatibilidad)
+// Modelos Gemini: gemini-2.5-pro (principal), gemini-2.0-pro (fallback), gemini-1.5-pro (compatibilidad)
 const geminiConfig = {
-  modelPrimary: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-  modelFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-1.5-flash-8b",
-  modelLegacy: "gemini-1.5-flash-lite", // Fallback adicional
+  modelPrimary: process.env.GEMINI_MODEL || "gemini-2.5-pro",
+  modelFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-pro",
+  modelLegacy: "gemini-1.5-pro", // Fallback adicional
 };
 
 let poolPromise = null;
@@ -528,7 +539,7 @@ async function runDbHealth() {
 app.get("/version", (_req, res) => {
   res.json({
     success: true,
-    version: "2.2.1",
+    version: "8.0",
     buildDate: new Date().toISOString()
   });
 });
@@ -537,7 +548,7 @@ app.get("/health", (_req, res) => {
   res.json({
     success: true,
     status: "ok",
-    version: "7.0",
+    version: "8.0",
     uptimeSeconds: Math.round(process.uptime()),
     host: os.hostname(),
     timestamp: new Date().toISOString(),
@@ -681,11 +692,11 @@ app.post("/transcribe", async (req, res) => {
  */
 app.get("/cartera/contactos", async (req, res) => {
   try {
-    const cargo   = asString(req.query.cargo, "").toUpperCase().trim();
-    const nombre  = asString(req.query.nombre, "").trim();
-    const page    = Math.max(1, asInt(req.query.page, 1));
+    const cargo = asString(req.query.cargo, "").toUpperCase().trim();
+    const nombre = asString(req.query.nombre, "").trim();
+    const page = Math.max(1, asInt(req.query.page, 1));
     const perPage = Math.min(500, Math.max(10, asInt(req.query.perPage, 200)));
-    const offset  = (page - 1) * perPage;
+    const offset = (page - 1) * perPage;
 
     // Construir WHERE dinámico según cargo
     let whereExtra = "";
@@ -724,7 +735,7 @@ app.get("/cartera/contactos", async (req, res) => {
     `;
 
     const result = await runSapQuery(sqlText, bindFn);
-    const rows   = result.recordset || [];
+    const rows = result.recordset || [];
 
     return res.json({
       success: true,
@@ -918,13 +929,15 @@ app.get("/sap/sync-users-stream", async (req, res) => {
   }
 });
 
-// GET /sap/sync-users → alias que ejecuta el sync síncrono (compatibilidad Flutter)
-app.get("/sap/sync-users", async (req, res) => {
+// GET /sap/sync-users → alias que ejecuta el sync síncrono. Siempre devuelve 200
+// para que Nginx no intercepte el error y el cliente pueda leer el mensaje.
+app.get(["/sap/sync-users", "/sap-sync"], async (req, res) => {
   try {
     const result = await fullUserSyncCore();
     return res.json({ success: true, ...result });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    console.error("[sap/sync-users] ERROR:", err.message);
+    return res.json({ success: false, error: err.message }); // 200 para pasar Nginx
   }
 });
 
@@ -1045,11 +1058,11 @@ app.patch("/admin/supervisores/:id", requireAdmin, async (req, res) => {
     const { id } = req.params;
     const b = req.body;
     const sets = [];
-    if (b.nombre !== undefined)   sets.push({ col: "nombre",   val: b.nombre });
-    if (b.cargo !== undefined)    sets.push({ col: "cargo",    val: b.cargo });
-    if (b.alias !== undefined)    sets.push({ col: "alias",    val: b.alias });
-    if (b.codigo !== undefined)   sets.push({ col: "codigo",   val: b.codigo });
-    if (b.zona !== undefined)     sets.push({ col: "zona",     val: b.zona });
+    if (b.nombre !== undefined) sets.push({ col: "nombre", val: b.nombre });
+    if (b.cargo !== undefined) sets.push({ col: "cargo", val: b.cargo });
+    if (b.alias !== undefined) sets.push({ col: "alias", val: b.alias });
+    if (b.codigo !== undefined) sets.push({ col: "codigo", val: b.codigo });
+    if (b.zona !== undefined) sets.push({ col: "zona", val: b.zona });
     if (b.telefono !== undefined) sets.push({ col: "telefono", val: b.telefono });
     if (!sets.length) return res.status(400).json({ success: false, error: "No hay campos para actualizar" });
     const setParts = sets.map((s, i) => `${s.col}=@v${i}`);
@@ -1079,12 +1092,12 @@ app.patch("/admin/vendedores/:id", requireAdmin, async (req, res) => {
     const { id } = req.params;
     const b = req.body;
     const sets = [];
-    if (b.nombre !== undefined)   sets.push({ col: "nombre",   val: b.nombre });
-    if (b.alias !== undefined)    sets.push({ col: "alias",    val: b.alias });
-    if (b.codigo !== undefined)   sets.push({ col: "codigo",   val: b.codigo });
-    if (b.zona !== undefined)     sets.push({ col: "zona",     val: b.zona });
+    if (b.nombre !== undefined) sets.push({ col: "nombre", val: b.nombre });
+    if (b.alias !== undefined) sets.push({ col: "alias", val: b.alias });
+    if (b.codigo !== undefined) sets.push({ col: "codigo", val: b.codigo });
+    if (b.zona !== undefined) sets.push({ col: "zona", val: b.zona });
     if (b.telefono !== undefined) sets.push({ col: "telefono", val: b.telefono });
-    if (b.coachId !== undefined)  sets.push({ col: "coachId",  val: b.coachId });
+    if (b.coachId !== undefined) sets.push({ col: "coachId", val: b.coachId });
     if (!sets.length) return res.status(400).json({ success: false, error: "No hay campos para actualizar" });
     const setParts = sets.map((s, i) => `${s.col}=@v${i}`);
     await runExecute(`UPDATE ${TABLES.vendedores} SET ${setParts.join(",")} WHERE id=@id`, (r) => {
@@ -1213,7 +1226,7 @@ app.get("/cartera/equipo-jerarquico", async (req, res) => {
       const llamadasHoy = await localPool.request()
         .input("hoy", hoy)
         .query(`SELECT nombreLider, COUNT(*) as total FROM registro_llamadas WHERE fecha = @hoy GROUP BY nombreLider`);
-      
+
       const countsMap = {};
       llamadasHoy.recordset.forEach(r => {
         countsMap[r.nombreLider] = r.total;
@@ -1253,7 +1266,7 @@ app.get("/cartera/equipo-jerarquico", async (req, res) => {
  * Núcleo de sincronización de usuarios SAP -> DB Local.
  * @param {object} options.send - Función para enviar mensajes de progreso (opcional).
  */
-async function fullUserSyncCore({ send = () => {} } = {}) {
+async function fullUserSyncCore({ send = () => { } } = {}) {
   const sapPool = await getSapPool();
   const localPool = await getPool();
 
@@ -1430,14 +1443,14 @@ async function fullUserSyncCore({ send = () => {} } = {}) {
   for (const r of relCK.recordset) {
     const cid = sapCodeToId[r.U_COACH.toString()];
     const kid = sapCodeToId[r.U_NEGOCIADOR.toString()];
-    if (cid && kid) await localPool.request().input("c",cid).input("k",kid).query("UPDATE supervisores SET superiorId=@k WHERE id=@c");
+    if (cid && kid) await localPool.request().input("c", cid).input("k", kid).query("UPDATE supervisores SET superiorId=@k WHERE id=@c");
   }
 
   send("🔗 Vinculando Vendedores -> Coach...");
   const relVC = await sapPool.request().query("SELECT DISTINCT SlpCode, U_COACH FROM OCRD WHERE ([validFor]='Y' AND SlpCode IS NOT NULL AND U_COACH IS NOT NULL)");
   for (const r of relVC.recordset) {
     const cid = sapCodeToId[r.U_COACH.toString()];
-    if (cid) await localPool.request().input("sc",r.SlpCode.toString()).input("ci",cid).query("UPDATE vendedores SET coachId=@ci WHERE sapCode=@sc");
+    if (cid) await localPool.request().input("sc", r.SlpCode.toString()).input("ci", cid).query("UPDATE vendedores SET coachId=@ci WHERE sapCode=@sc");
   }
 
   return { creados, actualizados };
@@ -1541,12 +1554,47 @@ app.delete("/vendedores/:id", async (req, res) => {
   }
 });
 
-app.get("/supervisores", async (_req, res) => {
+app.get("/supervisores", async (req, res) => {
+  // SAP sync vía query param (evita rutas nuevas que Nginx bloquea)
+  if (req.query._sync === "sap") {
+    try {
+      const result = await fullUserSyncCore();
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error("[supervisores?_sync=sap] ERROR:", err.message);
+      return res.json({ success: false, error: err.message });
+    }
+  }
+  // Audio streaming vía query param (evita /audio/:file bloqueado por Nginx)
+  if (req.query._audioId) {
+    const llamadaId = asString(req.query._audioId, "");
+    if (!llamadaId || !SAFE_ID.test(llamadaId)) return res.status(400).end();
+    try {
+      const row = await runQueryOne(
+        `SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`,
+        (r) => r.input("id", llamadaId)
+      );
+      const isPuntoB = req.query._b === "1";
+      const ruta = isPuntoB ? row?.rutaGrabacionPuntoB : row?.rutaGrabacion;
+      if (!ruta) return res.status(404).end();
+      const filename = path.basename(ruta);
+      const filepath = path.join(UPLOADS_DIR, filename);
+      if (!fs.existsSync(filepath)) return res.status(404).end();
+      const ext = path.extname(filename).toLowerCase();
+      const mimes = { ".m4a": "audio/mp4", ".mp4": "audio/mp4", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".aac": "audio/aac" };
+      res.setHeader("Content-Type", mimes[ext] || "audio/mp4");
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      return res.sendFile(filepath);
+    } catch (err) {
+      return res.status(500).end();
+    }
+  }
   try {
     const result = await runQuery(`SELECT * FROM ${TABLES.supervisores} ORDER BY nombre`);
     return res.json(normalizeRowsForJson(result.recordset));
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return res.json({ success: false, error: error.message });
   }
 });
 
@@ -1599,64 +1647,85 @@ app.delete("/supervisores/:id", async (req, res) => {
   }
 });
 
-// Actualizar campos de un supervisor (p.ej. telefono para correlacion dual)
-app.patch("/supervisores/:id", async (req, res) => {
-  try {
-    const id = asString(req.params.id, "");
-    if (!id) return res.status(400).json({ success: false, error: "id requerido" });
-    const body = req.body || {};
-    const ALLOWED = new Set(["telefono", "nombre", "zona", "cargo"]);
-    const updates = {};
-    for (const [k, v] of Object.entries(body)) {
-      if (ALLOWED.has(k) && SAFE_COLUMN_NAME.test(k)) updates[k] = asString(v, "");
-    }
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: "No hay campos validos para actualizar" });
-    }
-    const setClause = Object.keys(updates).map((col) => `[${col}] = @${col}`).join(", ");
-    await runExecute(
-      `UPDATE ${TABLES.supervisores} SET ${setClause} WHERE id = @id`,
-      (request) => {
-        request.input("id", id);
-        for (const [k, v] of Object.entries(updates)) request.input(k, v);
-      }
-    );
-    return res.json({ success: true, id, updated: Object.keys(updates) });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+async function updateUsuarioCampos(tabla, id, body, allowedFields) {
+  const ALLOWED = new Set(allowedFields);
+  const updates = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (ALLOWED.has(k) && SAFE_COLUMN_NAME.test(k)) updates[k] = asString(v, "");
   }
-});
+  if (Object.keys(updates).length === 0) throw new Error("No hay campos validos para actualizar");
+  const setClause = Object.keys(updates).map((col) => `[${col}] = @${col}`).join(", ");
+  await runExecute(
+    `UPDATE ${tabla} SET ${setClause} WHERE id = @id`,
+    (request) => {
+      request.input("id", id);
+      for (const [k, v] of Object.entries(updates)) request.input(k, v);
+    }
+  );
+  return Object.keys(updates);
+}
 
-// Actualizar campos de un vendedor (p.ej. telefono para correlacion dual)
-app.patch("/vendedores/:id", async (req, res) => {
+// Actualizar campos de un supervisor — PATCH y POST alias (Nginx bloquea PATCH)
+async function handleUpdateSupervisor(req, res) {
   try {
     const id = asString(req.params.id, "");
     if (!id) return res.status(400).json({ success: false, error: "id requerido" });
-    const body = req.body || {};
-    const ALLOWED = new Set(["telefono", "nombre", "zona"]);
-    const updates = {};
-    for (const [k, v] of Object.entries(body)) {
-      if (ALLOWED.has(k) && SAFE_COLUMN_NAME.test(k)) updates[k] = asString(v, "");
-    }
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: "No hay campos validos para actualizar" });
-    }
-    const setClause = Object.keys(updates).map((col) => `[${col}] = @${col}`).join(", ");
-    await runExecute(
-      `UPDATE ${TABLES.vendedores} SET ${setClause} WHERE id = @id`,
-      (request) => {
-        request.input("id", id);
-        for (const [k, v] of Object.entries(updates)) request.input(k, v);
-      }
-    );
-    return res.json({ success: true, id, updated: Object.keys(updates) });
+    const updated = await updateUsuarioCampos(TABLES.supervisores, id, req.body || {}, ["telefono", "nombre", "zona", "cargo"]);
+    return res.json({ success: true, id, updated });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
-});
+}
+app.patch("/supervisores/:id", handleUpdateSupervisor);
+app.post(["/supervisores/:id/update", "/supervisores-update/:id"], handleUpdateSupervisor);
+
+// Actualizar campos de un vendedor — PATCH y POST alias (Nginx bloquea PATCH)
+async function handleUpdateVendedor(req, res) {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id) return res.status(400).json({ success: false, error: "id requerido" });
+    const updated = await updateUsuarioCampos(TABLES.vendedores, id, req.body || {}, ["telefono", "nombre", "zona"]);
+    return res.json({ success: true, id, updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
+app.patch("/vendedores/:id", handleUpdateVendedor);
+app.post(["/vendedores/:id/update", "/vendedores-update/:id"], handleUpdateVendedor);
 
 app.get("/llamadas", async (req, res) => {
   try {
+    // Audio streaming vía query param (ruta compatible con Nginx)
+    if (req.query._audioId) {
+      const llamadaId = asString(req.query._audioId, "");
+      if (!llamadaId || !SAFE_ID.test(llamadaId)) return res.status(400).end();
+      const mimeMap = { "m4a": "audio/mp4", "mp4": "audio/mp4", "wav": "audio/wav", "amr": "audio/amr", "mp3": "audio/mpeg", "aac": "audio/aac" };
+      const exts = ["m4a", "mp4", "wav", "amr", "mp3", "aac"];
+      const isPuntoB = req.query._b === "1";
+      const suffixes = isPuntoB ? ["_b", "_punto_b", ""] : ["", "_b", "_punto_b"];
+      for (const suffix of suffixes) {
+        for (const ext of exts) {
+          const p = path.join(UPLOADS_DIR, `${llamadaId}${suffix}.${ext}`);
+          if (fs.existsSync(p)) return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mp4");
+        }
+      }
+      const row = await runQueryOne(
+        `SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`,
+        (r) => r.input("id", llamadaId)
+      );
+      if (row) {
+        const ruta = isPuntoB ? (row.rutaGrabacionPuntoB || row.rutaGrabacion) : (row.rutaGrabacion || row.rutaGrabacionPuntoB);
+        if (ruta && ruta.startsWith("/audio/")) {
+          const p = path.join(UPLOADS_DIR, ruta.replace("/audio/", ""));
+          if (fs.existsSync(p)) {
+            const ext = p.split(".").pop().toLowerCase();
+            return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mp4");
+          }
+        }
+      }
+      return res.status(404).end();
+    }
+
     const desde = asString(req.query.desde, todayIsoDate());
     const hasta = asString(req.query.hasta, todayIsoDate());
     const zona = asString(req.query.zona, "");
@@ -1711,6 +1780,30 @@ const LLAMADAS_COLUMNS = new Set([
 app.post("/llamadas", async (req, res) => {
   try {
     const body = req.body || {};
+
+    // Audio upload vía _action (evita rutas nuevas bloqueadas por Nginx)
+    if (body._action === "uploadAudio" || body._action === "uploadAudioB") {
+      const regId = asString(body.id, "");
+      if (!regId || !SAFE_ID.test(regId)) return res.json({ success: false, error: "id inválido" });
+      const audioBase64 = asString(body.audioBase64, "");
+      const mimeType = asString(body.mimeType, "audio/mp4");
+      if (!audioBase64) return res.json({ success: false, error: "audioBase64 requerido" });
+      const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+      const filename = body._action === "uploadAudioB" ? `${regId}_b.${ext}` : `${regId}.${ext}`;
+      const filepath = path.join(UPLOADS_DIR, filename);
+      let buf;
+      try { buf = Buffer.from(audioBase64, "base64"); } catch (_) { return res.json({ success: false, error: "audioBase64 inválido" }); }
+      if (buf.length > 30 * 1024 * 1024) return res.json({ success: false, error: "Audio supera 30MB" });
+      await fs.promises.writeFile(filepath, buf);
+      const rutaRelativa = `/audio/${filename}`;
+      const dbCol = body._action === "uploadAudioB" ? "rutaGrabacionPuntoB" : "rutaGrabacion";
+      await runExecute(
+        `UPDATE ${TABLES.llamadas} SET [${dbCol}] = @path WHERE id = @id`,
+        (r) => { r.input("path", rutaRelativa); r.input("id", regId); }
+      );
+      return res.json({ success: true, id: regId, rutaGrabacion: rutaRelativa, audioUrl: rutaRelativa });
+    }
+
     const id = asString(body.id, "") || makeId("llamada");
     const numeroPropietario = asNullableString(body.numeroPropietario);
     const numeroContacto = asNullableString(body.numeroContacto);
@@ -1719,7 +1812,7 @@ app.post("/llamadas", async (req, res) => {
 
     // Validación mínima
     if (!fechaStr || !asString(body.horaInicio, "") || !asString(body.horaFin, "")) {
-      return res.status(400).json({
+      return res.json({
         success: false,
         error: "fecha, horaInicio y horaFin son requeridos",
       });
@@ -1888,7 +1981,7 @@ app.get("/llamadas/diagnostico", async (_req, res) => {
 });
 
 // Subir audio principal (rutaGrabacion) - como la app envía tras grabar
-app.post("/llamadas/:id/audio", async (req, res) => {
+app.post(["/llamadas/:id/audio", "/upload-audio/:id"], async (req, res) => {
   try {
     const id = asString(req.params.id, "");
     if (!id || !SAFE_ID.test(id)) {
@@ -1912,7 +2005,7 @@ app.post("/llamadas/:id/audio", async (req, res) => {
     if (buf.length > 30 * 1024 * 1024) {
       return res.status(400).json({ success: false, error: "El audio supera el tamaño máximo (30MB)" });
     }
-    fs.writeFileSync(filepath, buf);
+    await fs.promises.writeFile(filepath, buf);
     const rutaRelativa = `/audio/${filename}`;
     await runExecute(
       `UPDATE ${TABLES.llamadas} SET rutaGrabacion = @path WHERE id = @id`,
@@ -1926,58 +2019,69 @@ app.post("/llamadas/:id/audio", async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
-// Obtener audio por ID (resuelve extensiones y hace streaming para bypass de proxy)
+// Helper: streaming con soporte completo de Range Requests (HTTP 206) — necesario para seek en Chrome/Android
+function serveAudioStream(req, res, filePath, mimeType) {
+  let stat;
+  try { stat = fs.statSync(filePath); } catch (_) { return res.status(404).send("Archivo no encontrado"); }
+  const fileSize = stat.size;
+  const baseHeaders = {
+    "Content-Type": mimeType,
+    "Accept-Ranges": "bytes",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
+    "Cache-Control": "no-cache",
+  };
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    if (isNaN(start) || start >= fileSize) {
+      res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+      return res.end();
+    }
+    const safeEnd = Math.min(end, fileSize - 1);
+    const chunkSize = safeEnd - start + 1;
+    res.writeHead(206, { ...baseHeaders, "Content-Length": chunkSize, "Content-Range": `bytes ${start}-${safeEnd}/${fileSize}` });
+    fs.createReadStream(filePath, { start, end: safeEnd }).pipe(res);
+  } else {
+    res.writeHead(200, { ...baseHeaders, "Content-Length": fileSize });
+    fs.createReadStream(filePath).pipe(res);
+  }
+}
+
+// Obtener audio por ID — resuelve extensiones, punto B, y sirve con HTTP 206 para seek correcto
 app.get("/audio-play/:id", async (req, res) => {
   try {
     const id = asString(req.params.id, "");
     if (!id || !SAFE_ID.test(id)) return res.status(400).send("ID inválido");
-    
+
+    const mimeMap = { "m4a": "audio/mp4", "mp4": "audio/mp4", "wav": "audio/wav", "amr": "audio/amr", "mp3": "audio/mpeg", "aac": "audio/aac" };
     const exts = ["m4a", "mp4", "wav", "amr", "mp3", "aac"];
-    let foundPath = null;
-    let foundExt = null;
-    for (const ext of exts) {
-      const p = path.join(UPLOADS_DIR, `${id}.${ext}`);
-      if (fs.existsSync(p)) {
-        foundPath = p;
-        foundExt = ext;
-        break;
-      }
-    }
-    
-    // Si no está por ID, buscar la ruta en DB
-    if (!foundPath) {
-      const row = await runQueryOne(`SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`, (request) => {
-        request.input("id", id);
-      });
-      if (row) {
-        const ruta = row.rutaGrabacion || row.rutaGrabacionPuntoB || "";
-        if (ruta.startsWith("/audio/")) {
-          const filename = ruta.replace("/audio/", "");
-          const p = path.join(UPLOADS_DIR, filename);
-          if (fs.existsSync(p)) {
-            foundPath = p;
-            foundExt = filename.split(".").pop();
-          }
-        }
+
+    // Buscar archivo por variantes de nombre (principal, punto B, punto_b)
+    for (const suffix of ["", "_b", "_punto_b"]) {
+      for (const ext of exts) {
+        const p = path.join(UPLOADS_DIR, `${id}${suffix}.${ext}`);
+        if (fs.existsSync(p)) return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mpeg");
       }
     }
 
-    if (foundPath) {
-      const mimeMap = {
-        "m4a": "audio/mp4", "mp4": "audio/mp4",
-        "wav": "audio/wav", "amr": "audio/amr",
-        "mp3": "audio/mpeg", "aac": "audio/aac"
-      };
-      const mimeType = mimeMap[foundExt] || "audio/mpeg";
-      
-      const stat = fs.statSync(foundPath);
-      res.writeHead(200, {
-        "Content-Type": mimeType,
-        "Content-Length": stat.size,
-        "Accept-Ranges": "bytes",
-        "Access-Control-Allow-Origin": "*"
-      });
-      return fs.createReadStream(foundPath).pipe(res);
+    // Fallback: buscar ruta guardada en DB
+    const row = await runQueryOne(
+      `SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`,
+      (request) => { request.input("id", id); }
+    );
+    if (row) {
+      for (const ruta of [row.rutaGrabacion, row.rutaGrabacionPuntoB]) {
+        if (ruta && ruta.startsWith("/audio/")) {
+          const p = path.join(UPLOADS_DIR, ruta.replace("/audio/", ""));
+          if (fs.existsSync(p)) {
+            const ext = p.split(".").pop().toLowerCase();
+            return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mpeg");
+          }
+        }
+      }
     }
 
     return res.status(404).send("Archivo no encontrado");
@@ -1986,7 +2090,7 @@ app.get("/audio-play/:id", async (req, res) => {
   }
 });
 
-app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
+app.post(["/llamadas/:id/audio-punto-b", "/upload-audio-b/:id"], async (req, res) => {
   try {
     const id = asString(req.params.id, "");
     if (!id || !SAFE_ID.test(id)) {
@@ -2010,7 +2114,7 @@ app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
     if (buf.length > 30 * 1024 * 1024) {
       return res.status(400).json({ success: false, error: "El audio supera el tamaño máximo (30MB)" });
     }
-    fs.writeFileSync(filepath, buf);
+    await fs.promises.writeFile(filepath, buf);
     const rutaRelativa = `/audio/${filename}`;
     await runExecute(
       `UPDATE ${TABLES.llamadas} SET rutaGrabacionPuntoB = @path WHERE id = @id`,
@@ -2022,6 +2126,53 @@ app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
     return res.json({ success: true, id, rutaGrabacionPuntoB: rutaRelativa, audioUrl: rutaRelativa });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Ruta plana para subir audio principal — el ID va en el body (evita sub-paths que Nginx puede bloquear)
+app.post("/subirllamadaaudio", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "");
+    if (!id || !SAFE_ID.test(id)) return res.json({ success: false, error: "id inválido" });
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) return res.json({ success: false, error: "audioBase64 requerido" });
+    const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+    const filepath = path.join(UPLOADS_DIR, `${id}.${ext}`);
+    let buf;
+    try { buf = Buffer.from(audioBase64, "base64"); } catch (_) { return res.json({ success: false, error: "audioBase64 inválido" }); }
+    if (buf.length > 30 * 1024 * 1024) return res.json({ success: false, error: "Audio supera 30MB" });
+    await fs.promises.writeFile(filepath, buf);
+    const rutaRelativa = `/audio/${id}.${ext}`;
+    await runExecute(`UPDATE ${TABLES.llamadas} SET rutaGrabacion = @path WHERE id = @id`, (r) => { r.input("path", rutaRelativa); r.input("id", id); });
+    return res.json({ success: true, id, rutaGrabacion: rutaRelativa, audioUrl: rutaRelativa });
+  } catch (err) {
+    return res.json({ success: false, error: err.message });
+  }
+});
+
+// Ruta plana para subir audio punto B
+app.post("/subirllamadaaudiob", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "");
+    if (!id || !SAFE_ID.test(id)) return res.json({ success: false, error: "id inválido" });
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) return res.json({ success: false, error: "audioBase64 requerido" });
+    const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+    const filename = `${id}_b.${ext}`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    let buf;
+    try { buf = Buffer.from(audioBase64, "base64"); } catch (_) { return res.json({ success: false, error: "audioBase64 inválido" }); }
+    if (buf.length > 30 * 1024 * 1024) return res.json({ success: false, error: "Audio supera 30MB" });
+    await fs.promises.writeFile(filepath, buf);
+    const rutaRelativa = `/audio/${filename}`;
+    await runExecute(`UPDATE ${TABLES.llamadas} SET rutaGrabacionPuntoB = @path WHERE id = @id`, (r) => { r.input("path", rutaRelativa); r.input("id", id); });
+    return res.json({ success: true, id, rutaGrabacionPuntoB: rutaRelativa, audioUrl: rutaRelativa });
+  } catch (err) {
+    return res.json({ success: false, error: err.message });
   }
 });
 
@@ -2045,6 +2196,12 @@ app.patch("/llamadas/:id", async (req, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(body, "transcripcionTexto")) {
       updates.transcripcionTexto = asNullableString(body.transcripcionTexto);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "cumplioMeta")) {
+      updates.cumplioMeta = asInt(body.cumplioMeta, 0);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "coincidenciaPpvcRvc")) {
+      updates.coincidenciaPpvcRvc = asInt(body.coincidenciaPpvcRvc, 0);
     }
 
     const columns = Object.keys(updates).filter((c) => LLAMADAS_COLUMNS.has(c));
@@ -2344,9 +2501,9 @@ async function ensureColumns() {
 
     // 2. Agregar columnas nuevas si ya existia la tabla sin ellas
     const newCols = [
-      { name: "fechaCreacion",       type: "NVARCHAR(50)  NULL" },
-      { name: "latitud",             type: "FLOAT         NULL" },
-      { name: "longitud",            type: "FLOAT         NULL" },
+      { name: "fechaCreacion", type: "NVARCHAR(50)  NULL" },
+      { name: "latitud", type: "FLOAT         NULL" },
+      { name: "longitud", type: "FLOAT         NULL" },
       { name: "rutaGrabacionPuntoB", type: "NVARCHAR(500) NULL" },
     ];
     for (const col of newCols) {
@@ -2381,13 +2538,13 @@ async function ensureColumns() {
     const userTables = ['supervisores', 'vendedores'];
     for (const table of userTables) {
       const cols = [
-        { name: "alias",   type: "NVARCHAR(100) NULL" },
-        { name: "zona",    type: "NVARCHAR(200) NULL" },
+        { name: "alias", type: "NVARCHAR(100) NULL" },
+        { name: "zona", type: "NVARCHAR(200) NULL" },
         { name: "sapCode", type: "NVARCHAR(100) NULL" },
-        { name: "codigo",  type: "NVARCHAR(100) NULL" } // Contraseña
+        { name: "codigo", type: "NVARCHAR(100) NULL" } // Contraseña
       ];
       if (table === 'supervisores') cols.push({ name: "superiorId", type: "NVARCHAR(200) NULL" });
-      if (table === 'vendedores')   cols.push({ name: "coachId",    type: "NVARCHAR(200) NULL" });
+      if (table === 'vendedores') cols.push({ name: "coachId", type: "NVARCHAR(200) NULL" });
 
       for (const col of cols) {
         try {
@@ -2410,7 +2567,7 @@ async function ensureColumns() {
 
 async function startServer() {
   console.log("\n" + "=".repeat(60));
-  console.log("  API MINUTO A MINUTO v2.2.1");
+  console.log("  API MINUTO A MINUTO v2.3.0");
   console.log("=".repeat(60));
   console.log("-".repeat(60));
   console.log(`  Puerto: ${port}`);
@@ -2450,7 +2607,7 @@ async function shutdown() {
   } catch (err) {
     console.error("Error cerrando recursos:", err.message);
   } finally {
-      process.exit(0);
+    process.exit(0);
   }
 }
 

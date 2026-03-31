@@ -324,6 +324,47 @@ class DatabaseService {
     );
   }
 
+  /// Repara campos vacíos en llamadas pendientes de sincronizar para que puedan subirse.
+  static Future<int> repararPendientes() async {
+    final db = await database;
+    final pending = await db.query('registro_llamadas', where: 'sincronizado = 0');
+    int reparadas = 0;
+    for (final row in pending) {
+      final updates = <String, dynamic>{};
+      final id = row['id'] as String? ?? '';
+      // Extraer número del propio ID (formato: llamada_ts_numProp_numContacto)
+      String? numFromId;
+      final parts = id.split('_');
+      if (parts.length >= 4 && parts[3].isNotEmpty && parts[3] != 'null') {
+        numFromId = parts[3];
+      }
+      final contacto = (row['nombreContactado'] as String?) ?? '';
+      final numero = (row['numeroContacto'] as String?) ?? '';
+      if (contacto.isEmpty || contacto == 'Desconocido' || contacto == '?') {
+        // Usar número de contacto si existe, si no el del ID
+        final candidato = numero.isNotEmpty ? numero : (numFromId ?? '');
+        updates['nombreContactado'] = candidato.isNotEmpty ? candidato : 'Sin identificar';
+      }
+      if ((row['nombreLider'] as String? ?? '').isEmpty) {
+        updates['nombreLider'] = 'Auto';
+      }
+      if ((row['zona'] as String? ?? '').isEmpty) {
+        updates['zona'] = 'N/A';
+      }
+      if ((row['tipoLlamada'] as String? ?? '').isEmpty) {
+        updates['tipoLlamada'] = 'entrante';
+      }
+      if ((row['cargoLider'] as String? ?? '').isEmpty) {
+        updates['cargoLider'] = 'VENDEDOR';
+      }
+      if (updates.isNotEmpty) {
+        await db.update('registro_llamadas', updates, where: 'id = ?', whereArgs: [id]);
+        reparadas++;
+      }
+    }
+    return reparadas;
+  }
+
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
     DateTime? desde,
     DateTime? hasta,

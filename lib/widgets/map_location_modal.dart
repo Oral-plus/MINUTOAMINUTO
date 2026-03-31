@@ -79,7 +79,11 @@ class MapLocationModal extends StatefulWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Icon(Icons.location_on, color: Colors.red, size: 36),
+                  const SizedBox(
+                    width: 60,
+                    height: 60,
+                    child: _BlinkingDot(),
+                  ),
                 ],
               ),
             ),
@@ -249,13 +253,9 @@ class _MapLocationModalState extends State<MapLocationModal> {
                     markers: [
                       Marker(
                         point: LatLng(widget.latitude, widget.longitude),
-                        width: 40,
-                        height: 40,
-                        child: const Icon(
-                          Icons.location_on,
-                          color: Colors.red,
-                          size: 40,
-                        ),
+                        width: 60,
+                        height: 60,
+                        child: const _BlinkingDot(),
                       ),
                     ],
                   ),
@@ -293,11 +293,12 @@ class _MapLocationModalState extends State<MapLocationModal> {
                       : Text(
                           _address,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 14,
                             color: Color(0xFF374151),
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
                           ),
-                          maxLines: 2,
+                          maxLines: 4,
                           overflow: TextOverflow.ellipsis,
                         ),
                 ),
@@ -327,4 +328,71 @@ class _MapGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MapGridPainter oldDelegate) => false;
+}
+
+class _BlinkingDot extends StatefulWidget {
+  const _BlinkingDot({super.key});
+
+  @override
+  State<_BlinkingDot> createState() => _BlinkingDotState();
+}
+
+class _BlinkingDotState extends State<_BlinkingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Onda expansiva verde
+            Container(
+              width: 60 * _controller.value,
+              height: 60 * _controller.value,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.green.withOpacity(1.0 - _controller.value),
+              ),
+            ),
+            // Punto central sólido
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.green,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  )
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

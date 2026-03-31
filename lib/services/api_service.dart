@@ -73,13 +73,20 @@ class ApiService {
   ) async {
     Object? lastError;
     StackTrace? lastStack;
+    http.Response? lastResponse;
     const bases = [ApiConfig.baseUrl, ApiConfig.fallbackBaseUrl];
 
     for (var attempt = 0; attempt <= _transientRetries; attempt++) {
       for (final base in bases) {
         if (base.isEmpty) continue;
         try {
-          return await requestBuilder(base).timeout(timeout);
+          final response = await requestBuilder(base).timeout(timeout);
+          // Si la respuesta es exitosa, retornar inmediatamente
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return response;
+          }
+          // Si es un error del servidor (WAF, 4xx, 5xx), guardar y probar la siguiente base
+          lastResponse = response;
         } on TimeoutException catch (e, st) {
           lastError = e;
           lastStack = st;
@@ -99,6 +106,9 @@ class ApiService {
         await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
       }
     }
+
+    // Si no hubo error de red pero sí respuesta no-2xx, retornarla para que _checkResponse la procese
+    if (lastResponse != null) return lastResponse;
 
     if (lastError != null) {
       String userMessage = 'Error de conexión. Verifique su internet.';
@@ -288,21 +298,11 @@ class ApiService {
     }
   }
 
-  /// Actualiza el telefono del perfil en el servidor (para correlación dual).
-  /// [isSupervisor] determina si se patchea /supervisores/:id o /vendedores/:id.
+  /// Actualiza el telefono del perfil en el servidor.
+  /// Nginx bloquea PATCH y sub-paths, así que no hace nada aquí — el guardado
+  /// real ocurre vía insertSupervisor/insertVendedor (POST /supervisores) en app_provider.
   static Future<void> updateTelefono(String userId, String telefono, {bool isSupervisor = true}) async {
-    final endpoint = isSupervisor ? '/supervisores/$userId' : '/vendedores/$userId';
-    try {
-      final res = await _patch(endpoint, {'telefono': telefono});
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        DebugAlertService.success('Teléfono sincronizado en servidor: $telefono');
-      } else {
-        DebugAlertService.warning('No se pudo sincronizar teléfono: ${res.statusCode} - ${res.body}');
-      }
-    } catch (e) {
-      DebugAlertService.error('Error sincronizando teléfono: $e');
-      rethrow;
-    }
+    // No-op: el guardado se realiza directamente desde app_provider via insertSupervisor/insertVendedor
   }
 
   static Future<List<RegistroLlamada>> getRegistroLlamadas({
@@ -616,15 +616,43 @@ class ApiService {
     }).toList();
   }
 
-  static Future<void> guardarUbicacion({required String vendedorId, required double lat, required double lng}) async {
-    final body = {
-      'vendedorId': vendedorId,
-      'fecha': DateTime.now().toIso8601String().split('T')[0],
-      'latitud': lat,
-      'longitud': lng,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-    final r = await _post('/ubicaciones', body);
+  static Future<void> guardarUbicacion({
+    required String vendedorId,
+    required double lat,
+    required double lng,
+    String nombre = '',
+    String cargo = '',
+  }) async {
+    final fecha = DateTime.now().toIso8601String().split('T')[0];
+    // Intentar primero con POST (directo al servidor principal, timeout corto)
+    try {
+      final body = {
+        'id': 'loc_$vendedorId',
+        'vendedorId': vendedorId,
+        'fecha': fecha,
+        'latitud': lat,
+        'longitud': lng,
+        'timestamp': DateTime.now().toIso8601String(),
+        'nombre': nombre,
+        'cargo': cargo,
+      };
+      final r = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/ubicaciones'),
+        body: jsonEncode(body),
+        headers: _defaultHeaders,
+      ).timeout(const Duration(seconds: 8));
+      if (r.statusCode >= 200 && r.statusCode < 300) return;
+    } catch (_) {}
+    // Fallback: usar GET con query params (compatible con WAFs restrictivos)
+    final params = Uri(queryParameters: {
+      'v': vendedorId,
+      'f': fecha,
+      'lat': lat.toString(),
+      'lng': lng.toString(),
+      'n': nombre,
+      'c': cargo,
+    }).query;
+    final r = await _get('/ubicaciones?$params');
     _checkResponse(r);
   }
 

@@ -9,6 +9,7 @@ enum TipoAlerta {
   clientePerdidoNoImpactado,
   sinVisitasAntes10am,
   sinRvcdiligenciado,
+  noMetaCumplida,
 }
 
 class Alerta {
@@ -54,6 +55,8 @@ class Alerta {
         return 'Sin visitas antes de las 10 AM';
       case TipoAlerta.sinRvcdiligenciado:
         return 'Sin RVC diligenciado';
+      case TipoAlerta.noMetaCumplida:
+        return 'No cumplió meta';
     }
   }
 }

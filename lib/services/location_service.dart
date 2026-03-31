@@ -100,12 +100,23 @@ class LocationService {
   }
 
   static Future<void> registrarUbicacionVendedor(String vendedorId) async {
+    await registrarUbicacion(userId: vendedorId, nombre: '', cargo: 'VENDEDOR');
+  }
+
+  /// Envía la posición actual al servidor para cualquier tipo de usuario.
+  static Future<void> registrarUbicacion({
+    required String userId,
+    required String nombre,
+    required String cargo,
+  }) async {
     final pos = await getCurrentPosition();
     if (pos != null) {
       await DataService.guardarUbicacion(
-        vendedorId: vendedorId,
+        vendedorId: userId,
         lat: pos.latitude,
         lng: pos.longitude,
+        nombre: nombre,
+        cargo: cargo,
       );
     }
   }

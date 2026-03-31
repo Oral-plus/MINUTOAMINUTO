@@ -36,7 +36,7 @@ android {
     defaultConfig {
         applicationId = "com.minutoaminuto.minuto_a_minuto"
         minSdk = flutter.minSdkVersion
-        targetSdk = 34
+        targetSdk = 35
         versionCode = localProperties.getProperty("flutter.versionCode")?.toInt() ?: 100
         versionName = localProperties.getProperty("flutter.versionName") ?: "2.1.100"
 
@@ -60,8 +60,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {

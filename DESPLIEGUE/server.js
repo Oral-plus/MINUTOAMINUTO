@@ -23,9 +23,20 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const app = express();
 const port = Number(process.env.PORT || 3005);
 
-app.use(cors());
+app.use(cors({
+  exposedHeaders: ["Content-Range", "Accept-Ranges", "Content-Length"],
+  allowedHeaders: ["Range", "Content-Type", "Authorization", "x-admin-key"]
+}));
 app.use(express.json({ limit: "30mb" }));
-app.use("/audio", express.static(UPLOADS_DIR));
+app.use("/audio", (req, res, next) => {
+  const ext = path.extname(req.path).toLowerCase();
+  const mimes = { ".m4a": "audio/mp4", ".mp4": "audio/mp4", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".aac": "audio/aac", ".amr": "audio/amr" };
+  if (mimes[ext]) res.setHeader("Content-Type", mimes[ext]);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+  next();
+}, express.static(UPLOADS_DIR, { acceptRanges: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 function parseBool(value, fallback) {
@@ -63,11 +74,11 @@ const dbConfig = {
   },
 };
 
-// Modelos Gemini: gemini-2.5-flash (principal), gemini-2.5-flash-lite (fallback), gemini-2.0-flash (compatibilidad)
+// Modelos Gemini: gemini-2.5-pro (principal), gemini-2.0-pro (fallback), gemini-1.5-pro (compatibilidad)
 const geminiConfig = {
-  modelPrimary: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-  modelFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-1.5-flash-8b",
-  modelLegacy: "gemini-1.5-flash-lite", // Fallback adicional
+  modelPrimary: process.env.GEMINI_MODEL || "gemini-2.5-pro",
+  modelFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-pro",
+  modelLegacy: "gemini-1.5-pro", // Fallback adicional
 };
 
 let poolPromise = null;
@@ -1435,6 +1446,37 @@ app.patch("/vendedores/:id", async (req, res) => {
 
 app.get("/llamadas", async (req, res) => {
   try {
+    // Audio streaming vía query param (ruta compatible con Nginx)
+    if (req.query._audioId) {
+      const llamadaId = asString(req.query._audioId, "");
+      if (!llamadaId || !SAFE_ID.test(llamadaId)) return res.status(400).end();
+      const mimeMap = { "m4a": "audio/mp4", "mp4": "audio/mp4", "wav": "audio/wav", "amr": "audio/amr", "mp3": "audio/mpeg", "aac": "audio/aac" };
+      const exts = ["m4a", "mp4", "wav", "amr", "mp3", "aac"];
+      const isPuntoB = req.query._b === "1";
+      const suffixes = isPuntoB ? ["_b", "_punto_b", ""] : ["", "_b", "_punto_b"];
+      for (const suffix of suffixes) {
+        for (const ext of exts) {
+          const p = path.join(UPLOADS_DIR, `${llamadaId}${suffix}.${ext}`);
+          if (fs.existsSync(p)) return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mp4");
+        }
+      }
+      const row = await runQueryOne(
+        `SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`,
+        (r) => r.input("id", llamadaId)
+      );
+      if (row) {
+        const ruta = isPuntoB ? (row.rutaGrabacionPuntoB || row.rutaGrabacion) : (row.rutaGrabacion || row.rutaGrabacionPuntoB);
+        if (ruta && ruta.startsWith("/audio/")) {
+          const p = path.join(UPLOADS_DIR, ruta.replace("/audio/", ""));
+          if (fs.existsSync(p)) {
+            const ext = p.split(".").pop().toLowerCase();
+            return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mp4");
+          }
+        }
+      }
+      return res.status(404).end();
+    }
+
     const desde = asString(req.query.desde, todayIsoDate());
     const hasta = asString(req.query.hasta, todayIsoDate());
     const zona = asString(req.query.zona, "");
@@ -1489,6 +1531,30 @@ const LLAMADAS_COLUMNS = new Set([
 app.post("/llamadas", async (req, res) => {
   try {
     const body = req.body || {};
+
+    // Audio upload vía _action (evita rutas nuevas bloqueadas por Nginx)
+    if (body._action === "uploadAudio" || body._action === "uploadAudioB") {
+      const regId = asString(body.id, "");
+      if (!regId || !SAFE_ID.test(regId)) return res.json({ success: false, error: "id inválido" });
+      const audioBase64 = asString(body.audioBase64, "");
+      const mimeType = asString(body.mimeType, "audio/mp4");
+      if (!audioBase64) return res.json({ success: false, error: "audioBase64 requerido" });
+      const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+      const filename = body._action === "uploadAudioB" ? `${regId}_b.${ext}` : `${regId}.${ext}`;
+      const filepath = path.join(UPLOADS_DIR, filename);
+      let buf;
+      try { buf = Buffer.from(audioBase64, "base64"); } catch (_) { return res.json({ success: false, error: "audioBase64 inválido" }); }
+      if (buf.length > 30 * 1024 * 1024) return res.json({ success: false, error: "Audio supera 30MB" });
+      await fs.promises.writeFile(filepath, buf);
+      const rutaRelativa = `/audio/${filename}`;
+      const dbCol = body._action === "uploadAudioB" ? "rutaGrabacionPuntoB" : "rutaGrabacion";
+      await runExecute(
+        `UPDATE ${TABLES.llamadas} SET [${dbCol}] = @path WHERE id = @id`,
+        (r) => { r.input("path", rutaRelativa); r.input("id", regId); }
+      );
+      return res.json({ success: true, id: regId, rutaGrabacion: rutaRelativa, audioUrl: rutaRelativa });
+    }
+
     const id = asString(body.id, "") || makeId("llamada");
     const numeroPropietario = asNullableString(body.numeroPropietario);
     const numeroContacto = asNullableString(body.numeroContacto);
@@ -1571,11 +1637,11 @@ app.post("/llamadas", async (req, res) => {
       horaInicio: requireStringField(body, "horaInicio"),
       horaFin: requireStringField(body, "horaFin"),
       duracionMinutos: Math.max(0, asInt(body.duracionMinutos, 1)),
-      tipoLlamada: requireStringField(body, "tipoLlamada"),
-      cargoLider: requireStringField(body, "cargoLider"),
-      zona: requireStringField(body, "zona"),
-      nombreLider: requireStringField(body, "nombreLider"),
-      nombreContactado: requireStringField(body, "nombreContactado"),
+      tipoLlamada: asString(body.tipoLlamada, "") || "entrante",
+      cargoLider: asString(body.cargoLider, "") || "VENDEDOR",
+      zona: asString(body.zona, "") || "N/A",
+      nombreLider: asString(body.nombreLider, "") || "Desconocido",
+      nombreContactado: asString(body.nombreContactado, "") || "Desconocido",
       numeroContacto: body.numeroContacto ? (normalizePhone(body.numeroContacto) || null) : null,
       numeroPropietario: body.numeroPropietario ? (normalizePhone(body.numeroPropietario) || null) : null,
       clientesProgramados: asInt(body.clientesProgramados, 0),
@@ -1663,7 +1729,7 @@ app.get("/llamadas/diagnostico", async (_req, res) => {
 });
 
 // Subir audio principal (rutaGrabacion) - como la app envía tras grabar
-app.post("/llamadas/:id/audio", async (req, res) => {
+app.post(["/llamadas/:id/audio", "/upload-audio/:id"], async (req, res) => {
   try {
     const id = asString(req.params.id, "");
     if (!id || !SAFE_ID.test(id)) {
@@ -1687,7 +1753,7 @@ app.post("/llamadas/:id/audio", async (req, res) => {
     if (buf.length > 30 * 1024 * 1024) {
       return res.status(400).json({ success: false, error: "El audio supera el tamaño máximo (30MB)" });
     }
-    fs.writeFileSync(filepath, buf);
+    await fs.promises.writeFile(filepath, buf);
     const rutaRelativa = `/audio/${filename}`;
     await runExecute(
       `UPDATE ${TABLES.llamadas} SET rutaGrabacion = @path WHERE id = @id`,
@@ -1702,7 +1768,7 @@ app.post("/llamadas/:id/audio", async (req, res) => {
   }
 });
 
-app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
+app.post(["/llamadas/:id/audio-punto-b", "/upload-audio-b/:id"], async (req, res) => {
   try {
     const id = asString(req.params.id, "");
     if (!id || !SAFE_ID.test(id)) {
@@ -1726,7 +1792,7 @@ app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
     if (buf.length > 30 * 1024 * 1024) {
       return res.status(400).json({ success: false, error: "El audio supera el tamaño máximo (30MB)" });
     }
-    fs.writeFileSync(filepath, buf);
+    await fs.promises.writeFile(filepath, buf);
     const rutaRelativa = `/audio/${filename}`;
     await runExecute(
       `UPDATE ${TABLES.llamadas} SET rutaGrabacionPuntoB = @path WHERE id = @id`,
@@ -1738,6 +1804,121 @@ app.post("/llamadas/:id/audio-punto-b", async (req, res) => {
     return res.json({ success: true, id, rutaGrabacionPuntoB: rutaRelativa, audioUrl: rutaRelativa });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Helper: streaming con soporte completo de Range Requests (HTTP 206) — necesario para seek en Chrome/Android
+function serveAudioStream(req, res, filePath, mimeType) {
+  let stat;
+  try { stat = fs.statSync(filePath); } catch (_) { return res.status(404).send("Archivo no encontrado"); }
+  const fileSize = stat.size;
+  const baseHeaders = {
+    "Content-Type": mimeType,
+    "Accept-Ranges": "bytes",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
+    "Cache-Control": "no-cache",
+  };
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    if (isNaN(start) || start >= fileSize) {
+      res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+      return res.end();
+    }
+    const safeEnd = Math.min(end, fileSize - 1);
+    const chunkSize = safeEnd - start + 1;
+    res.writeHead(206, { ...baseHeaders, "Content-Length": chunkSize, "Content-Range": `bytes ${start}-${safeEnd}/${fileSize}` });
+    fs.createReadStream(filePath, { start, end: safeEnd }).pipe(res);
+  } else {
+    res.writeHead(200, { ...baseHeaders, "Content-Length": fileSize });
+    fs.createReadStream(filePath).pipe(res);
+  }
+}
+
+// Obtener audio por ID — resuelve extensiones, punto B, y sirve con HTTP 206 para seek correcto
+app.get("/audio-play/:id", async (req, res) => {
+  try {
+    const id = asString(req.params.id, "");
+    if (!id || !SAFE_ID.test(id)) return res.status(400).send("ID inválido");
+
+    const mimeMap = { "m4a": "audio/mp4", "mp4": "audio/mp4", "wav": "audio/wav", "amr": "audio/amr", "mp3": "audio/mpeg", "aac": "audio/aac" };
+    const exts = ["m4a", "mp4", "wav", "amr", "mp3", "aac"];
+
+    for (const suffix of ["", "_b", "_punto_b"]) {
+      for (const ext of exts) {
+        const p = path.join(UPLOADS_DIR, `${id}${suffix}.${ext}`);
+        if (fs.existsSync(p)) return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mpeg");
+      }
+    }
+
+    const row = await runQueryOne(
+      `SELECT rutaGrabacion, rutaGrabacionPuntoB FROM ${TABLES.llamadas} WHERE id = @id`,
+      (request) => { request.input("id", id); }
+    );
+    if (row) {
+      for (const ruta of [row.rutaGrabacion, row.rutaGrabacionPuntoB]) {
+        if (ruta && ruta.startsWith("/audio/")) {
+          const p = path.join(UPLOADS_DIR, ruta.replace("/audio/", ""));
+          if (fs.existsSync(p)) {
+            const ext = p.split(".").pop().toLowerCase();
+            return serveAudioStream(req, res, p, mimeMap[ext] || "audio/mpeg");
+          }
+        }
+      }
+    }
+
+    return res.status(404).send("Archivo no encontrado");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+// Rutas planas de upload (evitan sub-paths que Nginx puede bloquear)
+app.post("/subirllamadaaudio", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "");
+    if (!id || !SAFE_ID.test(id)) return res.json({ success: false, error: "id inválido" });
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) return res.json({ success: false, error: "audioBase64 requerido" });
+    const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+    const filepath = path.join(UPLOADS_DIR, `${id}.${ext}`);
+    let buf;
+    try { buf = Buffer.from(audioBase64, "base64"); } catch (_) { return res.json({ success: false, error: "audioBase64 inválido" }); }
+    if (buf.length > 30 * 1024 * 1024) return res.json({ success: false, error: "Audio supera 30MB" });
+    await fs.promises.writeFile(filepath, buf);
+    const rutaRelativa = `/audio/${id}.${ext}`;
+    await runExecute(`UPDATE ${TABLES.llamadas} SET rutaGrabacion = @path WHERE id = @id`, (r) => { r.input("path", rutaRelativa); r.input("id", id); });
+    return res.json({ success: true, id, rutaGrabacion: rutaRelativa, audioUrl: rutaRelativa });
+  } catch (err) {
+    return res.json({ success: false, error: err.message });
+  }
+});
+
+app.post("/subirllamadaaudiob", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = asString(body.id, "");
+    if (!id || !SAFE_ID.test(id)) return res.json({ success: false, error: "id inválido" });
+    const audioBase64 = asString(body.audioBase64, "");
+    const mimeType = asString(body.mimeType, "audio/mp4");
+    if (!audioBase64) return res.json({ success: false, error: "audioBase64 requerido" });
+    const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") ? "mp3" : "m4a";
+    const filename = `${id}_punto_b.${ext}`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    let buf;
+    try { buf = Buffer.from(audioBase64, "base64"); } catch (_) { return res.json({ success: false, error: "audioBase64 inválido" }); }
+    if (buf.length > 30 * 1024 * 1024) return res.json({ success: false, error: "Audio supera 30MB" });
+    await fs.promises.writeFile(filepath, buf);
+    const rutaRelativa = `/audio/${filename}`;
+    await runExecute(`UPDATE ${TABLES.llamadas} SET rutaGrabacionPuntoB = @path WHERE id = @id`, (r) => { r.input("path", rutaRelativa); r.input("id", id); });
+    return res.json({ success: true, id, rutaGrabacionPuntoB: rutaRelativa, audioUrl: rutaRelativa });
+  } catch (err) {
+    return res.json({ success: false, error: err.message });
   }
 });
 
@@ -1761,6 +1942,12 @@ app.patch("/llamadas/:id", async (req, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(body, "transcripcionTexto")) {
       updates.transcripcionTexto = asNullableString(body.transcripcionTexto);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "cumplioMeta")) {
+      updates.cumplioMeta = asInt(body.cumplioMeta, 0);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "coincidenciaPpvcRvc")) {
+      updates.coincidenciaPpvcRvc = asInt(body.coincidenciaPpvcRvc, 0);
     }
 
     const columns = Object.keys(updates).filter((c) => LLAMADAS_COLUMNS.has(c));
@@ -1920,16 +2107,65 @@ app.post("/alertas", async (req, res) => {
   }
 });
 
+// GET /ubicaciones/live — Última posición de cada usuario en las últimas 8 horas
+app.get("/ubicaciones/live", async (_req, res) => {
+  try {
+    const result = await runQuery(`
+      SELECT u.*
+      FROM ${TABLES.ubicaciones} u
+      INNER JOIN (
+        SELECT vendedorId, MAX(timestamp) AS maxTs
+        FROM ${TABLES.ubicaciones}
+        WHERE TRY_CONVERT(DATETIME2, timestamp, 127) > DATEADD(HOUR, -8, GETDATE())
+           OR timestamp >= CONVERT(NVARCHAR(30), DATEADD(HOUR, -8, GETDATE()), 126)
+        GROUP BY vendedorId
+      ) latest ON u.vendedorId = latest.vendedorId AND u.timestamp = latest.maxTs
+    `);
+    return res.json(normalizeRowsForJson(result.recordset));
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/ubicaciones", async (req, res) => {
   try {
     const body = req.body || {};
     const id = asString(body.id, "") || makeId("ub");
+    const now = new Date().toISOString();
     const payload = {
       vendedorId: requireStringField(body, "vendedorId"),
       fecha: asString(body.fecha, todayIsoDate()),
       latitud: asDouble(body.latitud, 0),
       longitud: asDouble(body.longitud, 0),
-      timestamp: asString(body.timestamp, new Date().toISOString()),
+      timestamp: asString(body.timestamp, now),
+      nombre: asString(body.nombre, ""),
+      cargo: asString(body.cargo, ""),
+      fechaCreacion: now,
+    };
+    const mode = await upsertById(TABLES.ubicaciones, id, payload);
+    return res.json({ success: true, id, mode });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// GET /ubicaciones — Alternativa GET para actualizar ubicación (compatible con WAFs restrictivos)
+app.get("/ubicaciones", async (req, res) => {
+  try {
+    const q = req.query || {};
+    const vendedorId = asString(q.v, "");
+    if (!vendedorId) return res.status(400).json({ success: false, error: "Falta vendedorId" });
+    const id = `loc_${vendedorId}`;
+    const now = new Date().toISOString();
+    const payload = {
+      vendedorId,
+      fecha: asString(q.f, todayIsoDate()),
+      latitud: asDouble(q.lat, 0),
+      longitud: asDouble(q.lng, 0),
+      timestamp: now,
+      nombre: asString(q.n, ""),
+      cargo: asString(q.c, ""),
+      fechaCreacion: now,
     };
     const mode = await upsertById(TABLES.ubicaciones, id, payload);
     return res.json({ success: true, id, mode });
@@ -1958,6 +2194,8 @@ app.use((_req, res) => {
       "GET /ppvc",
       "GET /rvc",
       "GET /alertas",
+      "GET /ubicaciones/live",
+      "POST /ubicaciones",
     ],
     timestamp: new Date().toISOString(),
   });
@@ -2009,6 +2247,24 @@ async function ensureColumns() {
       )
     `);
     console.log("[migration] tabla registro_llamadas OK");
+
+    // 1b. Crear tabla ubicaciones si no existe
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ubicaciones'
+      )
+      CREATE TABLE [ubicaciones] (
+        [id]          NVARCHAR(200)  NOT NULL PRIMARY KEY,
+        [vendedorId]  NVARCHAR(200)  NOT NULL,
+        [fecha]       NVARCHAR(20)   NOT NULL,
+        [latitud]     FLOAT          NOT NULL DEFAULT 0,
+        [longitud]    FLOAT          NOT NULL DEFAULT 0,
+        [timestamp]   NVARCHAR(50)   NOT NULL,
+        [nombre]      NVARCHAR(300)  NOT NULL DEFAULT '',
+        [cargo]       NVARCHAR(100)  NOT NULL DEFAULT ''
+      )
+    `);
+    console.log("[migration] tabla ubicaciones OK");
 
     // 2. Agregar columnas nuevas si ya existia la tabla sin ellas
     const newCols = [

@@ -34,14 +34,38 @@ void callMonitorForegroundStartCallback() {
 
 class _CallMonitorTaskHandler extends TaskHandler {
   bool _busy = false;
+  StreamSubscription<Position>? _locationSub;
+
+  /// Arranca el stream GPS en este isolate de background.
+  /// Persiste cada posición en SharedPreferences para que cualquier
+  /// parte del sistema pueda leerla, incluso con la app cerrada.
+  void _startLocationStream() {
+    try {
+      _locationSub?.cancel();
+      _locationSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+          timeLimit: null,
+        ),
+      ).listen(
+        (pos) => LocationService.updateFromStream(pos),
+        onError: (_) {},
+        cancelOnError: false,
+      );
+    } catch (_) {}
+  }
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    _startLocationStream();
     await CallMonitorService.runBackgroundTick();
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
+    // Reiniciar stream si se cayó
+    if (_locationSub == null) _startLocationStream();
     if (_busy) return;
     _busy = true;
     runZonedGuarded(() {
@@ -55,7 +79,10 @@ class _CallMonitorTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {}
+  Future<void> onDestroy(DateTime timestamp) async {
+    await _locationSub?.cancel();
+    _locationSub = null;
+  }
 }
 
 /// Monitor de llamadas para Android: registra llamadas (y opcionalmente audio) en segundo plano.
@@ -96,6 +123,8 @@ class CallMonitorService {
   static bool _procesandoFin = false;
   static Timer? _pollTimer;
   static Timer? _serviceWatchdogTimer;
+  static Timer? _sweepTimer;
+  static const String _keyLastSweepTs = 'call_sweep_last_ts';
   static bool _isManualRecording = false;
   static bool get isManualRecording => _isManualRecording;
   static int _lastHandledNativeSignalTs = 0;
@@ -424,6 +453,8 @@ class CallMonitorService {
         _isInCall = false;
         _serviceWatchdogTimer?.cancel();
         _serviceWatchdogTimer = null;
+        _sweepTimer?.cancel();
+        _sweepTimer = null;
       } catch (e) {
         debugPrint('CallMonitor stop cleanup: $e');
       }
@@ -526,6 +557,46 @@ class CallMonitorService {
         await _consumeNativeCallSignal();
       });
     });
+    _startCallLogSweep();
+  }
+
+  /// Sweep periódico: detecta llamadas que el EventChannel no capturó
+  /// (Xiaomi MIUI, Huawei EMUI, Samsung batería restringida, etc.)
+  static void _startCallLogSweep() {
+    _sweepTimer?.cancel();
+    _sweepTimer = Timer.periodic(const Duration(seconds: 90), (_) async {
+      if (_isInCall) return; // No barrer durante llamada activa
+      await _runSafe(() async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final supId = prefs.getString('supervisor_id') ?? '';
+          final venId = prefs.getString('vendedor_id') ?? '';
+          if (supId.isEmpty && venId.isEmpty) return; // Sin sesión
+          final lastTs = prefs.getInt(_keyLastSweepTs) ?? 0;
+          final entries = await CallLog.get();
+          if (entries.isEmpty) return;
+          final cutoff = DateTime.now().millisecondsSinceEpoch - 300000; // últimos 5 min
+          final nuevas = entries.where((e) {
+            final ts = e.timestamp ?? 0;
+            return ts > lastTs && ts > cutoff;
+          }).toList();
+          if (nuevas.isEmpty) return;
+          // Marcar timestamp del más reciente antes de procesar
+          final maxTs = nuevas.map((e) => e.timestamp ?? 0).reduce((a, b) => a > b ? a : b);
+          await prefs.setInt(_keyLastSweepTs, maxTs);
+          debugPrint('CallMonitor sweep: ${nuevas.length} llamada(s) no capturadas, guardando...');
+          for (final entry in nuevas) {
+            try {
+              await _onCallEndedCore(prefs: prefs, audioPath: null, nativeNumber: entry.number);
+            } catch (e) {
+              debugPrint('CallMonitor sweep error procesando entrada: $e');
+            }
+          }
+        } catch (e) {
+          debugPrint('CallMonitor sweep error: $e');
+        }
+      });
+    });
   }
 
   static Future<void> _consumeNativeCallSignal() async {
@@ -552,7 +623,12 @@ class CallMonitorService {
       if (signal == 'start') {
         await _handleCallStart(source: 'native_prefs', number: number);
       } else if (signal == 'end') {
-        if (!_isInCall && number.isEmpty) return;
+        // Para llamadas perdidas/no contestadas: _isInCall=false pero hay señal
+        // nativa 'end' reciente → procesar igual. Si el número está vacío
+        // (llamada anónima) se crea entrada sintética con 'Desconocido'.
+        final signalAge = (DateTime.now().millisecondsSinceEpoch ~/ 1000 - ts).abs();
+        final isFreshMissed = !_isInCall && signalAge < 120; // señal de menos de 2 min
+        if (!_isInCall && !isFreshMissed) return;
         final lastEndSec = _lastHandledEndTs ~/ 1000;
         if (ts <= lastEndSec) return;
         _lastHandledEndTs = ts * 1000;
@@ -569,6 +645,13 @@ class CallMonitorService {
     isInCallNotifier.value = true;
     _startAmplitudePolling();
     debugPrint('CallMonitor $source: inicio llamada ${number ?? ""}');
+    // Guardar número para usarlo como fallback si al finalizar no está disponible
+    if (number != null && number.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_call_number', number);
+      } catch (_) {}
+    }
     try {
       if (await FlutterForegroundTask.isRunningService) {
         await FlutterForegroundTask.updateService(
@@ -724,7 +807,7 @@ class CallMonitorService {
             if (mod.isBefore(cutoff)) continue;
             
             final len = await e.length();
-            if (len < 4096) continue; // descartar archivos vacíos (0 bytes provenientes de bloqueos PCM)
+            if (len < 512) continue; // descartar archivos completamente vacíos
             
             final ms = mod.millisecondsSinceEpoch;
             if (ms > bestMod) {
@@ -783,15 +866,31 @@ class CallMonitorService {
     String? audioPath,
     String? nativeNumber,
   }) async {
+    // Usar nativeNumber o last_call_number guardado al inicio
+    final resolvedNumber = (nativeNumber != null && nativeNumber.isNotEmpty)
+        ? nativeNumber
+        : prefs.getString('last_call_number');
+
     CallLogEntry? entry;
     try {
-      entry = await _pollForCallLog();
+      entry = await _pollForCallLog(targetNumber: resolvedNumber);
     } catch (e) {
       debugPrint('CallMonitor _pollForCallLog error: $e');
     }
-    
-    // Fallback: usar número nativo si call log no encontró nada
-    entry ??= (nativeNumber != null ? _createSyntheticEntry(nativeNumber) : null);
+
+    // Si el entry no tiene número pero tenemos resolvedNumber, completarlo
+    if (entry != null && (entry.number == null || entry.number!.isEmpty) && resolvedNumber != null) {
+      entry = CallLogEntry(
+        number: resolvedNumber,
+        name: entry.name,
+        callType: entry.callType,
+        duration: entry.duration,
+        timestamp: entry.timestamp,
+      );
+    }
+
+    // Fallback: usar número resuelto si call log no encontró nada
+    entry ??= (resolvedNumber != null && resolvedNumber.isNotEmpty ? _createSyntheticEntry(resolvedNumber) : null);
     
     // Último recurso: crear entrada sintética con datos de SharedPreferences
     if (entry == null) {
@@ -804,6 +903,21 @@ class CallMonitorService {
     
     // Si aún no hay entry, crear una genérica para no perder la llamada
     entry ??= _createSyntheticEntry('Desconocido');
+
+    // No guardar si no hay usuario logueado
+    final supId = prefs.getString('supervisor_id');
+    final venId = prefs.getString('vendedor_id');
+    if ((supId == null || supId.isEmpty) && (venId == null || venId.isEmpty)) {
+      debugPrint('CallMonitor: sin usuario logueado, llamada no guardada.');
+      return;
+    }
+
+    // Marcar timestamp para evitar que el sweep la procese de nuevo
+    final entryTs = entry.timestamp ?? DateTime.now().millisecondsSinceEpoch;
+    final lastSweep = prefs.getInt(_keyLastSweepTs) ?? 0;
+    if (entryTs > lastSweep) {
+      await prefs.setInt(_keyLastSweepTs, entryTs);
+    }
 
     final r = await _prepareRegistro(prefs, entry, audioPath);
     String finalId = r.id;
@@ -902,17 +1016,26 @@ class CallMonitorService {
     }
   }
 
-  static Future<CallLogEntry?> _pollForCallLog() async {
-    // Más reintentos con delays crecientes para dispositivos lentos
+  static Future<CallLogEntry?> _pollForCallLog({String? targetNumber}) async {
     final delays = [500, 800, 1000, 1500, 2000, 2000, 2500, 3000];
+    final targetNorm = targetNumber != null ? PhoneUtils.normalize(targetNumber) : null;
     for (var i = 0; i < delays.length; i++) {
       try {
         final entries = await CallLog.get();
         if (entries.isNotEmpty) {
-          final last = entries.first;
-          final diff = (DateTime.now().millisecondsSinceEpoch - (last.timestamp ?? 0)).abs();
-          // Ventana ampliada a 2 minutos para dispositivos lentos
-          if (diff < 120000) return last;
+          final cutoff = DateTime.now().millisecondsSinceEpoch - 120000;
+          final recent = entries.where((e) => (e.timestamp ?? 0) >= cutoff).toList();
+          if (recent.isNotEmpty) {
+            // Si tenemos número objetivo, buscar la entrada que coincida
+            if (targetNorm != null && targetNorm.isNotEmpty) {
+              final match = recent.firstWhere(
+                (e) => PhoneUtils.normalize(e.number ?? '') == targetNorm,
+                orElse: () => recent.first,
+              );
+              return match;
+            }
+            return recent.first;
+          }
         }
       } catch (e) {
         debugPrint('CallMonitor _pollForCallLog intento $i error: $e');
@@ -939,24 +1062,28 @@ class CallMonitorService {
     final venId = prefs.getString('vendedor_id');
     
     // Ubicación: lastKnown del stream → última conocida de Android → GPS fresco → fallback IP
+    String gpsSrc = 'none';
     Position? pos = LocationService.lastKnown;
+    if (pos != null) { gpsSrc = 'lastKnown'; }
     if (pos == null) {
-      try { pos = await Geolocator.getLastKnownPosition(); } catch (_) {}
+      try { final p = await Geolocator.getLastKnownPosition(); if (p != null) { pos = p; gpsSrc = 'androidLastKnown'; } } catch (_) {}
     }
     // Leer de SharedPreferences (funciona en todos los isolates)
     if (pos == null) {
-      try { pos = await LocationService.getFromPrefs(); } catch (_) {}
+      try { final p = await LocationService.getFromPrefs(); if (p != null) { pos = p; gpsSrc = 'sharedPrefs'; } } catch (_) {}
     }
     if (pos == null) {
       try {
-        pos = await Geolocator.getCurrentPosition(
+        final p = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.reduced, timeLimit: Duration(seconds: 6)),
         ).timeout(const Duration(seconds: 7));
+        pos = p; gpsSrc = 'freshGPS';
       } catch (_) {}
     }
     if (pos == null) {
-      try { pos = await LocationService.getGoogleGeolocationFallback(); } catch (_) {}
+      try { final p = await LocationService.getGoogleGeolocationFallback(); if (p != null) { pos = p; gpsSrc = 'googleFallback'; } } catch (_) {}
     }
+    debugPrint('CallMonitor GPS[$gpsSrc]: lat=${pos?.latitude}, lon=${pos?.longitude}');
 
     final results = await Future.wait([
       IpService.getPublicIp().timeout(const Duration(seconds: 6)).catchError((_) => null),
@@ -970,7 +1097,10 @@ class CallMonitorService {
 
     final name = sup?.nombre ?? ven?.nombre ?? prefs.getString('user_name') ?? 'Usuario';
     final p = sup?.telefono ?? ven?.telefono ?? prefs.getString('numero_telefono_propietario');
-    final c = sup?.cargo ?? NivelCargo.values.firstWhere((e) => e.valor == prefs.getString('user_cargo'), orElse: () => NivelCargo.coach);
+    final c = sup?.cargo ?? NivelCargo.values.firstWhere(
+      (e) => e.valor.toLowerCase() == (prefs.getString('user_cargo') ?? '').toLowerCase(),
+      orElse: () => NivelCargo.coach,
+    );
 
     return RegistroLlamada(
       id: 'llamada_${ts}_${PhoneUtils.normalize(p ?? "")}_${PhoneUtils.normalize(entry.number ?? "")}',

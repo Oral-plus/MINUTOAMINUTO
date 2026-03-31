@@ -101,18 +101,19 @@ class _HomeScreenState extends State<HomeScreen> {
         final cargo = provider.usuarioActual?.cargo.displayName ?? 'Vendedor';
         final isSupervisor = provider.usuarioActual != null;
         final acciones = <_AccionHome>[
-          _AccionHome(
-            icono: Icons.call_rounded,
-            titulo: 'Mis llamadas',
-            subtitulo: 'Ver registro del día',
-            color: context.ac.fg,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MisLlamadasScreen()),
-              );
-            },
-          ),
+          if (isSupervisor)
+            _AccionHome(
+              icono: Icons.call_rounded,
+              titulo: 'Mis llamadas',
+              subtitulo: 'Ver registro del día',
+              color: context.ac.fg,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MisLlamadasScreen()),
+                );
+              },
+            ),
           if (isSupervisor)
             _AccionHome(
               icono: Icons.insights_rounded,
@@ -152,6 +153,62 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: context.ac.bg,
             foregroundColor: context.ac.fg,
             actions: [
+              // Indicador GPS en tiempo real
+              GestureDetector(
+                onTap: () {
+                  final lat = provider.lastGpsLat;
+                  final lng = provider.lastGpsLng;
+                  final ts = provider.lastGpsEnvio;
+                  final activo = provider.geolocalizacionActiva;
+                  final hora = ts != null
+                      ? '${ts.hour.toString().padLeft(2,'0')}:${ts.minute.toString().padLeft(2,'0')}:${ts.second.toString().padLeft(2,'0')}'
+                      : 'Nunca';
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: Row(children: [
+                        Icon(Icons.location_on_rounded, color: activo && lat != null ? Colors.green : Colors.red),
+                        SizedBox(width: 8),
+                        Text('GPS en tiempo real'),
+                      ]),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Estado: ${activo ? "ACTIVO" : "INACTIVO"}', style: TextStyle(fontWeight: FontWeight.bold, color: activo ? Colors.green : Colors.red)),
+                          SizedBox(height: 8),
+                          Text('Último envío: $hora'),
+                          if (lat != null && lng != null) ...[
+                            SizedBox(height: 4),
+                            Text('Lat: ${lat.toStringAsFixed(6)}'),
+                            Text('Lng: ${lng.toStringAsFixed(6)}'),
+                          ] else
+                            Text('Coordenadas: Sin datos aún', style: TextStyle(color: Colors.orange)),
+                          if (provider.lastGpsError != null) ...[
+                            SizedBox(height: 10),
+                            Text('ERROR ENVÍO:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 11)),
+                            SizedBox(height: 2),
+                            Text(provider.lastGpsError!, style: TextStyle(color: Colors.red, fontSize: 11)),
+                          ],
+                        ],
+                      ),
+                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text('OK'))],
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(
+                    Icons.location_on_rounded,
+                    color: provider.geolocalizacionActiva && provider.lastGpsLat != null
+                        ? Colors.green
+                        : provider.geolocalizacionActiva
+                            ? Colors.orange
+                            : Colors.red,
+                    size: 22,
+                  ),
+                ),
+              ),
               IconButton(
                 icon: Icon(Icons.phone_android_rounded),
                 tooltip: 'Mi número para correlación dual',

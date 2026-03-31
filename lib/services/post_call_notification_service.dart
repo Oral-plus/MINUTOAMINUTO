@@ -207,7 +207,84 @@ class PostCallNotificationService {
     }
   }
 
-  // ─── 4. Sincronización exitosa (reintento en background) ───────────────────
+  // ─── 4. Permisos faltantes (persistente hasta que se activen) ─────────────
+  static const _idPermissosFaltantes = 999001;
+  static Future<void> showPermissosFaltantes(List<String> nombresPermisos) async {
+    if (!_isAndroid || !_initialized) return;
+    try {
+      final lista = nombresPermisos.join(', ');
+      final cuerpo =
+          'Minuto a Minuto necesita estos permisos para funcionar correctamente: $lista. '
+          'Toca aquí para abrirlos en Ajustes.';
+
+      final android = AndroidNotificationDetails(
+        'permisos_faltantes',
+        'Permisos requeridos',
+        channelDescription: 'Recordatorio persistente de permisos faltantes',
+        importance: Importance.max,
+        priority: Priority.max,
+        ongoing: true,
+        autoCancel: false,
+        styleInformation: BigTextStyleInformation(
+          cuerpo,
+          htmlFormatBigText: false,
+          contentTitle: '⚠️ Permisos requeridos (${nombresPermisos.length})',
+          summaryText: 'Minuto a Minuto',
+        ),
+        playSound: false,
+        enableVibration: false,
+      );
+
+      await _instance.show(
+        _idPermissosFaltantes,
+        '⚠️ Permisos requeridos',
+        cuerpo,
+        NotificationDetails(android: android),
+        payload: 'permisos',
+      );
+    } catch (e) {
+      debugPrint('showPermissosFaltantes: $e');
+    }
+  }
+
+  static Future<void> cancelPermissosFaltantes() async {
+    if (!_isAndroid || !_initialized) return;
+    try {
+      await _instance.cancel(_idPermissosFaltantes);
+    } catch (_) {}
+  }
+
+  // ─── 5. Alerta general (cualquier tipo de alerta del sistema) ──────────────
+  static Future<void> showAlertaGeneral({
+    required String titulo,
+    required String cuerpo,
+    required String claveUnica,
+  }) async {
+    if (!_isAndroid || !_initialized) return;
+    try {
+      final logo = await _loadLogoBytes();
+      final android = _androidDetails(
+        channelId: 'alertas_gestion',
+        channelName: 'Alertas de gestión',
+        channelDescription: 'Alertas automáticas del sistema de gestión',
+        bigText: cuerpo,
+        importance: Importance.high,
+        priority: Priority.high,
+        largeIcon: logo != null ? ByteArrayAndroidBitmap(logo) : null,
+      );
+      final id = claveUnica.hashCode.abs() % 100000;
+      await _instance.show(
+        id,
+        titulo,
+        cuerpo,
+        NotificationDetails(android: android),
+      );
+    } catch (e) {
+      debugPrint('showAlertaGeneral: $e');
+    }
+  }
+
+  // ─── 6. Sincronización exitosa (reintento en background) ───────────────────
   static Future<void> showSyncOk(String registroId, String contacto, int attempt) async {
     if (!_isAndroid || !_initialized) return;
     try {

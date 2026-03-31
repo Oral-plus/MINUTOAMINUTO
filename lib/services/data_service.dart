@@ -177,7 +177,7 @@ class DataService {
         ...localList.where((e) => e.sincronizado == 0 && !idsApi.contains(e.id)),
       ];
       merged.sort((a, b) => b.horaInicio.compareTo(a.horaInicio));
-      return merged;
+      return _deduplicarLlamadas(merged);
     } else {
       // Si la API falla, mostramos todo lo local (mejor ver algo a nada)
       final ids = apiList.map((e) => e.id).toSet();
@@ -195,6 +195,7 @@ class DataService {
         await ApiService.insertRegistroLlamada(r);
         await DatabaseService.insertRegistroLlamada(r, sincronizado: 1);
         DebugAlertService.success('Llamada guardada en servidor: ${r.nombreContactado}');
+        if (!r.cumplioMeta) _enviarAlertaNoMeta(r);
         return (
           savedTo: ApiConfig.baseUrl,
           registroId: r.id,
@@ -346,9 +347,11 @@ class DataService {
     required String vendedorId,
     required double lat,
     required double lng,
+    String nombre = '',
+    String cargo = '',
   }) async {
     await (_useApi
-        ? ApiService.guardarUbicacion(vendedorId: vendedorId, lat: lat, lng: lng)
+        ? ApiService.guardarUbicacion(vendedorId: vendedorId, lat: lat, lng: lng, nombre: nombre, cargo: cargo)
         : DatabaseService.guardarUbicacion(vendedorId: vendedorId, lat: lat, lng: lng));
   }
 
@@ -356,5 +359,51 @@ class DataService {
     if (_useApi) {
       await ApiService.uploadAudioPuntoB(registroId, rutaAudio);
     }
+  }
+
+  /// Elimina duplicados de llamadas correlacionadas que fallaron la fusión en servidor.
+  /// Si dos registros tienen el mismo contacto, igual duración y horaInicio dentro de 5 min,
+  /// se conserva solo el que tenga más datos (audio > transcripción > el más antiguo).
+  static List<RegistroLlamada> _deduplicarLlamadas(List<RegistroLlamada> lista) {
+    final resultado = <RegistroLlamada>[];
+    for (final r in lista) {
+      final duplicado = resultado.indexWhere((e) {
+        if (e.duracionMinutos != r.duracionMinutos) return false;
+        final mismoContacto = e.numeroContacto != null && r.numeroContacto != null
+            ? e.numeroContacto!.endsWith(r.numeroContacto!.length > 10
+                ? r.numeroContacto!.substring(r.numeroContacto!.length - 10)
+                : r.numeroContacto!)
+            : e.nombreContactado == r.nombreContactado;
+        if (!mismoContacto) return false;
+        return e.horaInicio.difference(r.horaInicio).inMinutes.abs() <= 5;
+      });
+      if (duplicado == -1) {
+        resultado.add(r);
+      } else {
+        // Conservar el registro con más datos
+        final existente = resultado[duplicado];
+        final existenteScore = (existente.rutaGrabacion?.isNotEmpty == true ? 2 : 0) +
+            (existente.transcripcionTexto?.isNotEmpty == true ? 1 : 0);
+        final nuevoScore = (r.rutaGrabacion?.isNotEmpty == true ? 2 : 0) +
+            (r.transcripcionTexto?.isNotEmpty == true ? 1 : 0);
+        if (nuevoScore > existenteScore) resultado[duplicado] = r;
+      }
+    }
+    return resultado;
+  }
+
+  /// Fire-and-forget: crea alerta de no-meta cuando cumplioMeta = false.
+  static void _enviarAlertaNoMeta(RegistroLlamada r) {
+    final alerta = Alerta(
+      id: 'nometa_${r.id}',
+      tipo: TipoAlerta.noMetaCumplida,
+      fecha: r.fecha,
+      mensaje: 'No cumplió meta: ${r.nombreLider} (${r.zona})',
+      zona: r.zona,
+      resuelta: false,
+    );
+    ApiService.insertAlerta(alerta).catchError((e) {
+      debugPrint('_enviarAlertaNoMeta error: $e');
+    });
   }
 }

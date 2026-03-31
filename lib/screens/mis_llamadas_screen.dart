@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
 import '../models/registro_llamada.dart';
 import '../services/data_service.dart';
+import '../services/sync_service.dart';
 import '../services/call_monitor_service.dart';
 import '../services/transcription_manager.dart';
 import '../utils/constants.dart';
@@ -30,16 +31,39 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
   bool _loading = false;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
+  int _pendingCount = 0;
+  bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
-    // Arrancar siempre en "hoy"
     _selectedDate = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _cargarLlamadas();
+      final provider = context.read<AppProvider>();
+      if (provider.esVendedor) {
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
+      // Sincronizar pendientes antes de cargar para que todo suba
+      await _sincronizarYCargar();
       if (mounted) _checkPendingCumplioMeta();
     });
+  }
+
+  Future<void> _sincronizarYCargar() async {
+    await _refreshPendingCount();
+    if (_pendingCount > 0) {
+      if (mounted) setState(() => _syncing = true);
+      await SyncService.repararYSincronizar();
+      await _refreshPendingCount();
+      if (mounted) setState(() => _syncing = false);
+    }
+    await _cargarLlamadas();
+  }
+
+  Future<void> _refreshPendingCount() async {
+    final count = await SyncService.getPendingCount();
+    if (mounted) setState(() => _pendingCount = count);
   }
 
   Future<void> _checkPendingCumplioMeta() async {
@@ -291,6 +315,41 @@ class _MisLlamadasScreenState extends State<MisLlamadasScreen> {
         foregroundColor: context.ac.fg,
         centerTitle: true,
         elevation: 0,
+        actions: [
+          if (_syncing)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: context.ac.fg),
+              ),
+            )
+          else
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  tooltip: 'Reparar y subir pendientes',
+                  onPressed: () async {
+                    if (mounted) setState(() => _syncing = true);
+                    await SyncService.repararYSincronizar();
+                    await _refreshPendingCount();
+                    if (mounted) setState(() => _syncing = false);
+                    await _cargarLlamadas();
+                  },
+                ),
+                if (_pendingCount > 0)
+                  Positioned(
+                    right: 6, top: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                      child: Text('$_pendingCount', style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+              ],
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(100),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -591,7 +650,7 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Avatar con iniciales
+                            // Avatar con iniciales o ícono de teléfono
                             Container(
                               width: 44,
                               height: 44,
@@ -600,15 +659,17 @@ class _LlamadaCardState extends State<_LlamadaCard> {
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
-                                child: Text(
-                                  initials.isEmpty ? '?' : initials,
-                                  style: TextStyle(
-                                    fontSize: initials.length > 1 ? 13 : 16,
-                                    fontWeight: FontWeight.w900,
-                                    color: context.ac.fg.withOpacity(0.6),
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
+                                child: RegExp(r'^[\d\s\+\-\(\)]+$').hasMatch(widget.contacto.trim())
+                                    ? Icon(Icons.phone_rounded, size: 20, color: context.ac.fg.withValues(alpha: 0.5))
+                                    : Text(
+                                        initials.isEmpty ? '?' : initials,
+                                        style: TextStyle(
+                                          fontSize: initials.length > 1 ? 13 : 16,
+                                          fontWeight: FontWeight.w900,
+                                          color: context.ac.fg.withValues(alpha: 0.6),
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
                               ),
                             ),
                             SizedBox(width: 12),

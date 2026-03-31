@@ -24,17 +24,18 @@ Future<String?> uploadAudioFileImpl(String registroId, String rutaAudio, {bool i
     'm4a' => 'audio/mp4',
     _ => 'audio/mp4',
   };
-  final suffix = isPuntoB ? 'audio-punto-b' : 'audio';
+  // Embebido en POST /llamadas con _action para evitar rutas bloqueadas por Nginx
   final sizeKb = (bytes.length / 1024).toStringAsFixed(0);
-  DebugAlertService.info('Subiendo audio $suffix ($sizeKb KB)');
+  DebugAlertService.info('Subiendo audio ($sizeKb KB)');
   try {
     final base = ApiConfig.baseUrl;
     final res = await http.post(
-      Uri.parse('$base/llamadas/$registroId/$suffix'),
+      Uri.parse('$base/llamadas'),
       body: jsonEncode({
+        '_action': isPuntoB ? 'uploadAudioB' : 'uploadAudio',
+        'id': registroId,
         'audioBase64': b64,
         'mimeType': mime,
-        'filename': 'audio_${registroId}_${isPuntoB ? "B" : "A"}.$ext'
       }),
       headers: {
         'Content-Type': 'application/json',
@@ -71,10 +72,10 @@ Future<void> uploadAudioPuntoBImpl(String registroId, String rutaAudio) async {
     'aac' => 'audio/aac',
     _ => 'audio/mp4',
   };
-  final body = {'audioBase64': b64, 'mimeType': mime};
+  final body = {'_action': 'uploadAudioB', 'id': registroId, 'audioBase64': b64, 'mimeType': mime};
   final base = ApiConfig.baseUrl;
   final res = await http.post(
-    Uri.parse('$base/llamadas/$registroId/audio-punto-b'),
+    Uri.parse('$base/llamadas'),
     body: jsonEncode(body),
     headers: {
       'Content-Type': 'application/json',
