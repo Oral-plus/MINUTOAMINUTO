@@ -1,4 +1,15 @@
 {
+  "extraKnownMarketplaces": {
+    "ui-ux-pro-max-skill": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true
+  },
   "permissions": {
     "allow": [
       "Bash(adb -s R5CY90FYVJH shell \"logcat -d -t 50 2>/dev/null\")",
@@ -6,15 +17,7 @@
       "Read(//c/Users/skyen/Desktop/MINUTOAMINUTO_NUEVO/$LOCALAPPDATA/Android/Sdk/platform-tools/**)",
       "Read(//c/Users/skyen/Desktop/MINUTOAMINUTO_NUEVO/$HOME/AppData/Local/Android/Sdk/platform-tools/**)",
       "Read(//c/Users/**)",
-      "Bash(cmd /c \"where flutter\")",
-      "Bash(cmd /c \"dir C:\\\\Users\\\\steve\\\\flutter\\\\bin\\\\flutter.bat\")",
-      "Bash(cmd /c \"dir C:\\\\flutter\\\\bin\\\\flutter.bat\")",
-      "Bash(cmd /c \"dir C:\\\\src\\\\flutter\\\\bin\\\\flutter.bat\")",
-      "Bash(cmd /c \"echo %PATH%\")",
-      "Bash(powershell -Command \"Get-Command flutter -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
-      "Bash(powershell -Command \"Get-ChildItem -Path C:\\\\Users\\\\steve -Recurse -Filter ''flutter.bat'' -ErrorAction SilentlyContinue | Select-Object -First 3 FullName\")",
-      "Bash(cmd /c \"dir C:\\\\flutter 2>nul || dir C:\\\\development 2>nul || dir C:\\\\src 2>nul\")",
-      "Bash(powershell -Command \"dir C:\\\\flutter -ErrorAction SilentlyContinue; dir ''C:\\\\Users\\\\steve\\\\AppData\\\\Local\\\\flutter'' -ErrorAction SilentlyContinue; dir ''C:\\\\Users\\\\steve\\\\flutter'' -ErrorAction SilentlyContinue\")"
+      "Bash(cmd /c \"where flutter\")"
     ]
   }
 }
